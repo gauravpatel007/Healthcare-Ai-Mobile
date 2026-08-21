@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from 'react-router-dom'
 import { SettingsProvider, useSettings } from './contexts/SettingsContext'
+import { UnitProvider } from './contexts/UnitContext'
+import { LangProvider } from './contexts/LangContext'
 import { AlertTriangle } from 'lucide-react'
 import { Toaster } from 'react-hot-toast'
 import LandingPage from './pages/LandingPage'
@@ -82,6 +84,39 @@ const AppRoutes = () => {
     }
   }, [isMaintenance, isAdminRoute, isRoot, navigate]);
 
+  // OneSignal Push Notifications Setup
+  useEffect(() => {
+    const initOneSignal = async () => {
+      try {
+        const OneSignal = (await import('react-onesignal')).default;
+        await OneSignal.init({
+          appId: "66baddfc-24d8-4b43-a3dc-2d4d9f297f54",
+          notifyButton: {
+            enable: false,
+          },
+          allowLocalhostAsSecureOrigin: true,
+        });
+
+        const token = localStorage.getItem('token');
+        if (token) {
+          OneSignal.Slidedown.promptPush();
+          // The OneSignal Player ID (device token)
+          const playerId = await OneSignal.User.PushSubscription.id;
+          if (playerId) {
+            import('./utils/api').then(({ default: API }) => {
+              API.put('/users/me/device-token', { token: playerId })
+                .catch(err => console.error("Failed to register device token", err));
+            });
+          }
+        }
+      } catch (err) {
+        console.error("OneSignal initialization failed", err);
+      }
+    };
+    initOneSignal();
+  }, []);
+
+
   // If maintenance mode is active, not on an admin route, and not on root
   if (isMaintenance && !isAdminRoute && !isRoot) {
     return <MaintenanceScreen showLogoutMsg={showLogoutMsg} />;
@@ -123,10 +158,14 @@ const AppRoutes = () => {
 function App() {
   return (
     <SettingsProvider>
-      <Toaster position="top-right" toastOptions={{ className: 'dark:bg-gray-800 dark:text-white border border-gray-100 dark:border-gray-700 shadow-xl rounded-2xl' }} />
-      <Router>
-        <AppRoutes />
-      </Router>
+      <LangProvider>
+        <UnitProvider>
+          <Toaster position="top-right" containerStyle={{ zIndex: 9999999 }} toastOptions={{ className: 'dark:bg-gray-800 dark:text-white border border-gray-100 dark:border-gray-700 shadow-xl rounded-2xl' }} />
+          <Router>
+            <AppRoutes />
+          </Router>
+        </UnitProvider>
+      </LangProvider>
     </SettingsProvider>
   )
 }

@@ -1,7 +1,7 @@
-
-import { useState, useEffect } from 'react';
-import API from '../../utils/api';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Plus, Edit2, Trash2, FileText, Globe, CheckCircle, XCircle } from 'lucide-react';
+import CustomSelect from '../../components/ui/CustomSelect';
 
 const AdminArticles = () => {
   const [articles, setArticles] = useState([]);
@@ -98,9 +98,9 @@ const AdminArticles = () => {
         </div>
       )}
 
-      {showModal && (
-        <div className="modal-overlay active" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div className="modal-content glass-card" style={{ background: 'var(--bg-card)', padding: '32px', borderRadius: '20px', width: '90%', maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto' }}>
+      {showModal && createPortal(
+        <div className="modal-overlay active" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100000, backdropFilter: 'blur(4px)' }} onClick={() => setShowModal(false)}>
+          <div className="modal-content glass-card" style={{ background: 'var(--bg-card)', padding: '32px', borderRadius: '20px', width: '90%', maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
             <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '24px' }}>{editingId ? 'Edit Article' : 'New Article'}</h2>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
@@ -110,15 +110,25 @@ const AdminArticles = () => {
               </div>
               <div className="form-group">
                 <label className="form-label">Category</label>
-                <select className="form-select" value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })}>
-                  {categories.map(c => <option key={c}>{c}</option>)}
-                </select>
+                <CustomSelect
+                  value={formData.category}
+                  onChange={e => setFormData({ ...formData, category: e.target.value })}
+                  options={categories.map(c => ({ value: c, label: c }))}
+                  className="bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-primary)] font-normal py-[10px]"
+                />
               </div>
               <div className="form-group">
                 <label className="form-label">Status</label>
-                <select className="form-select" value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })}>
-                  <option>Draft</option><option>Published</option><option>Archived</option>
-                </select>
+                <CustomSelect
+                  value={formData.status}
+                  onChange={e => setFormData({ ...formData, status: e.target.value })}
+                  options={[
+                    { value: "Draft", label: "Draft" },
+                    { value: "Published", label: "Published" },
+                    { value: "Archived", label: "Archived" }
+                  ]}
+                  className="bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-primary)] font-normal py-[10px]"
+                />
               </div>
               <div className="form-group">
                 <label className="form-label">Featured Image URL</label>
@@ -152,7 +162,8 @@ const AdminArticles = () => {
               <button className="btn btn-primary" onClick={handleSave}>Save Article</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

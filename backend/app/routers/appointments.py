@@ -35,13 +35,38 @@ async def list_appointments(
     return result.scalars().all()
 
 
+from fastapi import BackgroundTasks
+
 @router.post("", response_model=AppointmentResponse, status_code=201)
-async def create_appointment(data: AppointmentCreate, user_id: CurrentUserId, db: AsyncSession = Depends(get_db)):
+async def create_appointment(
+    data: AppointmentCreate, 
+    user_id: CurrentUserId, 
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db)
+):
     """Schedule a new appointment."""
     apt = Appointment(user_id=user_id, **data.model_dump())
     db.add(apt)
     await db.flush()
     await db.refresh(apt)
+    
+    # Check notification preferences
+    result = await db.execute(select(UserProfile).where(UserProfile.user_id == user_id))
+    profile = result.scalar_one_or_none()
+    
+    if profile and profile.notification_preferences and profile.notification_preferences.get("appointment", {}).get("emergency_sms", False):
+        from app.models.emergency import EmergencyContact
+        from app.utils.email import send_sos_sms_twilio
+        
+        # Get emergency contacts
+        contacts_res = await db.execute(select(EmergencyContact).where(EmergencyContact.user_id == user_id))
+        contacts = contacts_res.scalars().all()
+        phones = [c.phone for c in contacts if c.phone]
+        
+        if phones:
+            msg = f"LifeOS Alert: {profile.name} has scheduled a new medical appointment with {apt.doctor} on {apt.date} at {apt.time}."
+            background_tasks.add_task(send_sos_sms_twilio, phones, profile.name, msg)
+
     await db.commit()
     return apt
 
@@ -109,6 +134,11 @@ async def generate_appointment_prep(
 
     # 3. Construct AI Prompt
     symptoms_text = request.symptoms if request.symptoms else "None reported."
+    requested_lang = "English"
+    if request.language and request.language.lower() not in ['en', 'english']:
+        requested_lang = request.language.upper()
+    lang_instruction = f"\n\nCRITICAL INSTRUCTION: Output your final response entirely in {requested_lang}."
+
     prompt = f"""
 You are an expert AI medical assistant helping a patient prepare for an upcoming doctor's appointment.
 
@@ -125,7 +155,7 @@ PATIENT'S RECENT DATA:
 TASK:
 Based on the appointment reason, the recent symptoms, and the vitals provided, draft a list of 3 to 5 highly relevant and important questions the patient should ask their doctor during the visit.
 Ensure the questions are patient-friendly, clear, and focused on understanding their health, potential treatments, and next steps.
-Format the output as a clear bulleted list using markdown. Do not include any greeting or conversational filler, just the questions and a very brief rationale for each if helpful.
+Format the output as a clear bulleted list using markdown. Do not include any greeting or conversational filler, just the questions and a very brief rationale for each if helpful.{lang_instruction}
     """
 
     # 4. Generate AI Response

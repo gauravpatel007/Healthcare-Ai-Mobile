@@ -17,6 +17,7 @@ class ChatMessage(Base):
     user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    session_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
 
     role: Mapped[str] = mapped_column(
         SAEnum("user", "assistant", name="chat_role"),

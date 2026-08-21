@@ -178,8 +178,28 @@ async def check_organ_suitability(
     data: OrganSuitabilityRequest, user_id: CurrentUserId, db: AsyncSession = Depends(get_db)
 ):
     """Run AI Pre-Screening for Organ Suitability based on profile and questionnaire."""
-    # (Existing suitability logic here)
-    raise NotImplementedError()
+    from app.services.ai_service import generate_ai_response
+    
+    result = await db.execute(select(UserProfile).where(UserProfile.user_id == user_id))
+    profile = result.scalar_one_or_none()
+    
+    context = ""
+    if profile:
+        conditions = ", ".join(profile.conditions) if profile.conditions else "None"
+        allergies = ", ".join(profile.allergies) if profile.allergies else "None"
+        context = f"Age: {profile.age}\nBlood Type: {profile.blood_type}\nConditions: {conditions}\nAllergies: {allergies}"
+        
+    user_message = "Questionnaire Answers:\n"
+    for k, v in data.questionnaire_answers.items():
+        user_message += f"- {k.replace('_', ' ').title()}: {v}\n"
+        
+    report = await generate_ai_response(
+        module="organ_suitability",
+        user_message=user_message,
+        context=context
+    )
+    
+    return {"report": report}
 
 from app.models.user import User
 from app.models.notification import SystemNotification

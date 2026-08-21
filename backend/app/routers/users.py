@@ -20,10 +20,69 @@ router = APIRouter(prefix="/users", tags=["Users"])
 @router.get("/profile", response_model=UserProfileResponse)
 async def get_profile(user_id: CurrentUserId, db: AsyncSession = Depends(get_db)):
     """Get current user's profile."""
+    from sqlalchemy import text
+    try:
+        await db.execute(text("ALTER TABLE user_profiles ADD COLUMN step_goal INTEGER NOT NULL DEFAULT 10000;"))
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        
+    try:
+        await db.execute(text("ALTER TABLE user_profiles ADD COLUMN target_weight FLOAT;"))
+        await db.commit()
+    except Exception:
+        await db.rollback()
+
+    try:
+        await db.execute(text("ALTER TABLE user_profiles ADD COLUMN target_weight_timeline VARCHAR(100);"))
+        await db.commit()
+    except Exception:
+        await db.rollback()
+
+    try:
+        await db.execute(text("ALTER TABLE user_profiles ADD COLUMN calorie_goal INTEGER;"))
+        await db.commit()
+    except Exception:
+        await db.rollback()
+
+    try:
+        await db.execute(text("ALTER TABLE user_profiles ADD COLUMN burn_calorie_goal INTEGER NOT NULL DEFAULT 500;"))
+        await db.commit()
+    except Exception:
+        await db.rollback()
+
+    try:
+        await db.execute(text("ALTER TABLE user_profiles ADD COLUMN measurement_unit VARCHAR(10) NOT NULL DEFAULT 'metric';"))
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        
+    try:
+        await db.execute(text("ALTER TABLE user_profiles ADD COLUMN notification_preferences JSON NOT NULL DEFAULT '{}';"))
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        
     result = await db.execute(select(UserProfile).where(UserProfile.user_id == user_id))
     profile = result.scalar_one_or_none()
     if not profile:
         raise NotFoundException("Profile")
+        
+    from app.models.health_tracker import HealthEntry
+    
+    # Auto-sync weight from the latest HealthEntry to resolve out-of-sync states
+    latest_weight_res = await db.execute(
+        select(HealthEntry)
+        .where(HealthEntry.user_id == user_id, HealthEntry.category == "weight")
+        .order_by(HealthEntry.recorded_at.desc())
+        .limit(1)
+    )
+    latest_w = latest_weight_res.scalars().first()
+    if latest_w and latest_w.value != profile.weight:
+        profile.weight = latest_w.value
+        db.add(profile)
+        
+    await db.commit()
     return profile
 
 
@@ -42,6 +101,10 @@ async def update_profile(
     
     for key, value in update_data.items():
         setattr(profile, key, value)
+        
+    if data.burn_calorie_goal is not None:
+        profile.burn_calorie_goal = data.burn_calorie_goal
+
 
     new_weight = update_data.get("weight")
     if new_weight is not None and new_weight != old_weight:
@@ -237,3 +300,99 @@ async def upload_avatar(
     await db.commit()
     
     return profile
+
+
+from pydantic import BaseModel
+
+class DeviceTokenUpdate(BaseModel):
+    token: str
+
+@router.put("/me/device-token")
+async def update_device_token(
+    data: DeviceTokenUpdate, user_id: CurrentUserId, db: AsyncSession = Depends(get_db)
+):
+    """Register or update the user's push notification device token."""
+    from sqlalchemy import text
+    try:
+        await db.execute(text("ALTER TABLE user_profiles ADD COLUMN push_device_token VARCHAR(255);"))
+        await db.commit()
+    except Exception:
+        await db.rollback()
+
+    result = await db.execute(select(UserProfile).where(UserProfile.user_id == user_id))
+    profile = result.scalar_one_or_none()
+    if not profile:
+        from app.exceptions import NotFoundException
+        raise NotFoundException("Profile")
+        
+    profile.push_device_token = data.token
+    await db.commit()
+    
+    return {"success": True, "message": "Device token registered"}
+
+@router.post("/me/test-push")
+async def test_push_notification(
+    user_id: CurrentUserId, db: AsyncSession = Depends(get_db)
+):
+    """Send a test push notification to the user's registered device."""
+    from fastapi import HTTPException
+    import traceback
+    
+    try:
+        result = await db.execute(select(UserProfile).where(UserProfile.user_id == user_id))
+        profile = result.scalar_one_or_none()
+        
+        if not profile or not profile.push_device_token:
+            raise HTTPException(status_code=400, detail="No push device token found. Please subscribe first.")
+        
+        token = profile.push_device_token
+        
+        # Inline the push notification logic here for better error visibility
+        import urllib.request
+        import json as json_lib
+        from app.config import get_settings
+        
+        settings = get_settings()
+        app_id = settings.ONESIGNAL_APP_ID.strip('"').strip("'")
+        rest_api_key = settings.ONESIGNAL_REST_API_KEY.strip('"').strip("'")
+        
+        if not app_id or not rest_api_key:
+            raise HTTPException(
+                status_code=500, 
+                detail=f"OneSignal not configured. app_id='{app_id}', key_prefix='{rest_api_key[:20] if rest_api_key else 'EMPTY'}'"
+            )
+        
+        url = "https://onesignal.com/api/v1/notifications"
+        payload = {
+            "app_id": app_id,
+            "target_channel": "push",
+            "include_subscription_ids": [token],
+            "headings": {"en": "Test Notification 🚀"},
+            "contents": {"en": "Your push notifications are working perfectly!"},
+        }
+        
+        req = urllib.request.Request(
+            url,
+            data=json_lib.dumps(payload).encode(),
+            headers={
+                "Content-Type": "application/json; charset=utf-8",
+                "Authorization": f"Basic {rest_api_key}"
+            },
+            method="POST"
+        )
+        
+        with urllib.request.urlopen(req) as response:
+            res_data = json_lib.loads(response.read())
+            return {"success": True, "message": "Test notification sent", "onesignal_response": res_data}
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        error_body = ""
+        if hasattr(e, 'read'):
+            try:
+                error_body = e.read().decode()
+            except Exception:
+                pass
+        full_error = f"{str(e)} | Body: {error_body}" if error_body else str(e)
+        raise HTTPException(status_code=500, detail=f"Push error: {full_error}")

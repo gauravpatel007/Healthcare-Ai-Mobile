@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, ShieldAlert, Lock, UserX, LogOut, CheckCircle, XCircle, Search, RefreshCw, Smartphone, Key } from 'lucide-react';
 import api from '../../utils/api';
+import { usePersistentTab } from '../../hooks/usePersistentTab';
 
 export default function AdminSecurity() {
-  const [activeTab, setActiveTab] = useState('logins'); // logins, blocked, policy
+  const [activeTab, setActiveTab] = usePersistentTab('admin_security', 'logins'); // logins, blocked, policy
   const [logins, setLogins] = useState([]);
-  const [showAllLogins, setShowAllLogins] = useState(false);
+  const [displayCountLogins, setDisplayCountLogins] = useState(15);
   const [blockedIps, setBlockedIps] = useState([]);
   const [policy, setPolicy] = useState({
     min_length: 8,
@@ -112,7 +113,7 @@ export default function AdminSecurity() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-row flex-wrap md:flex-nowrap items-center justify-between gap-4 relative overflow-hidden w-full">
+      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-row flex-wrap md:flex-nowrap items-center justify-between gap-4 relative overflow-visible w-full">
         <div className="flex items-center gap-4 lg:gap-6 relative z-10 w-auto">
           <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
             <Shield className="w-8 h-8" />
@@ -175,7 +176,7 @@ export default function AdminSecurity() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                {(showAllLogins ? logins : logins.slice(0, 15)).map((login) => (
+                {logins.slice(0, displayCountLogins).map((login) => (
                   <tr key={login.id} className="hover:bg-gray-50 dark:bg-gray-900 dark:hover:bg-gray-700/50 transition-colors">
                     <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">{login.email}</td>
                     <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{login.ip_address}</td>
@@ -198,13 +199,13 @@ export default function AdminSecurity() {
                 ))}
               </tbody>
             </table>
-            {logins.length > 15 && (
+            {logins.length > displayCountLogins && (
               <div className="p-4 border-t border-gray-100 dark:border-gray-700 flex justify-center bg-gray-50 dark:bg-gray-900 dark:bg-gray-800/50">
                 <button
-                  onClick={() => setShowAllLogins(!showAllLogins)}
+                  onClick={() => setDisplayCountLogins(prev => prev + 20)}
                   className="px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50 rounded-lg transition-colors"
                 >
-                  {showAllLogins ? "Show Less" : `See More (${logins.length - 15} more)`}
+                  See More ({logins.length - displayCountLogins} more)
                 </button>
               </div>
             )}

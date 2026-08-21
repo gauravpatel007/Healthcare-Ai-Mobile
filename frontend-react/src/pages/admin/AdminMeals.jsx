@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../../utils/api';
 import { Plus, Search, Edit2, Trash2, UtensilsCrossed, Flame } from 'lucide-react';
+import CustomSelect from '../../components/ui/CustomSelect';
 
 export default function AdminMeals() {
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [displayCount, setDisplayCount] = useState(15);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Form Modal state
@@ -143,7 +146,7 @@ export default function AdminMeals() {
             ) : filtered.length === 0 ? (
               <tr><td colSpan="4" className="p-8 text-center text-gray-400 font-medium">No meals found.</td></tr>
             ) : (
-              filtered.map(item => (
+              filtered.slice(0, displayCount).map(item => (
                 <tr key={item.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-700/50 dark:bg-gray-700/30 dark:hover:bg-gray-700/50 dark:bg-gray-700/30 dark:hover:bg-gray-700/50 dark:bg-gray-700/30 transition-colors">
                   <td className="p-4 pl-6">
                     <div className="flex items-center gap-3">
@@ -190,12 +193,22 @@ export default function AdminMeals() {
             )}
           </tbody>
         </table>
+        {filtered.length > displayCount && (
+          <div className="p-4 mt-2 flex justify-center border-t border-gray-100 dark:border-gray-700">
+            <button
+              onClick={() => setDisplayCount(prev => prev + 20)}
+              className="px-4 py-2 text-sm font-medium text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 hover:bg-teal-100 rounded-lg transition-colors"
+            >
+              See More ({filtered.length - displayCount} more)
+            </button>
+          </div>
+        )}
       </div>
 
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-gray-800 rounded-[2rem] shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden border border-gray-100 dark:border-gray-700 animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-6 md:p-8">
+      {showModal && createPortal(
+        <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm" onClick={() => setShowModal(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-[2rem] shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col border border-gray-100 dark:border-gray-700 animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6 md:p-8 overflow-y-auto overflow-x-hidden custom-scrollbar">
               <h2 className="text-2xl font-extrabold text-gray-900 dark:text-white mb-6">
                 {editingId ? 'Edit Meal' : 'Add Meal'}
               </h2>
@@ -211,13 +224,17 @@ export default function AdminMeals() {
                   
                   <div className="space-y-1.5">
                     <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Meal Type</label>
-                    <select value={formData.meal_type} onChange={e => setFormData({ ...formData, meal_type: e.target.value })}
-                      className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-3 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none">
-                      <option value="Breakfast">Breakfast</option>
-                      <option value="Lunch">Lunch</option>
-                      <option value="Snack">Snack</option>
-                      <option value="Dinner">Dinner</option>
-                    </select>
+                    <CustomSelect
+                      value={formData.meal_type}
+                      onChange={e => setFormData({ ...formData, meal_type: e.target.value })}
+                      options={[
+                        { value: "Breakfast", label: "Breakfast" },
+                        { value: "Lunch", label: "Lunch" },
+                        { value: "Snack", label: "Snack" },
+                        { value: "Dinner", label: "Dinner" }
+                      ]}
+                      className="!bg-white dark:!bg-gray-800 border border-gray-200 dark:border-gray-600 !font-medium !py-3 !shadow-none !text-gray-900 dark:!text-white !text-base"
+                    />
                   </div>
 
                   <div className="space-y-1.5">
@@ -253,7 +270,8 @@ export default function AdminMeals() {
               </form>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

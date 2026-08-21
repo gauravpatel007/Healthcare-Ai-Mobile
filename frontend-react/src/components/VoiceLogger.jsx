@@ -14,6 +14,9 @@ const VoiceLogger = ({ onLogSuccess, onAction }) => {
   const [state, setState] = useState('idle'); // idle | passive | active | processing
   const [command, setCommand] = useState('');
   const [interimText, setInterimText] = useState('');
+  const [messages, setMessages] = useState([]);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const messagesEndRef = useRef(null);
   const recognitionRef = useRef(null);
   const restartTimeoutRef = useRef(null);
   const commandTimeoutRef = useRef(null);
@@ -50,21 +53,28 @@ const VoiceLogger = ({ onLogSuccess, onAction }) => {
   // ── Text-to-Speech (TTS) ──
   const speakText = useCallback((text) => {
     if (!('speechSynthesis' in window)) return;
-    
+
     isSpeakingRef.current = true;
-    
+
     // Stop listening temporarily to avoid echo loop
     if (recognitionRef.current) {
       isStoppedManuallyRef.current = true;
-      try { recognitionRef.current.stop(); } catch(e) {}
+      try { recognitionRef.current.stop(); } catch (e) { }
     }
 
     const utterance = new SpeechSynthesisUtterance(text);
+    // Prevent garbage collection bug in Chrome
+    window._speechUtterances = window._speechUtterances || [];
+    window._speechUtterances.push(utterance);
+    
     utterance.rate = 1.0;
     utterance.pitch = 1.0;
-    
+
     utterance.onend = () => {
       isSpeakingRef.current = false;
+      // Remove from global array
+      window._speechUtterances = window._speechUtterances.filter(u => u !== utterance);
+      
       // Resume listening if it was enabled
       if (isEnabledRef.current && startListeningRef.current) {
         setTimeout(() => {
@@ -74,6 +84,20 @@ const VoiceLogger = ({ onLogSuccess, onAction }) => {
       }
     };
 
+    utterance.onerror = (e) => {
+      console.error("Speech synthesis error:", e);
+      isSpeakingRef.current = false;
+      window._speechUtterances = window._speechUtterances.filter(u => u !== utterance);
+      if (isEnabledRef.current && startListeningRef.current) {
+        setTimeout(() => {
+          isStoppedManuallyRef.current = false;
+          startListeningRef.current();
+        }, 300);
+      }
+    };
+
+    // Ensure any previous speech is cancelled to prevent queue lockups
+    window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
   }, []);
 
@@ -82,6 +106,8 @@ const VoiceLogger = ({ onLogSuccess, onAction }) => {
     if (text !== 'code red') {
       setState('processing');
       setCommand(text);
+      setMessages(prev => [...prev, { id: Date.now() + '-user', role: 'user', text }]);
+      setIsChatOpen(true);
     }
     try {
       // If "Hey AI" was used, send directly to AI chat
@@ -97,26 +123,30 @@ const VoiceLogger = ({ onLogSuccess, onAction }) => {
       }
 
       const res = await API.post('/trackers/voice-log', { text });
-      
+
       if (res.type === 'action' && res.success) {
+        setMessages(prev => [...prev, { id: Date.now() + '-ai', role: 'ai', text: res.message || "Action processed." }]);
         if (res.target_feature === 'voice' && res.action_name === 'speak') {
           speakText(res.data?.text || "I'm sorry, I couldn't process that.");
-        } else if (onAction) {
-          onAction({
-            target_feature: res.target_feature,
-            action_name: res.action_name,
-            data: res.data || {}
-          });
+        } else {
+          if (res.message) speakText(res.message);
+          if (onAction) {
+            onAction({
+              target_feature: res.target_feature,
+              action_name: res.action_name,
+              data: res.data || {}
+            });
+          }
         }
       } else if (res.success) {
+        setMessages(prev => [...prev, { id: Date.now() + '-ai', role: 'ai', text: res.message }]);
         if (onLogSuccess) onLogSuccess(res.message);
-        else alert(res.message);
       } else {
-        alert(res.message || "Failed to process voice command");
+        setMessages(prev => [...prev, { id: Date.now() + '-error', role: 'error', text: res.message || "Failed to process voice command" }]);
       }
     } catch (err) {
       console.error(err);
-      alert("Error processing voice command");
+      setMessages(prev => [...prev, { id: Date.now() + '-error', role: 'error', text: "Error processing voice command" }]);
     } finally {
       if (isEnabledRef.current) {
         setState('passive');
@@ -146,7 +176,7 @@ const VoiceLogger = ({ onLogSuccess, onAction }) => {
   const wakeTypeRef = useRef(null);
   const detectWakeWord = useCallback((text) => {
     const normalized = text.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
-    
+
     // Check for "Hey AI" or "Hello AI" first (for AI chat)
     const aiPatterns = ['hey ai', 'hey a i', 'a ai', 'hello ai', 'hello a i'];
     for (const pattern of aiPatterns) {
@@ -156,7 +186,7 @@ const VoiceLogger = ({ onLogSuccess, onAction }) => {
         return { detected: true, command: afterWake, wakeType: 'ai' };
       }
     }
-    
+
     // Check for "Hey Jarvis" (main wake word)
     const jarvisPatterns = [
       'hey jarvis', 'hello jarvis', 'hi jarvis', 'a jarvis',
@@ -196,7 +226,7 @@ const VoiceLogger = ({ onLogSuccess, onAction }) => {
     // Clean up existing instance
     if (recognitionRef.current) {
       isStoppedManuallyRef.current = true;
-      try { recognitionRef.current.stop(); } catch(e) {}
+      try { recognitionRef.current.stop(); } catch (e) { }
     }
 
     const recognition = new SpeechRecognition();
@@ -216,6 +246,8 @@ const VoiceLogger = ({ onLogSuccess, onAction }) => {
     };
 
     recognition.onresult = (event) => {
+      if (isStoppedManuallyRef.current) return; // Completely block duplicate events after stopping
+      
       // Build full transcript from all results
       let finalText = '';
       let interimTextLocal = '';
@@ -242,7 +274,8 @@ const VoiceLogger = ({ onLogSuccess, onAction }) => {
             // Clear timeout and process
             if (commandTimeoutRef.current) clearTimeout(commandTimeoutRef.current);
             isStoppedManuallyRef.current = true;
-            try { recognition.stop(); } catch(e) {}
+            wakeDetectedRef.current = false; // Prevent double-firing
+            try { recognition.stop(); } catch (e) { }
             processVoiceCommand(cmd, wakeTypeRef.current === 'ai');
           }
         }
@@ -254,16 +287,18 @@ const VoiceLogger = ({ onLogSuccess, onAction }) => {
       if (wakeResult.detected) {
         wakeDetectedRef.current = true;
         wakeTypeRef.current = wakeResult.wakeType;
-        
+
         if (wakeResult.wakeType !== 'silent') {
           setState('active');
+          setIsChatOpen(true);
           playChime();
         }
 
         // If there's already a command after the wake word in final text
         if (wakeResult.command.length > 2 && finalText.trim()) {
           isStoppedManuallyRef.current = true;
-          try { recognition.stop(); } catch(e) {}
+          wakeDetectedRef.current = false; // Prevent double-firing
+          try { recognition.stop(); } catch (e) { }
           processVoiceCommand(wakeResult.command, wakeResult.wakeType === 'ai');
           return;
         }
@@ -276,7 +311,7 @@ const VoiceLogger = ({ onLogSuccess, onAction }) => {
           setState('passive');
           setInterimText('');
           isStoppedManuallyRef.current = true;
-          try { recognition.stop(); } catch(e) {}
+          try { recognition.stop(); } catch (e) { }
           setTimeout(() => startListening(), 200);
         }, 5000);
       }
@@ -318,15 +353,6 @@ const VoiceLogger = ({ onLogSuccess, onAction }) => {
   // ── Proactive Reminders ──
   useEffect(() => {
     let reminderPlayed = false;
-    
-    // 1-minute test mode timer
-    const testTimer = setTimeout(() => {
-      if (isEnabledRef.current && !isSpeakingRef.current) {
-        playChime();
-        speakText("Hey Gaurav, this is your test mode reminder. It's time to take your blood pressure medication.");
-        reminderPlayed = true;
-      }
-    }, 60000); // 1 minute
 
     const interval = setInterval(() => {
       const now = new Date();
@@ -338,7 +364,7 @@ const VoiceLogger = ({ onLogSuccess, onAction }) => {
           reminderPlayed = true;
         }
       }
-      
+
       // Reset reminder flag at midnight
       if (now.getHours() === 0 && now.getMinutes() === 0) {
         reminderPlayed = false;
@@ -346,7 +372,6 @@ const VoiceLogger = ({ onLogSuccess, onAction }) => {
     }, 30000); // Check every 30 seconds
 
     return () => {
-      clearTimeout(testTimer);
       clearInterval(interval);
     };
   }, [playChime, speakText]);
@@ -358,7 +383,7 @@ const VoiceLogger = ({ onLogSuccess, onAction }) => {
       if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
       if (commandTimeoutRef.current) clearTimeout(commandTimeoutRef.current);
       if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch(e) {}
+        try { recognitionRef.current.stop(); } catch (e) { }
       }
     };
   }, []);
@@ -374,7 +399,7 @@ const VoiceLogger = ({ onLogSuccess, onAction }) => {
       if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
       if (commandTimeoutRef.current) clearTimeout(commandTimeoutRef.current);
       if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch(e) {}
+        try { recognitionRef.current.stop(); } catch (e) { }
       }
       setState('idle');
       wakeDetectedRef.current = false;
@@ -415,7 +440,7 @@ const VoiceLogger = ({ onLogSuccess, onAction }) => {
   const getStatusText = () => {
     switch (state) {
       case 'idle': return 'Click to enable voice';
-      case 'passive': return 'Say "Hey Jarvis" or "Hey AI" ...';
+      case 'passive': return 'Say "Hey Jarvis"';
       case 'active': return interimText ? `Hearing: "${interimText}"` : 'Listening for command...';
       case 'processing': return `Processing: "${command}"`;
       default: return '';
@@ -431,6 +456,12 @@ const VoiceLogger = ({ onLogSuccess, onAction }) => {
     }
   };
 
+  useEffect(() => {
+    if (isChatOpen && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, isChatOpen, state, interimText]);
+
   return (
     <>
       {/* Fixed bottom-right floating assistant */}
@@ -438,14 +469,53 @@ const VoiceLogger = ({ onLogSuccess, onAction }) => {
         position: 'fixed',
         bottom: '24px',
         right: '24px',
-        zIndex: 9999,
+        zIndex: 999999,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'flex-end',
         gap: '10px',
       }}>
-        {/* Status tooltip — shown when not idle */}
-        {state !== 'idle' && (
+        {/* Chat window — shown when chat is open */}
+        {isChatOpen && (
+          <div className="bg-white dark:bg-gray-800 rounded-2xl w-[320px] max-h-[400px] flex flex-col shadow-[0_10px_40px_rgba(0,0,0,0.2)] border border-slate-200 dark:border-gray-700 overflow-hidden mb-2" style={{ animation: 'fadeSlideUp 0.3s ease' }}>
+            <div className="px-4 py-3 bg-slate-50 dark:bg-gray-900 border-b border-slate-200 dark:border-gray-700 flex justify-between items-center">
+              <span className="font-semibold text-sm text-slate-800 dark:text-gray-100 flex items-center gap-2">
+                <span style={{
+                  width: '8px', height: '8px', borderRadius: '50%',
+                  background: getStatusDot(),
+                  animation: state === 'active' ? 'activePulse 1s infinite' : state === 'passive' ? 'breathe 2s infinite' : 'none',
+                }} />
+                Voice Assistant
+              </span>
+              <button onClick={() => setIsChatOpen(false)} className="text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-gray-200">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
+            <div className="flex-1 p-4 overflow-y-auto flex flex-col gap-3 bg-slate-50/50 dark:bg-gray-800">
+              {messages.length === 0 && <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: '13px', marginTop: '20px' }}>Say "Hey Jarvis" to start</div>}
+              {messages.map(m => (
+                <div key={m.id} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
+                  <div className={`px-3.5 py-2.5 text-sm shadow-sm ${m.role === 'user' ? 'text-white bg-emerald-500 rounded-[14px] rounded-br-[4px]' : (m.role === 'error' ? 'text-red-800 bg-red-100 border border-red-300 rounded-[14px] rounded-bl-[4px] dark:bg-red-900/30 dark:border-red-800 dark:text-red-200' : 'text-slate-800 bg-white border border-slate-200 rounded-[14px] rounded-bl-[4px] dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100')}`}>
+                    {m.text}
+                  </div>
+                </div>
+              ))}
+              {(state === 'active' || state === 'processing') && (
+                 <div style={{ alignSelf: 'flex-start', maxWidth: '85%' }}>
+                   <div className="px-3.5 py-2.5 text-sm text-slate-500 bg-white border border-slate-200 rounded-[14px] rounded-bl-[4px] shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300">
+                     <span style={{ display: 'inline-block', animation: state === 'processing' ? 'breathe 1s infinite' : 'none' }}>
+                       {state === 'processing' ? '...' : (interimText ? `"${interimText}"` : 'Listening...')}
+                     </span>
+                   </div>
+                 </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+          </div>
+        )}
+
+        {/* Status tooltip — shown when not idle and chat is closed */}
+        {state !== 'idle' && !isChatOpen && (
           <div style={{
             background: 'rgba(15, 23, 42, 0.9)',
             backdropFilter: 'blur(12px)',
@@ -461,7 +531,8 @@ const VoiceLogger = ({ onLogSuccess, onAction }) => {
             alignItems: 'center',
             gap: '8px',
             animation: 'fadeSlideUp 0.3s ease',
-          }}>
+            cursor: 'pointer'
+          }} onClick={() => setIsChatOpen(true)}>
             <span style={{
               width: '8px', height: '8px', borderRadius: '50%',
               background: getStatusDot(),
@@ -476,19 +547,19 @@ const VoiceLogger = ({ onLogSuccess, onAction }) => {
         <button onClick={toggleAlwaysOn} style={getButtonStyle()} title={getStatusText()}>
           {state === 'processing' ? (
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}>
-              <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
             </svg>
           ) : state === 'active' ? (
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-              <line x1="12" y1="19" x2="12" y2="22"/>
+              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+              <line x1="12" y1="19" x2="12" y2="22" />
             </svg>
           ) : (
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-              <line x1="12" y1="19" x2="12" y2="22"/>
+              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+              <line x1="12" y1="19" x2="12" y2="22" />
             </svg>
           )}
 

@@ -5,6 +5,7 @@ import {
   XCircle, Coins, TrendingUp, UserPlus, Wifi, BarChart3, Pill, ShieldAlert, Download, Loader2
 } from 'lucide-react';
 import API from '../../utils/api';
+import CustomSelect from '../../components/ui/CustomSelect';
 
 /* ─── Reusable Card (EXACT same design as original) ──────────── */
 const StatCard = ({ title, value, subtitle, icon: Icon, colorClass, onClick }) => (
@@ -152,7 +153,7 @@ const AdminOverview = () => {
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
       
       {/* ── Header ─────────────────────────────────── */}
-      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-row flex-wrap md:flex-nowrap items-center justify-between gap-4 relative overflow-hidden w-full">
+      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-row flex-wrap md:flex-nowrap items-center justify-between gap-4 relative overflow-visible w-full">
         <div className="flex items-center gap-4 lg:gap-6 relative z-10 w-auto">
           <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
             <LayoutDashboard className="w-8 h-8" />
@@ -197,14 +198,15 @@ const AdminOverview = () => {
             <h3 className="font-extrabold text-xl text-gray-900 dark:text-white">Platform Usage Trends</h3>
             <p className="text-gray-500 dark:text-gray-400 text-sm font-medium mt-1">AI Interactions vs Active Users (Last {chartRange} Days)</p>
           </div>
-          <select 
+          <CustomSelect
             value={chartRange}
             onChange={e => setChartRange(e.target.value)}
-            className="bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 rounded-xl px-4 pr-10 py-2 text-sm font-bold text-gray-700 dark:text-gray-200 outline-none focus:border-indigo-500 transition-colors cursor-pointer"
-          >
-            <option value="7">Last 7 days</option>
-            <option value="30">Last 30 days</option>
-          </select>
+            options={[
+              { value: "7", label: "Last 7 days" },
+              { value: "30", label: "Last 30 days" }
+            ]}
+            className="bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 font-bold py-[8px]"
+          />
         </div>
         
         {(() => {
@@ -322,14 +324,15 @@ const AdminOverview = () => {
       {/* ── Charts Section (Tab Switcher + Same Gradient Style) ── */}
       <div className="flex items-center justify-between mb-2">
         <SectionHeader title="Analytics Charts" subtitle={`Visualize platform trends over the last ${chart2Range} days`} />
-        <select 
+        <CustomSelect
             value={chart2Range}
             onChange={e => setChart2Range(e.target.value)}
-            className="bg-gray-50 dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 rounded-xl px-4 pr-10 py-2 text-sm font-bold text-gray-700 dark:text-gray-300 outline-none focus:border-indigo-500 transition-colors cursor-pointer"
-          >
-            <option value="7">Last 7 days</option>
-            <option value="30">Last 30 days</option>
-        </select>
+            options={[
+              { value: "7", label: "Last 7 days" },
+              { value: "30", label: "Last 30 days" }
+            ]}
+            className="bg-gray-50 dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 font-bold py-[8px]"
+          />
       </div>
       <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-8 shadow-sm border border-gray-100 dark:border-gray-700">
         {/* Tabs */}

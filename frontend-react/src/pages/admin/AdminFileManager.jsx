@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Folder, Image as ImageIcon, Video, FileText, File, 
   FileBox, Search, Plus, MoreVertical, LayoutGrid, List,
   Trash2, Download, ArrowLeft, Loader2, Edit, X
 } from 'lucide-react';
 import api from '../../utils/api';
+import CustomSelect from '../../components/ui/CustomSelect';
 
 export default function AdminFileManager() {
   const [files, setFiles] = useState([]);
@@ -13,6 +15,7 @@ export default function AdminFileManager() {
   const [searchQuery, setSearchQuery] = useState('');
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
+  const [displayCount, setDisplayCount] = useState(15);
 
   const folderCategories = [
     { name: 'Images', icon: ImageIcon, color: 'text-purple-500', bg: 'bg-purple-50' },
@@ -129,7 +132,7 @@ export default function AdminFileManager() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 flex flex-col h-full min-h-[80vh] pb-10">
-      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-row flex-wrap md:flex-nowrap items-center justify-between gap-4 relative overflow-hidden w-full shrink-0">
+      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-row flex-wrap md:flex-nowrap items-center justify-between gap-4 relative overflow-visible w-full shrink-0">
         <div className="flex items-center gap-4 lg:gap-6 relative z-10 w-auto">
           <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
             <Folder className="w-8 h-8" />
@@ -225,7 +228,7 @@ export default function AdminFileManager() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredFiles.map(file => (
+                  {filteredFiles.slice(0, displayCount).map(file => (
                     <tr key={file.id} className="border-b border-gray-50 hover:bg-gray-50/50 dark:hover:bg-gray-700/50 dark:bg-gray-700/30 dark:hover:bg-gray-700/50 dark:bg-gray-700/30 dark:hover:bg-gray-700/50 dark:bg-gray-700/30 transition-colors">
                       <td className="py-4 flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
@@ -275,12 +278,22 @@ export default function AdminFileManager() {
               </table>
             </div>
           )}
+          {filteredFiles.length > displayCount && (
+            <div className="p-4 mt-2 flex justify-center">
+              <button
+                onClick={() => setDisplayCount(prev => prev + 20)}
+                className="px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-lg transition-colors"
+              >
+                See More ({filteredFiles.length - displayCount} more)
+              </button>
+            </div>
+          )}
         </div>
       )}
 
-      {editFile && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md shadow-xl animate-in zoom-in-95 duration-200">
+      {editFile && createPortal(
+        <div className="fixed inset-0 bg-black/50 z-[100000] flex items-center justify-center p-4" onClick={closeEditModal}>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md shadow-xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold text-gray-900 dark:text-white">Edit File Details</h3>
               <button onClick={closeEditModal} className="p-2 hover:bg-gray-100 dark:bg-gray-700 rounded-xl transition-colors">
@@ -301,15 +314,12 @@ export default function AdminFileManager() {
               
               <div>
                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">Category</label>
-                <select 
+                <CustomSelect
                   value={editCategory}
                   onChange={e => setEditCategory(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 appearance-none" 
-                >
-                  {folderCategories.map(cat => (
-                    <option key={cat.name} value={cat.name}>{cat.name}</option>
-                  ))}
-                </select>
+                  options={folderCategories.map(cat => ({ value: cat.name, label: cat.name }))}
+                  className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 font-medium py-[10px]"
+                />
               </div>
 
               <div className="pt-4 flex gap-3">
@@ -330,7 +340,8 @@ export default function AdminFileManager() {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>

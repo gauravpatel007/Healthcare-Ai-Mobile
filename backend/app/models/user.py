@@ -45,6 +45,9 @@ class User(Base, TimestampMixin):
     profile: Mapped["UserProfile"] = relationship(
         "UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
+    gamification: Mapped["UserGamification"] = relationship(
+        "UserGamification", back_populates="user", uselist=False, cascade="all, delete-orphan"
+    )
 
 
 class UserProfile(Base, TimestampMixin):
@@ -63,6 +66,11 @@ class UserProfile(Base, TimestampMixin):
     blood_type: Mapped[str] = mapped_column(String(5), nullable=False, default="O+")
     height: Mapped[float] = mapped_column(nullable=False, default=170.0)
     weight: Mapped[float] = mapped_column(nullable=False, default=70.0)
+    step_goal: Mapped[int] = mapped_column(Integer, nullable=False, default=10000)
+    target_weight: Mapped[float | None] = mapped_column(nullable=True)
+    target_weight_timeline: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    calorie_goal: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    burn_calorie_goal: Mapped[int] = mapped_column(Integer, nullable=False, default=500)
     allergies: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     conditions: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     chronic_conditions: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
@@ -70,11 +78,18 @@ class UserProfile(Base, TimestampMixin):
     organ_donor: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     organ_preferences: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     language: Mapped[str] = mapped_column(String(5), default="en", nullable=False)
+    measurement_unit: Mapped[str] = mapped_column(String(10), default="metric", nullable=False)
     phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     connected_devices: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    notification_preferences: Mapped[dict] = mapped_column(JSON, nullable=False, default=lambda: {
+        "medicine": {"email": True, "sms": False, "app": True},
+        "appointment": {"emergency_sms": False, "app": True},
+        "fitness": {"email": False, "app": True}
+    })
     fitbit_access_token: Mapped[str | None] = mapped_column(Text, nullable=True)
     fitbit_refresh_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    push_device_token: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="profile")

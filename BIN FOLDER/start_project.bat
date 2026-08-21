@@ -1,17 +1,19 @@
 @echo off
-echo Starting LifeOS Backend and Chatbot...
+echo ==========================================
+echo Starting LifeOS Healthcare AI Services...
+echo ==========================================
 
-cd /d "%~dp0"
+:: Get the parent directory of the BIN FOLDER (which is the project root)
+set "PROJECT_DIR=%~dp0.."
 
-echo Starting FastAPI Backend...
-start cmd /k "venv\Scripts\activate && cd backend && python -m uvicorn app.main:app --reload --port 8000"
+echo Starting Frontend...
+start "Frontend" cmd /k "cd /d "%PROJECT_DIR%\frontend-react" && npm install && npm run dev"
 
-echo Starting AI Chatbot...
-start cmd /k "venv\Scripts\activate && cd backend\chatbot && python app.py"
+echo Starting Backend...
+start "Backend" cmd /k "cd /d "%PROJECT_DIR%" && python -m venv venv && call venv\Scripts\activate.bat && python -m pip install -r requirements.txt && cd backend && python -m uvicorn app.main:app --reload --port 8000"
 
-echo Both services have been started in new windows.
-echo Frontend is already running via Live Server at http://127.0.0.1:5500/frontend/
-echo.
-echo API Docs: http://localhost:8000/docs
-echo.
+echo Starting Chatbot...
+start "Chatbot" cmd /k "cd /d "%PROJECT_DIR%" && call venv\Scripts\activate.bat && cd backend\chatbot && python -m pip install -r requirements.txt && python app.py"
+
+echo All services are starting up in separate terminal windows.
 pause

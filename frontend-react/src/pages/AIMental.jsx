@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import API from '../utils/api';
+import { useLang } from '../contexts/LangContext';
 import { 
   SmilePlus, 
   Sparkles, 
@@ -14,7 +16,9 @@ import {
   Pause,
   X,
   Save,
-  Check
+  Check,
+  Mic,
+  MicOff
 } from 'lucide-react';
 
 const meditations = [
@@ -46,6 +50,7 @@ const AFFIRMATIONS = [
 ];
 
 const AIMental = ({ voiceAction, onVoiceActionConsumed }) => {
+  const { t, lang } = useLang();
   const [loading, setLoading] = useState(true);
   const [moods, setMoods] = useState([]);
   const [analysis, setAnalysis] = useState(null);
@@ -56,6 +61,10 @@ const AIMental = ({ voiceAction, onVoiceActionConsumed }) => {
   const [selectedMood, setSelectedMood] = useState('');
   const [screeningAnswers, setScreeningAnswers] = useState({});
   const [screeningResult, setScreeningResult] = useState(null);
+
+  const [isRecording, setIsRecording] = useState(false);
+  const recognitionRef = useRef(null);
+  const [proactiveAction, setProactiveAction] = useState(null);
 
   const dailyAffirmation = AFFIRMATIONS[new Date().getDay() % AFFIRMATIONS.length];
 
@@ -89,7 +98,7 @@ const AIMental = ({ voiceAction, onVoiceActionConsumed }) => {
     try {
       const res = await API.post('/ai/mental/mood', { mood: emoji, note: '' });
       if (res) {
-        setMoods([res, ...moods].slice(0, 7));
+        setMoods([res, ...moods]);
         const [moodAnalysis, stressRes] = await Promise.all([
           API.get('/ai/mental/mood/analysis'),
           API.get('/ai/mental/stress')
@@ -109,10 +118,18 @@ const AIMental = ({ voiceAction, onVoiceActionConsumed }) => {
     }
     
     try {
-      const res = await API.post('/ai/mental/journal', { content: journalEntry });
+      const res = await API.post('/ai/mental/journal', { 
+        content: journalEntry,
+        language: lang === 'hi' ? 'Hindi' : (lang === 'gu' ? 'Gujarati' : 'English')
+      });
       if (res) {
         setJournalAnalysis({ sentiment: res.sentiment, ai_analysis: res.ai_analysis });
         setJournalEntry('');
+        
+        if (res.proactive_action) {
+          setProactiveAction(res.proactive_action);
+        }
+        
         const moodHistory = await API.get('/ai/mental/mood/history');
         if (moodHistory) setMoods(moodHistory);
       }
@@ -120,6 +137,47 @@ const AIMental = ({ voiceAction, onVoiceActionConsumed }) => {
       console.error(e);
       alert('Failed to save journal');
     }
+  };
+
+  const handleVoiceRecord = () => {
+    if (isRecording) {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      setIsRecording(false);
+      return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Your browser doesn't support voice recording.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = lang === 'hi' ? 'hi-IN' : (lang === 'gu' ? 'gu-IN' : 'en-US');
+
+    recognition.onresult = (event) => {
+      let finalTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        }
+      }
+      if (finalTranscript) {
+        setJournalEntry(prev => (prev ? prev + ' ' + finalTranscript : finalTranscript));
+      }
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+    };
+
+    recognition.start();
+    recognitionRef.current = recognition;
+    setIsRecording(true);
   };
 
   const handleStartMeditation = (meditation) => {
@@ -136,6 +194,15 @@ const AIMental = ({ voiceAction, onVoiceActionConsumed }) => {
         if (target) {
           handleStartMeditation(target);
           setTimeout(() => toggleTimer(), 500); // Auto-start the timer
+        }
+      } else if (voiceAction.action_name === 'log_mood' && voiceAction.data?.mood) {
+        const moodMap = {
+          'great': '😄', 'good': '🙂', 'okay': '😐', 'low': '😔', 'sad': '😢', 'angry': '😡', 'anxious': '😰'
+        };
+        const moodLabel = voiceAction.data.mood.toLowerCase();
+        const emoji = moodMap[moodLabel];
+        if (emoji) {
+          handleLogMood(emoji);
         }
       }
       if (onVoiceActionConsumed) onVoiceActionConsumed();
@@ -182,8 +249,29 @@ const AIMental = ({ voiceAction, onVoiceActionConsumed }) => {
   );
 
   const moodValues = { '😄': 5, '🙂': 4, '😐': 3, '😔': 2, '😢': 1, '😡': 1, '😰': 2 };
-  const recentMoods = [...moods].reverse();
+  const uniqueMoodsMap = new Map();
+  [...moods].forEach(m => {
+    const dateStr = new Date(m.created_at || m.date).toDateString();
+    if (!uniqueMoodsMap.has(dateStr)) {
+      uniqueMoodsMap.set(dateStr, m);
+    }
+  });
+  
+  const last7Days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    last7Days.push(d.toDateString());
+  }
 
+  const recentMoods = last7Days.map(dateStr => {
+    if (uniqueMoodsMap.has(dateStr)) {
+      return uniqueMoodsMap.get(dateStr);
+    }
+    return { isSkipped: true, dateStr: dateStr };
+  });
+
+  const hasData = recentMoods.some(m => !m.isSkipped);
   const renderMarkdown = (text) => {
     if (!text) return null;
     return (
@@ -213,17 +301,17 @@ const AIMental = ({ voiceAction, onVoiceActionConsumed }) => {
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-20">
       {/* Page Header */}
-      <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex items-center justify-start gap-6 relative overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex items-center justify-start gap-6 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 dark:bg-indigo-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
         <div className="flex items-center gap-5">
           <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
             <SmilePlus className="w-8 h-8" />
           </div>
           <div>
-            <h1 className="text-2xl lg:text-3xl font-extrabold text-gray-900 dark:text-white mb-2">AI Mental Health</h1>
-            <p className="text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-1">{t("AI Mental Health")}</h1>
+            <p className="text-xs sm:text-sm lg:text-base text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
-              Track your mood, manage stress, and find peace
+              {t("Track your mood, manage stress, and find peace")}
             </p>
           </div>
         </div>
@@ -232,16 +320,16 @@ const AIMental = ({ voiceAction, onVoiceActionConsumed }) => {
       {/* Mood Logger */}
       <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 text-center relative overflow-hidden">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-32 bg-indigo-500/5 dark:bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
-        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-8">How are you feeling right now?</h3>
+        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-8">{t("How are you feeling right now?")}</h3>
         <div className="flex flex-wrap justify-center gap-4 sm:gap-6 lg:gap-8 relative z-10">
           {[
-            { emoji: '😄', label: 'Great', color: 'hover:bg-emerald-50 dark:hover:bg-emerald-900/30 ring-emerald-500' },
-            { emoji: '🙂', label: 'Good', color: 'hover:bg-teal-50 dark:hover:bg-teal-900/30 ring-teal-500' },
-            { emoji: '😐', label: 'Okay', color: 'hover:bg-gray-50 dark:hover:bg-gray-700/50 ring-gray-400' },
-            { emoji: '😔', label: 'Low', color: 'hover:bg-indigo-50 dark:hover:bg-indigo-900/30 ring-indigo-400' },
-            { emoji: '😢', label: 'Sad', color: 'hover:bg-blue-50 dark:hover:bg-blue-900/30 ring-blue-500' },
-            { emoji: '😡', label: 'Angry', color: 'hover:bg-red-50 dark:hover:bg-red-900/30 ring-red-500' },
-            { emoji: '😰', label: 'Anxious', color: 'hover:bg-amber-50 dark:hover:bg-amber-900/30 ring-amber-500' }
+            { emoji: '😄', label: t('Great'), color: 'hover:bg-emerald-50 dark:hover:bg-emerald-900/30 ring-emerald-500' },
+            { emoji: '🙂', label: t('Good'), color: 'hover:bg-teal-50 dark:hover:bg-teal-900/30 ring-teal-500' },
+            { emoji: '😐', label: t('Okay'), color: 'hover:bg-gray-50 dark:hover:bg-gray-700/50 ring-gray-400' },
+            { emoji: '😔', label: t('Low'), color: 'hover:bg-indigo-50 dark:hover:bg-indigo-900/30 ring-indigo-400' },
+            { emoji: '😢', label: t('Sad'), color: 'hover:bg-blue-50 dark:hover:bg-blue-900/30 ring-blue-500' },
+            { emoji: '😡', label: t('Angry'), color: 'hover:bg-red-50 dark:hover:bg-red-900/30 ring-red-500' },
+            { emoji: '😰', label: t('Anxious'), color: 'hover:bg-amber-50 dark:hover:bg-amber-900/30 ring-amber-500' }
           ].map(m => (
             <div key={m.emoji} className="flex flex-col items-center gap-2 group">
               <button 
@@ -264,12 +352,25 @@ const AIMental = ({ voiceAction, onVoiceActionConsumed }) => {
         <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col h-full">
             <h4 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-6">
               <Activity className="w-5 h-5 text-indigo-500" /> 
-              Mood History (Last 7 Days)
+              {t("Mood History (Last 7 Days)")}
             </h4>
             
-            {recentMoods.length > 0 ? (
+            {hasData ? (
               <div className="flex justify-between items-end h-40 mb-6 border-b border-gray-100 dark:border-gray-700 pb-2">
                 {recentMoods.map((m, i) => {
+                  if (m.isSkipped) {
+                    const d = new Date(m.dateStr);
+                    return (
+                      <div key={i} className="flex flex-col items-center justify-end h-full flex-1 group opacity-40">
+                        <span className="text-2xl mb-2 invisible">😐</span>
+                        <div className="w-full max-w-[32px] rounded-t-xl bg-gray-200 dark:bg-gray-700 h-2"></div>
+                        <span className="text-[10px] sm:text-xs font-semibold text-gray-400 mt-3 uppercase tracking-wider">
+                          {d.toLocaleDateString('en', { weekday: 'short' })}
+                        </span>
+                      </div>
+                    );
+                  }
+
                   const height = (moodValues[m.mood] || 3) * 20;
                   let d = new Date();
                   try {
@@ -292,7 +393,7 @@ const AIMental = ({ voiceAction, onVoiceActionConsumed }) => {
               </div>
             ) : (
               <div className="h-40 flex items-center justify-center mb-6">
-                <p className="text-gray-400 font-medium">No mood data yet. Start tracking!</p>
+                <p className="text-gray-400 font-medium">{t("No mood data yet. Start tracking!")}</p>
               </div>
             )}
             
@@ -301,10 +402,10 @@ const AIMental = ({ voiceAction, onVoiceActionConsumed }) => {
                 <Brain className="w-24 h-24" />
               </div>
               <h5 className="flex items-center gap-2 text-xs font-extrabold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest mb-2 relative z-10">
-                <Sparkles className="w-4 h-4" /> AI Mood Analysis
+                <Sparkles className="w-4 h-4" /> {t("AI Mood Analysis")}
               </h5>
               <p className="text-sm text-gray-700 dark:text-gray-300 font-medium leading-relaxed relative z-10">
-                {analysis ? analysis.analysis : "Start tracking your mood daily to get personalized insights!"}
+                {analysis ? t(analysis.analysis) : t("Start tracking your mood daily to get personalized insights!")}
               </p>
             </div>
         </div>
@@ -313,7 +414,7 @@ const AIMental = ({ voiceAction, onVoiceActionConsumed }) => {
         <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col justify-center h-full">
             <h4 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-6">
               <Wind className="w-5 h-5 text-teal-500" />
-              Stress Level
+              {t("Current Stress Level")}
             </h4>
             
             {stress ? (
@@ -334,7 +435,7 @@ const AIMental = ({ voiceAction, onVoiceActionConsumed }) => {
                     <span className={`text-5xl font-extrabold tracking-tight ${stress.stress_level > 70 ? 'text-red-500' : stress.stress_level > 40 ? 'text-amber-500' : 'text-emerald-500'}`}>
                       {stress.stress_level}
                     </span>
-                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Score</span>
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">{t("Score")}</span>
                   </div>
                 </div>
                 
@@ -347,10 +448,10 @@ const AIMental = ({ voiceAction, onVoiceActionConsumed }) => {
                 } max-w-sm w-full text-center flex flex-col items-center gap-2 animate-in slide-in-from-bottom-4 fade-in duration-700 shadow-sm`}>
                   <div className="flex items-center gap-2 font-bold text-base">
                     {stress.stress_level > 70 ? <AlertTriangle className="w-5 h-5" /> : stress.stress_level > 40 ? <Activity className="w-5 h-5" /> : <CheckCircle2 className="w-5 h-5" />}
-                    <span>{stress.stress_level > 70 ? 'High Stress Detected' : stress.stress_level > 40 ? 'Moderate Stress' : 'Low Stress Levels'}</span>
+                    <span>{stress.stress_level > 70 ? t('High Stress Detected') : stress.stress_level > 40 ? t('Moderate Stress') : t('Low Stress Levels')}</span>
                   </div>
                   <p className="text-sm font-medium opacity-90 leading-relaxed">
-                    {stress.advice}
+                    {t(stress.advice)}
                   </p>
                 </div>
               </div>
@@ -366,23 +467,32 @@ const AIMental = ({ voiceAction, onVoiceActionConsumed }) => {
       <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col mb-6">
         <h4 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-4">
               <BookHeart className="w-5 h-5 text-pink-500" />
-              Mood Journal
+              {t("Mood Journal")}
             </h4>
             <div className="relative flex-1 flex flex-col">
               <textarea 
                 className="w-full flex-1 min-h-[120px] bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-2xl p-4 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none font-medium text-sm"
                 value={journalEntry} 
                 onChange={(e) => setJournalEntry(e.target.value)}
-                placeholder="Write about your day, feelings, or thoughts... The AI will analyze your journal for insights."
+                placeholder={t("Write about your day, feelings, or thoughts... The AI will analyze your journal for insights.")}
               ></textarea>
               <div className="flex justify-between items-center mt-4">
-                <span className="text-xs font-semibold text-gray-400 flex items-center gap-1"><Sparkles className="w-3 h-3"/> AI Analyzed</span>
-                <button 
-                  onClick={handleSaveJournal}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md shadow-indigo-600/20 transition-transform hover:-translate-y-0.5 flex items-center gap-2"
-                >
-                  <Save className="w-4 h-4" /> Save Entry
-                </button>
+                <span className="text-xs font-semibold text-gray-400 flex items-center gap-1"><Sparkles className="w-3 h-3"/> {t("AI Analyzed")}</span>
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={handleVoiceRecord}
+                    className={`p-2.5 rounded-xl transition-all ${isRecording ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'}`}
+                    title="Record Voice Journal"
+                  >
+                    {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                  </button>
+                  <button 
+                    onClick={handleSaveJournal}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md shadow-indigo-600/20 transition-transform hover:-translate-y-0.5 flex items-center gap-2"
+                  >
+                    <Save className="w-4 h-4" /> {t("Save Entry")}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -403,7 +513,7 @@ const AIMental = ({ voiceAction, onVoiceActionConsumed }) => {
                     journalAnalysis.sentiment === 'Needs Attention' ? 'text-amber-600 dark:text-amber-400' :
                     'text-blue-600 dark:text-blue-400'
                   }`}>
-                    {journalAnalysis.sentiment}
+                    {t(journalAnalysis.sentiment)}
                   </span>
                 </div>
                 <div className="text-sm">
@@ -416,26 +526,28 @@ const AIMental = ({ voiceAction, onVoiceActionConsumed }) => {
       {/* Meditations */}
       <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
         <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
-          <Wind className="w-6 h-6 text-indigo-500" /> Meditation & Relaxation
+          <Wind className="w-6 h-6 text-indigo-500" /> {t("Meditation & Relaxation")}
         </h3>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {meditations.map(m => (
             <div 
               key={m.name} 
+              className="bg-gray-50 dark:bg-gray-900/50 rounded-2xl p-4 border border-gray-100 dark:border-gray-800 flex items-center justify-between group cursor-pointer hover:border-indigo-200 dark:hover:border-indigo-800 transition-colors"
               onClick={() => handleStartMeditation(m)}
-              className="group bg-gray-50 dark:bg-gray-900/50 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 border border-gray-100 dark:border-gray-700 hover:border-indigo-200 dark:hover:border-indigo-800 rounded-2xl p-5 cursor-pointer transition-all hover:-translate-y-1 hover:shadow-md"
             >
-              <div className="flex justify-between items-start mb-3">
-                <span className="text-3xl transform group-hover:scale-110 transition-transform origin-left">{m.icon}</span>
-                <span className="bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 text-xs font-bold px-2 py-1 rounded-lg border border-gray-100 dark:border-gray-700 shadow-sm">
-                  {m.duration}
-                </span>
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-white dark:bg-gray-800 rounded-xl shadow-sm flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                  {m.icon}
+                </div>
+                <div>
+                  <h5 className="font-bold text-gray-900 dark:text-white">{t(m.name)}</h5>
+                  <p className="text-xs font-medium text-gray-500">{t(m.duration)} • {t(m.desc)}</p>
+                </div>
               </div>
-              <h4 className="font-bold text-gray-900 dark:text-white mb-1">{m.name}</h4>
-              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium leading-relaxed line-clamp-2">
-                {m.desc}
-              </p>
+              <div className="w-8 h-8 rounded-full bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-500 group-hover:bg-indigo-500 group-hover:text-white transition-colors">
+                <Play className="w-4 h-4 fill-current" />
+              </div>
             </div>
           ))}
         </div>
@@ -444,35 +556,33 @@ const AIMental = ({ voiceAction, onVoiceActionConsumed }) => {
       {/* Mental Health Quick Check */}
       <div className="bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-900/30 rounded-[2.5rem] p-6 lg:p-8 shadow-sm">
         <h4 className="text-xl font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-          <Activity className="w-6 h-6 text-indigo-500" /> Quick Health Check
+          <Activity className="w-6 h-6 text-indigo-500" /> {t("Quick Health Check")}
         </h4>
         <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-8">
-          Answer honestly for self-awareness. This is not a diagnosis.
+          {t("Answer honestly for self-awareness. This is not a diagnosis.")}
         </p>
 
         <div className="space-y-4 mb-8">
-          {screeningQuestions.map((q, i) => (
-            <div key={i} className="flex flex-col items-start gap-3 bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm text-left">
-              <span className="text-sm font-bold text-gray-700 dark:text-gray-200">
-                <span className="text-indigo-400 mr-2">{i + 1}.</span>{q}
-              </span>
-              <div className="flex flex-wrap gap-2 justify-start w-full">
-                {['Never', 'Sometimes', 'Often', 'Always'].map((a, j) => {
-                  const isSelected = screeningAnswers[i] === j;
-                  return (
-                    <button 
-                      key={a} 
-                      onClick={() => handleScreeningAnswer(i, j)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                        isSelected 
-                          ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' 
-                          : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'
-                      }`}
-                    >
-                      {a}
-                    </button>
-                  );
-                })}
+          {screeningQuestions.map((q, idx) => (
+            <div key={idx} className="bg-white dark:bg-gray-800/80 rounded-2xl p-5 border border-indigo-100 dark:border-gray-700">
+              <p className="font-bold text-gray-900 dark:text-white mb-4 flex gap-3 text-sm lg:text-base">
+                <span className="text-indigo-500 shrink-0">{idx + 1}.</span>
+                {t(q)}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {['Not at all', 'Several days', 'More than half the days', 'Nearly every day'].map((opt, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleScreeningAnswer(idx, i)}
+                    className={`px-4 py-2 text-xs lg:text-sm font-bold rounded-xl transition-all ${
+                      screeningAnswers[idx] === i 
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' 
+                        : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+                    }`}
+                  >
+                    {t(opt)}
+                  </button>
+                ))}
               </div>
             </div>
           ))}
@@ -480,9 +590,11 @@ const AIMental = ({ voiceAction, onVoiceActionConsumed }) => {
         
         <button 
           onClick={evaluateScreening}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3.5 rounded-xl font-bold shadow-lg shadow-indigo-600/20 transition-all hover:-translate-y-0.5 flex items-center gap-2"
+          disabled={Object.keys(screeningAnswers).length < screeningQuestions.length}
+          className="w-full sm:w-auto mx-auto flex items-center justify-center gap-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-8 py-3.5 rounded-xl font-bold shadow-md hover:-translate-y-0.5 transition-transform disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
         >
-          <Activity className="w-5 h-5" /> Evaluate Results
+          <Check className="w-5 h-5" />
+          {t("Evaluate Screening")}
         </button>
 
         {screeningResult && (
@@ -497,22 +609,22 @@ const AIMental = ({ voiceAction, onVoiceActionConsumed }) => {
                   screeningResult.percentage <= 50 ? 'text-amber-500' : 
                   'text-red-500'
                 }`}>
-                  {screeningResult.result}
+                  {t(screeningResult.result)}
                 </h4>
                 <div className="inline-block px-3 py-1 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 text-xs font-bold text-gray-600 dark:text-gray-400">
-                  Score: {screeningResult.score} / {screeningResult.max_score}
+                  {t("Score")}: {screeningResult.score} / {screeningResult.max_score}
                 </div>
               </div>
             </div>
             <p className="text-sm font-medium text-gray-700 dark:text-gray-300 leading-relaxed bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl">
-              {screeningResult.advice}
+              {t(screeningResult.advice)}
             </p>
           </div>
         )}
       </div>
 
       {/* Meditation Timer Modal */}
-      {activeMeditation && (
+      {activeMeditation && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => { if (e.target === e.currentTarget) handleStartMeditation(null) }}>
           <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] w-full max-w-md overflow-hidden shadow-2xl relative">
             
@@ -536,7 +648,7 @@ const AIMental = ({ voiceAction, onVoiceActionConsumed }) => {
                 {activeMeditation.icon}
               </div>
               <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-8 max-w-[250px] mx-auto leading-relaxed">
-                Find a comfortable position, close your eyes, and focus on your breath.
+                {t("Find a comfortable position, close your eyes, and focus on your breath.")}
               </p>
               
               <div className="text-[5rem] font-extrabold text-indigo-600 dark:text-indigo-400 tracking-tighter mb-8 tabular-nums drop-shadow-sm">
@@ -554,17 +666,17 @@ const AIMental = ({ voiceAction, onVoiceActionConsumed }) => {
                   onClick={() => { setTimerRunning(false); if (timerRef.current) clearInterval(timerRef.current); setTimerSeconds(0); }} 
                   className="px-6 py-3 rounded-full font-bold text-gray-600 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 transition-colors"
                 >
-                  Reset
+                  {t("Reset")}
                 </button>
               </div>
             </div>
 
-            <div className="relative z-10 p-6 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex justify-end gap-3">
+            <div className="relative z-10 p-6 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 grid grid-cols-2 gap-4">
               <button 
                 onClick={() => handleStartMeditation(null)}
-                className="px-6 py-2.5 rounded-xl font-bold text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                className="w-full px-6 py-2.5 rounded-xl font-bold text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
-                Cancel
+                {t("Cancel")}
               </button>
               <button 
                 onClick={async () => { 
@@ -581,13 +693,65 @@ const AIMental = ({ voiceAction, onVoiceActionConsumed }) => {
                   }
                   handleStartMeditation(null); 
                 }} 
-                className="px-6 py-2.5 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/20 transition-all hover:-translate-y-0.5 flex items-center gap-2"
+                className="w-full justify-center px-6 py-2.5 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/20 transition-all hover:-translate-y-0.5 flex items-center gap-2"
               >
-                <Check className="w-4 h-4" /> Save Session
+                <Check className="w-4 h-4" /> {t("Save Session")}
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Proactive Intervention Modal */}
+      {proactiveAction && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => { if (e.target === e.currentTarget) setProactiveAction(null) }}>
+          <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] w-full max-w-md overflow-hidden shadow-2xl p-8 text-center relative">
+            <button 
+              onClick={() => setProactiveAction(null)}
+              className="absolute top-6 right-6 w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 flex items-center justify-center text-gray-500 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="w-20 h-20 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-500 rounded-full flex items-center justify-center mx-auto mb-6 text-4xl">
+              {proactiveAction === 'alert_emergency' ? '🚨' : '🧘'}
+            </div>
+            
+            <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white mb-4">
+              {proactiveAction === 'alert_emergency' 
+                ? t("We're here for you") 
+                : t("Take a deep breath")}
+            </h3>
+            
+            <p className="text-gray-600 dark:text-gray-300 mb-8 leading-relaxed font-medium">
+              {proactiveAction === 'alert_emergency' 
+                ? t("Your recent journal entries indicate you might be going through a tough time. We've notified your emergency contact so they can check in on you. Remember, you are not alone.") 
+                : t("Your recent entries suggest you've been feeling stressed or down. Taking a few minutes to meditate can make a big difference.")}
+            </p>
+
+            <div className="flex flex-col gap-3">
+              {proactiveAction === 'suggest_meditation' && (
+                <button 
+                  onClick={() => {
+                    setProactiveAction(null);
+                    handleStartMeditation(meditations[0]); // Deep Breathing
+                  }}
+                  className="w-full px-6 py-3.5 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md transition-transform hover:-translate-y-0.5"
+                >
+                  {t("Start Breathing Exercise")}
+                </button>
+              )}
+              <button 
+                onClick={() => setProactiveAction(null)}
+                className="w-full px-6 py-3.5 rounded-xl font-bold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+              >
+                {t("I'm Okay, Thanks")}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
     </div>

@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useLang } from '../contexts/LangContext';
 import API from '../utils/api';
 import toast from 'react-hot-toast';
 import {
   AlertTriangle, Phone, Activity, HeartPulse, Plus, X, Edit2, Trash2,
-  MapPin, ShieldAlert, Bot, Search, Droplet, Clock, Download, Share2, User, Heart
+  MapPin, ShieldAlert, ShieldCheck, Bot, Search, Droplet, Clock, Download, Share2, User, Heart
 } from 'lucide-react';
 import OrganDonorModal from '../components/OrganDonorModal';
 import OrganNetworkModal from '../components/OrganNetworkModal';
+import HealthIDCard from '../components/HealthIDCard';
 
 const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
   const navigate = useNavigate();
+  const { t, lang } = useLang();
 
   useEffect(() => {
     // Hide right panel globally for this page
@@ -106,7 +109,7 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
             ws.onclose = () => {
               clearInterval(locInterval);
               mediaRecorder.stop();
-              stream.getTracks().forEach(t => t.stop());
+              stream.getTracks().forEach(trk => trk.stop());
             };
           }).catch(err => console.error("Audio recording permission denied", err));
         } else {
@@ -120,7 +123,7 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
 
   const triggerSOS = async (skipConfirm = false, isSilent = false) => {
     const shouldSkipConfirm = skipConfirm === true || isSilent === true;
-    if (shouldSkipConfirm || confirm('🚨 EMERGENCY SOS 🚨\n\nAre you sure you want to trigger an SOS alert? This will immediately notify your emergency contacts and local authorities.')) {
+    if (shouldSkipConfirm || confirm(t('🚨 EMERGENCY SOS 🚨\n\nAre you sure you want to trigger an SOS alert? This will immediately notify your emergency contacts and local authorities.'))) {
       try {
         if (!isSilent) setSosLoading(true);
         const getPosition = () => {
@@ -146,12 +149,12 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
         startLiveTracking(sessionId);
 
         if (!isSilent) {
-          toast.success('SOS ALERT SENT.\n\nActions triggered:\n' + res.actions.map(a => `✅ ${a}`).join('\n') + '\n\n📞 Emergency: 112', { duration: 8000 });
+          toast.success(t('SOS ALERT SENT.') + '\n\n' + t('Actions triggered:') + '\n' + res.actions.map(a => `✅ ${a}`).join('\n') + '\n\n📞 ' + t('Emergency: 112'), { duration: 8000 });
         } else {
           console.log("Silent SOS executed successfully.");
         }
       } catch (e) {
-        if (!isSilent) toast.error('Failed to send SOS');
+        if (!isSilent) toast.error(t('Failed to send SOS'));
       } finally {
         if (!isSilent) setSosLoading(false);
       }
@@ -164,7 +167,7 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
       toast.success(res.message);
       fetchData(); // refresh profile state
     } catch (e) {
-      toast.error('Failed to update status');
+      toast.error(t('Failed to update status'));
     }
   };
 
@@ -190,7 +193,7 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
       });
       setTriageResult(res);
     } catch (e) {
-      toast.error("Failed to evaluate symptom.");
+      toast.error(t("Failed to evaluate symptom."));
     } finally {
       setTriageLoading(false);
     }
@@ -205,7 +208,7 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
       });
       setFirstAidResult(res.response);
     } catch (e) {
-      toast.error("Failed to get first aid instructions.");
+      toast.error(t("Failed to get first aid instructions."));
     } finally {
       setFirstAidLoading(false);
     }
@@ -243,7 +246,7 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
 
   const saveContact = async () => {
     if (!modalData.name || !modalData.phone || !modalData.relation) {
-      toast.error("Please fill in all fields.");
+      toast.error(t("Please fill in all fields."));
       return;
     }
 
@@ -255,32 +258,32 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
       }
       setModalOpen(false);
       fetchData();
-      toast.success(`Contact ${modalMode === 'add' ? 'added' : 'updated'} successfully`);
+      toast.success(modalMode === 'add' ? t('Contact added successfully') : t('Contact updated successfully'));
     } catch (e) {
-      toast.error(`Failed to ${modalMode} contact`);
+      toast.error(t('Failed to save contact'));
     }
   };
 
   const deleteContact = async (id) => {
-    if (confirm('Delete this contact?')) {
+    if (confirm(t('Delete this contact?'))) {
       try {
         await API.delete(`/emergency/contacts/${id}`);
         fetchData();
-        toast.success('Contact deleted');
+        toast.success(t('Contact deleted'));
       } catch (e) {
-        toast.error('Failed to delete contact');
+        toast.error(t('Failed to delete contact'));
       }
     }
   };
 
   const getNearbyHospitals = () => [
-    { name: 'Apollo Hospital', distance: '2.3 km', type: 'Multi-specialty', phone: '1066', icon: <Activity size={24} /> },
-    { name: 'City Blood Bank', distance: '1.5 km', type: 'Blood Bank', phone: '104', icon: <Droplet size={24} /> },
-    { name: 'LifeCare Pharmacy', distance: '0.8 km', type: 'Pharmacy', phone: '1800-123', icon: <HeartPulse size={24} /> },
-    { name: 'Ambulance Service', distance: 'On Call', type: 'Emergency', phone: '108', icon: <AlertTriangle size={24} /> }
+    { name: 'Apollo Hospital', distance: '2.3 km', type: t('Multi-specialty'), phone: '1066', icon: <Activity size={24} /> },
+    { name: 'City Blood Bank', distance: '1.5 km', type: t('Blood Bank'), phone: '104', icon: <Droplet size={24} /> },
+    { name: 'LifeCare Pharmacy', distance: '0.8 km', type: t('Pharmacy'), phone: '1800-123', icon: <HeartPulse size={24} /> },
+    { name: 'Ambulance Service', distance: t('On Call'), type: t('Emergency'), phone: '108', icon: <AlertTriangle size={24} /> }
   ];
 
-  const healthIDText = profile ? `EMERGENCY MEDICAL ID\nName: ${profile.name || 'Unknown'}\nBlood Type: ${profile.blood_type || 'Unknown'}\nAge: ${profile.age || '?'} | Gender: ${profile.gender || 'Unknown'}\nAllergies: ${profile.allergies?.join(', ') || 'None'}\nConditions: ${profile.conditions?.join(', ') || 'None'}\nEmergency Contact: ${contacts && contacts.length > 0 ? `${contacts[0].name} - ${contacts[0].phone}` : 'None'}` : '';
+  const healthIDText = profile ? `${t('EMERGENCY MEDICAL ID')}\n${t('Name')}: ${profile.name || t('Unknown')}\n${t('Blood Type')}: ${profile.blood_type || t('Unknown')}\n${t('Age')}: ${profile.age || '?'} | ${t('Gender')}: ${profile.gender || t('Unknown')}\n${t('Allergies')}: ${profile.allergies?.join(', ') || t('None')}\n${t('Conditions')}: ${profile.conditions?.join(', ') || t('None')}\n${t('Emergency Contact')}: ${contacts && contacts.length > 0 ? `${contacts[0].name} - ${contacts[0].phone}` : t('None')}` : '';
   const qrUrl = `https://quickchart.io/qr?size=300&margin=0&text=${encodeURIComponent(healthIDText)}`;
 
   const downloadQR = async () => {
@@ -295,9 +298,9 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-      toast.success("QR code downloaded");
+      toast.success(t("QR code downloaded"));
     } catch (e) {
-      toast.error("Failed to download QR code.");
+      toast.error(t("Failed to download QR code."));
     }
   };
 
@@ -308,16 +311,16 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
       const res = await API.post('/share/generate');
       const url = `${window.location.origin}/shared/${res.token}`;
       await navigator.clipboard.writeText(url);
-      toast.success("Secure Digital ID link copied!");
+      toast.success(t("Secure Digital ID link copied!"));
     } catch (e) {
-      toast.error("Failed to generate secure Digital ID link.");
+      toast.error(t("Failed to generate secure Digital ID link."));
     } finally {
       setSharingLoading(false);
     }
   };
 
-  if (loading && !profile) return <div className="empty-state"><span className="spinner"></span> Loading Emergency System...</div>;
-  if (!profile) return <div className="empty-state">Failed to load Emergency Data</div>;
+  if (loading && !profile) return <div className="empty-state"><span className="spinner"></span> {t('Loading Emergency System...')}</div>;
+  if (!profile) return <div className="empty-state">{t('Failed to load Emergency Data')}</div>;
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6 pb-20">
@@ -329,12 +332,12 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
               <AlertTriangle className="w-8 h-8" />
             </div>
             <div className="text-left">
-              <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-1 text-left">
-                Emergency System
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-1 text-left">
+                {t('Emergency System')}
               </h1>
               <p className="text-xs sm:text-sm lg:text-base text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2 text-left">
                 <span className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)] animate-pulse shrink-0"></span>
-                Emergency services active and ready
+                {t('Emergency services active and ready')}
               </p>
             </div>
           </div>
@@ -351,13 +354,13 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
               value={triageSymptom}
               onChange={e => setTriageSymptom(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && evaluateTriage()}
-              placeholder="Describe your symptoms for instant AI triage (e.g., 'Severe chest pain')"
+              placeholder={t("Describe your symptoms for instant AI triage (e.g., 'Severe chest pain')")}
               className="w-full py-3 px-4 pl-12 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none"
             />
             <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
           </div>
           <button onClick={evaluateTriage} disabled={triageLoading} className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl transition-colors disabled:opacity-70 disabled:cursor-wait shrink-0">
-            {triageLoading ? 'Evaluating...' : 'Evaluate'}
+            {triageLoading ? t('Evaluating...') : t('Evaluate')}
           </button>
         </div>
 
@@ -365,19 +368,19 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
           <div className={`mb-8 p-6 rounded-2xl border ${triageResult.urgency === 'High' ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800' : triageResult.urgency === 'Medium' ? 'bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800' : 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800'}`}>
             <div className="flex justify-between items-start mb-4">
               <h3 className={`text-lg font-bold ${triageResult.urgency === 'High' ? 'text-red-700 dark:text-red-400' : triageResult.urgency === 'Medium' ? 'text-amber-700 dark:text-amber-400' : 'text-green-700 dark:text-green-400'}`}>
-                Urgency Level: {triageResult.urgency}
+                {t('Urgency Level')}: {t(triageResult.urgency)}
               </h3>
               <button onClick={() => setTriageResult(null)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <strong className="block text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Possible Conditions:</strong>
+                <strong className="block text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">{t('Possible Conditions')}:</strong>
                 <ul className="list-disc list-inside text-gray-800 dark:text-gray-200 text-sm">
                   {triageResult.conditions?.map((c, i) => <li key={i}>{c.condition} ({c.probability}%)</li>)}
                 </ul>
               </div>
               <div>
-                <strong className="block text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Recommendations:</strong>
+                <strong className="block text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">{t('Recommendations')}:</strong>
                 <ul className="list-disc list-inside text-gray-800 dark:text-gray-200 text-sm">
                   {triageResult.recommendations?.map((r, i) => <li key={i}>{r}</li>)}
                 </ul>
@@ -399,23 +402,23 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
               {sosLoading ? (
                 <>
                   <div className="w-8 h-8 rounded-full border-4 border-white/30 border-t-white animate-spin mb-2"></div>
-                  <span className="font-bold tracking-widest text-sm">LOCATING</span>
+                  <span className="font-bold tracking-widest text-sm">{t('LOCATING')}</span>
                 </>
               ) : (
                 <>
                   <AlertTriangle size={48} className="mb-1" />
-                  <span className="font-extrabold text-xl tracking-widest">SOS</span>
+                  <span className="font-extrabold text-xl tracking-widest">{t('SOS')}</span>
                 </>
               )}
             </button>
 
             <div className="mt-8 text-center relative z-10">
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Emergency Assistance</h3>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{t('Emergency Assistance')}</h3>
               <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto text-sm leading-relaxed mb-4">
-                Press the SOS button to instantly alert your emergency contacts, share your live location, and begin audio recording.
+                {t('Press the SOS button to instantly alert your emergency contacts, share your live location, and begin audio recording.')}
               </p>
               <div className="inline-flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-full text-xs font-bold uppercase tracking-wider">
-                <Phone size={14} /> Also call 911 / 112
+                <Phone size={14} /> {t('Also call 911 / 112')}
               </div>
             </div>
           </div>
@@ -426,34 +429,34 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
               <div className="w-10 h-10 rounded-xl bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0">
                 <HeartPulse size={20} />
               </div>
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">AI First Aid</h3>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">{t('AI First Aid')}</h3>
             </div>
 
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-6 flex-1">
-              Instant AI-guided first aid instructions for critical scenarios.
+              {t('Instant AI-guided first aid instructions for critical scenarios.')}
             </p>
 
             <div className="grid grid-cols-2 gap-3 mb-4">
               <button onClick={() => getFirstAid('Burns')} disabled={firstAidLoading} className="flex flex-col items-center gap-2 p-3 rounded-xl bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-100 dark:border-gray-600 transition-colors text-gray-700 dark:text-gray-300">
                 <span className="text-2xl">🔥</span>
-                <span className="text-xs font-semibold">Burns</span>
+                <span className="text-xs font-semibold">{t('Burns')}</span>
               </button>
               <button onClick={() => getFirstAid('CPR')} disabled={firstAidLoading} className="flex flex-col items-center gap-2 p-3 rounded-xl bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-100 dark:border-gray-600 transition-colors text-gray-700 dark:text-gray-300">
                 <span className="text-2xl">🫁</span>
-                <span className="text-xs font-semibold">CPR</span>
+                <span className="text-xs font-semibold">{t('CPR')}</span>
               </button>
               <button onClick={() => getFirstAid('Severe Bleeding')} disabled={firstAidLoading} className="flex flex-col items-center gap-2 p-3 rounded-xl bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-100 dark:border-gray-600 transition-colors text-gray-700 dark:text-gray-300">
                 <span className="text-2xl">🩸</span>
-                <span className="text-xs font-semibold">Bleeding</span>
+                <span className="text-xs font-semibold">{t('Bleeding')}</span>
               </button>
               <button onClick={() => getFirstAid('Choking')} disabled={firstAidLoading} className="flex flex-col items-center gap-2 p-3 rounded-xl bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-100 dark:border-gray-600 transition-colors text-gray-700 dark:text-gray-300">
                 <span className="text-2xl">🤢</span>
-                <span className="text-xs font-semibold">Choking</span>
+                <span className="text-xs font-semibold">{t('Choking')}</span>
               </button>
             </div>
 
             <button onClick={() => navigate('/app/ai-chat')} className="w-full py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-xl font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity">
-              <Bot size={18} /> Open First Aid Chat
+              <Bot size={18} /> {t('Open First Aid Chat')}
             </button>
           </div>
         </div>
@@ -466,10 +469,10 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                  <Phone className="text-blue-500" /> Emergency Contacts
+                  <Phone className="text-blue-500" /> {t('Emergency Contacts')}
                 </h3>
                 <button onClick={openAddModal} className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-1">
-                  <Plus size={16} /> Add New
+                  <Plus size={16} /> {t('Add New')}
                 </button>
               </div>
 
@@ -496,14 +499,14 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
                         <Trash2 size={18} />
                       </button>
                       <a href={`tel:${c.phone}`} className="ml-2 flex items-center gap-2 px-4 py-2 rounded-full bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 font-bold hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors">
-                        <Phone size={16} /> Call
+                        <Phone size={16} /> {t('Call')}
                       </a>
                     </div>
                   </div>
                 ))}
                 {contacts.length === 0 && (
                   <div className="p-6 text-center bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 text-gray-500 dark:text-gray-400">
-                    No emergency contacts added yet.
+                    {t('No emergency contacts added yet.')}
                   </div>
                 )}
               </div>
@@ -512,7 +515,7 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
             {/* Nearby Hospitals */}
             <div>
               <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-4">
-                <MapPin className="text-red-500" /> Nearby Hospitals
+                <MapPin className="text-red-500" /> {t('Nearby Hospitals')}
               </h3>
               <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
                 {getNearbyHospitals().map((h, i) => (
@@ -523,7 +526,7 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
                       </div>
                       <div>
                         <h4 className="font-bold text-gray-900 dark:text-white">{h.name}</h4>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">{h.distance} • {h.type}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">{h.distance} • {t(h.type)}</p>
                       </div>
                     </div>
                     <a href={`tel:${h.phone}`} className="px-3 py-1.5 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-semibold text-sm hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors flex items-center gap-2">
@@ -537,7 +540,7 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
             {/* Organ Donor & Network */}
             <div>
               <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-4">
-                <HeartPulse className="text-green-500" /> Organ Donor & Exchange
+                <HeartPulse className="text-green-500" /> {t('Organ Donor & Exchange')}
               </h3>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -546,15 +549,15 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
                   <div className="flex items-start justify-between mb-4">
                     <Heart className="w-10 h-10 text-green-500" fill="currentColor" />
                     <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${profile.organ_donor ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>
-                      {profile.organ_donor ? 'Registered' : 'Not Registered'}
+                      {profile.organ_donor ? t('Registered') : t('Not Registered')}
                     </span>
                   </div>
                   <div>
                     <h4 className="text-base font-bold text-gray-900 dark:text-white mb-1 group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors">
-                      Donor Registration
+                      {t('Donor Registration')}
                     </h4>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Manage advanced preferences & AI screening.
+                      {t('Manage advanced preferences & AI screening.')}
                     </p>
                   </div>
                 </div>
@@ -564,15 +567,15 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
                   <div className="flex items-start justify-between mb-4">
                     <div className="text-4xl text-indigo-500"><Search /></div>
                     <span className="px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-400 text-[10px] font-bold uppercase tracking-wider">
-                      Global
+                      {t('Global')}
                     </span>
                   </div>
                   <div>
                     <h4 className="text-base font-bold text-gray-900 dark:text-white mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                      Organ Match Network
+                      {t('Organ Match Network')}
                     </h4>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Search availability and match requirements.
+                      {t('Search availability and match requirements.')}
                     </p>
                   </div>
                 </div>
@@ -585,103 +588,20 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
 
             {/* Digital Health ID */}
             <div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-4">
-                <ShieldAlert className="text-indigo-500" /> Digital Health ID
-              </h3>
+              <HealthIDCard profile={profile} qrUrl={qrUrl} t={t} />
 
-              <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-indigo-900 via-slate-900 to-slate-900 p-8 shadow-2xl border border-white/10 group">
-                {/* Premium Glow Effects */}
-                <div className="absolute -top-32 -left-32 w-64 h-64 bg-indigo-500/20 rounded-full blur-[80px] pointer-events-none group-hover:bg-indigo-500/30 transition-colors duration-700"></div>
-                <div className="absolute -bottom-32 -right-32 w-64 h-64 bg-rose-500/20 rounded-full blur-[80px] pointer-events-none group-hover:bg-rose-500/30 transition-colors duration-700"></div>
-
-                {/* Header */}
-                <div className="relative z-10 flex justify-between items-start mb-10 border-b border-white/10 pb-6">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl shadow-lg">
-                      <Activity className="text-white" size={28} />
-                    </div>
-                    <div>
-                      <h3 className="text-2xl font-black text-white tracking-tight">LifeOS Health ID</h3>
-                      <p className="text-xs font-bold text-indigo-300 tracking-widest mt-1 uppercase">Emergency Medical Profile</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Main Content Grid */}
-                <div className="relative z-10 flex flex-col items-start w-full">
-
-                  {/* Patient Details */}
-                  <div className="w-full text-left mb-6">
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                      <User size={12} /> Patient Name
-                    </div>
-                    <div className="font-black text-white text-3xl truncate leading-tight">{profile?.name || "LifeOS User"}</div>
-                  </div>
-
-                  {/* Stats Grid */}
-                  <div className="grid grid-cols-3 w-full gap-2 p-4 bg-white/5 rounded-2xl border border-white/5 shadow-sm mb-6 text-center">
-                    <div>
-                      <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Blood Type</div>
-                      <div className="font-black text-rose-400 text-lg flex items-center justify-center gap-1"><Droplet size={14} fill="currentColor" /> {profile?.blood_type || "N/A"}</div>
-                    </div>
-                    <div className="border-x border-white/10">
-                      <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Age</div>
-                      <div className="font-bold text-white text-lg">{profile?.age ? `${profile.age}y` : "N/A"}</div>
-                    </div>
-                    <div>
-                      <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Gender</div>
-                      <div className="font-bold text-white text-lg">{profile?.gender || "N/A"}</div>
-                    </div>
-                  </div>
-
-                  {/* Medical Tags */}
-                  <div className="w-full space-y-4 mb-8">
-                    {profile?.allergies?.length > 0 && (
-                      <div>
-                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Allergies</div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {profile.allergies.map(a => <span key={a} className="px-3 py-1.5 bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-xl text-xs font-bold shadow-sm">{a}</span>)}
-                        </div>
-                      </div>
-                    )}
-                    {profile?.conditions?.length > 0 && (
-                      <div>
-                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Conditions</div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {profile.conditions.map(c => <span key={c} className="px-3 py-1.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold shadow-sm">{c}</span>)}
-                        </div>
-                      </div>
-                    )}
-                    {(!profile?.allergies?.length && !profile?.conditions?.length) && (
-                      <div className="text-slate-400 text-xs italic py-1 text-left">No known allergies or conditions.</div>
-                    )}
-                  </div>
-
-                  {/* QR Code Box */}
-                  <div className="w-full bg-white/5 rounded-2xl border border-white/5 shadow-sm p-6 flex flex-col items-center justify-center">
-                    <div className="w-28 h-28 bg-white p-2 rounded-xl shadow-lg relative mb-4">
-                      <img src={qrUrl} alt="Health ID QR" className="w-full h-full object-contain mix-blend-multiply relative z-10" />
-                    </div>
-                    <div className="text-center">
-                      <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest mb-1">Scan for records</p>
-                      <p className="text-xs font-bold text-indigo-400">Authorized Personnel Only</p>
-                    </div>
-                  </div>
-
-                </div>
-              </div>
-
-              <div className="flex gap-4 mt-4">
-                <button onClick={downloadQR} className="flex-1 py-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-xl font-bold flex items-center justify-center gap-2 border border-gray-200 dark:border-gray-700 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                  <Download size={18} /> Download ID
+              <div className="flex gap-4 mt-6">
+                <button onClick={downloadQR} className="flex-1 py-4 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-2xl font-bold flex items-center justify-center gap-2 border border-gray-200 dark:border-gray-700 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                  <Download size={18} /> {t('Download ID')}
                 </button>
-                <button onClick={copyID} disabled={sharingLoading} className={`flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-sm hover:bg-indigo-700 transition-colors ${sharingLoading ? 'opacity-70 cursor-wait' : ''}`}>
-                  <Share2 size={18} /> {sharingLoading ? 'Generating...' : 'Share ID'}
+                <button onClick={copyID} disabled={sharingLoading} className={`flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm hover:bg-indigo-700 transition-colors ${sharingLoading ? 'opacity-70 cursor-wait' : ''}`}>
+                  <Share2 size={18} /> {sharingLoading ? t('Generating...') : t('Share ID')}
                 </button>
               </div>
             </div>
           </div>
         </div>
+
 
         {/* Add/Edit Contact Modal */}
         {modalOpen && (
@@ -690,7 +610,7 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
               <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                   <Phone className="text-blue-500" />
-                  {modalMode === 'add' ? 'Add Emergency Contact' : 'Edit Emergency Contact'}
+                  {modalMode === 'add' ? t('Add Emergency Contact') : t('Edit Emergency Contact')}
                 </h3>
                 <button onClick={() => setModalOpen(false)} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors">
                   <X size={20} />
@@ -699,29 +619,29 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
 
               <div className="p-6 space-y-5">
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Name</label>
-                  <input type="text" value={modalData.name} onChange={e => setModalData({ ...modalData, name: e.target.value })} placeholder="Contact name" className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
+                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('Name')}</label>
+                  <input type="text" value={modalData.name} onChange={e => setModalData({ ...modalData, name: e.target.value })} placeholder={t('Contact name')} className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Phone</label>
+                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('Phone')}</label>
                   <input type="tel" value={modalData.phone} onChange={e => setModalData({ ...modalData, phone: e.target.value })} placeholder="+1 (555) 000-0000" className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Email (Optional)</label>
+                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('Email (Optional)')}</label>
                   <input type="email" value={modalData.email} onChange={e => setModalData({ ...modalData, email: e.target.value })} placeholder="contact@example.com" className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Relation</label>
-                  <input type="text" value={modalData.relation} onChange={e => setModalData({ ...modalData, relation: e.target.value })} placeholder="e.g., Father, Doctor" className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
+                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('Relation')}</label>
+                  <input type="text" value={modalData.relation} onChange={e => setModalData({ ...modalData, relation: e.target.value })} placeholder={t('e.g., Father, Doctor')} className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
                 </div>
               </div>
 
               <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex justify-end gap-3">
-                <button onClick={() => setModalOpen(false)} className="px-6 py-2.5 rounded-xl font-bold text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">Cancel</button>
-                <button onClick={saveContact} className="px-6 py-2.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-colors">Save Contact</button>
+                <button onClick={() => setModalOpen(false)} className="px-6 py-2.5 rounded-xl font-bold text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">{t('Cancel')}</button>
+                <button onClick={saveContact} className="px-6 py-2.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-colors">{t('Save Contact')}</button>
               </div>
             </div>
           </div>
@@ -733,7 +653,7 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
               <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                   <Bot className="text-blue-500" />
-                  First Aid: {firstAidTopic}
+                  {t('First Aid')}: {t(firstAidTopic)}
                 </h3>
                 <button onClick={() => setFirstAidResult(null)} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors">
                   <X size={20} />
@@ -747,7 +667,7 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
               </div>
 
               <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex justify-end">
-                <button onClick={() => setFirstAidResult(null)} className="px-6 py-2.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-colors">Close</button>
+                <button onClick={() => setFirstAidResult(null)} className="px-6 py-2.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-colors">{t('Close')}</button>
               </div>
             </div>
           </div>

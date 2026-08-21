@@ -15,7 +15,7 @@ async def test_groq():
     image_url = f"data:image/jpeg;base64,{base64_img}"
 
     payload = {
-        "model": "llama-3.2-11b-vision-preview",
+        "model": "qwen/qwen3.6-27b",
         "messages": [
             {
                 "role": "user",

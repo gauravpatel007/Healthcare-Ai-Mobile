@@ -134,8 +134,6 @@ const LandingPage = () => {
           style={{
             minHeight: 'calc(100vh - 74px)',
             background: `
-              radial-gradient(circle at 92% 45%, rgba(77, 211, 255, 0.28), transparent 32%),
-              radial-gradient(circle at 45% 100%, rgba(49, 112, 255, 0.16), transparent 38%),
               linear-gradient(135deg, #929496 0%, #8b8d8f 48%, #7f8588 100%)
             `,
             backgroundSize: '200% 200%',

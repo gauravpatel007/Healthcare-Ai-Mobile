@@ -8,6 +8,7 @@ export default function AdminAuditLogs() {
   const [searchAction, setSearchAction] = useState('');
   const [selectedLog, setSelectedLog] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
+  const [displayCount, setDisplayCount] = useState(15);
 
   const showError = (msg) => { setErrorMsg(msg); setTimeout(() => setErrorMsg(''), 3000); };
 
@@ -51,7 +52,7 @@ export default function AdminAuditLogs() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-row flex-wrap md:flex-nowrap items-center justify-between gap-4 relative overflow-hidden w-full">
+      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-row flex-wrap md:flex-nowrap items-center justify-between gap-4 relative overflow-visible w-full">
         <div className="flex items-center gap-4 lg:gap-6 relative z-10 w-auto">
           <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
             <ClipboardList className="w-8 h-8" />
@@ -100,7 +101,7 @@ export default function AdminAuditLogs() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                {logs.map((log) => (
+                {logs.slice(0, displayCount).map((log) => (
                   <tr 
                     key={log.id} 
                     onClick={() => setSelectedLog(log)}
@@ -128,6 +129,16 @@ export default function AdminAuditLogs() {
                 )}
               </tbody>
             </table>
+            {logs.length > displayCount && (
+              <div className="p-4 flex justify-center border-t border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800">
+                <button
+                  onClick={() => setDisplayCount(prev => prev + 20)}
+                  className="px-4 py-2 text-sm font-medium text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 hover:bg-teal-100 rounded-lg transition-colors"
+                >
+                  See More ({logs.length - displayCount} more)
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

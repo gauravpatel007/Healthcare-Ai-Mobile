@@ -81,7 +81,7 @@ async def get_nutrition_plan(user_id: CurrentUserId, db: AsyncSession = Depends(
 
     bmi = calculate_bmi(weight, height)
     bmr = calculate_bmr(weight, height, age, gender)
-    tdee = calculate_tdee(bmr, "moderate")
+    tdee = profile.calorie_goal if profile and getattr(profile, 'calorie_goal', None) else calculate_tdee(bmr, "moderate")
     water_goal = round(weight * 0.033, 1)
     protein_goal = round(weight * 1.2)
 
@@ -125,31 +125,79 @@ async def get_nutrition_plan(user_id: CurrentUserId, db: AsyncSession = Depends(
     )
     scanned_meals = scanned_meals_result.scalars().all()
     
+    consumed_calories = 0
+    consumed_protein = 0
+    consumed_carbs = 0
+    consumed_fats = 0
+
     for sm in scanned_meals:
-        meals.append({
-            "id": sm.id,
-            "meal_type": sm.meal_type or "scanned snack",
-            "time": sm.recorded_at.strftime("%I:%M %p") if sm.recorded_at else "Unknown",
-            "recorded_at": int(sm.recorded_at.timestamp() * 1000) if sm.recorded_at else None,
-            "name": sm.name,
-            "calories": sm.calories,
-            "protein": sm.protein,
-            "carbs": sm.carbs,
-            "fats": sm.fats,
-            "is_deleted": sm.is_deleted,
-            "icon": "📸",
-            "image_url": sm.image_url
-        })
-        if not sm.is_deleted:
-            tdee += (sm.calories or 0)
-            protein_goal += (sm.protein or 0)
+        if sm.is_deleted:
+            continue
+            
+        consumed_calories += sm.calories or 0
+        consumed_protein += sm.protein or 0
+        consumed_carbs += sm.carbs or 0
+        consumed_fats += sm.fats or 0
 
+        # Try to match with an existing planned meal
+        matched = False
+        for m in meals:
+            # Match by name
+            if m.get("name") == sm.name and not m.get("is_consumed"):
+                m["is_consumed"] = True
+                m["consumed_id"] = sm.id
+                m["recorded_at"] = int(sm.recorded_at.timestamp() * 1000) if sm.recorded_at else None
+                matched = True
+                break
+        
+        if not matched:
+            time_of_day = "Unknown"
+            if sm.recorded_at:
+                hour = sm.recorded_at.hour
+                if 5 <= hour < 12:
+                    time_of_day = "Morning"
+                elif 12 <= hour < 17:
+                    time_of_day = "Afternoon"
+                elif 17 <= hour < 21:
+                    time_of_day = "Evening"
+                else:
+                    time_of_day = "Night"
 
+            meals.append({
+                "id": sm.id,
+                "meal_type": sm.meal_type or "scanned snack",
+                "time": f"{time_of_day} ({sm.recorded_at.strftime('%I:%M %p')})" if sm.recorded_at else "Unknown",
+                "recorded_at": int(sm.recorded_at.timestamp() * 1000) if sm.recorded_at else None,
+                "name": sm.name,
+                "calories": sm.calories,
+                "protein": sm.protein,
+                "carbs": sm.carbs,
+                "fats": sm.fats,
+                "is_deleted": sm.is_deleted,
+                "is_consumed": True,
+                "consumed_id": sm.id,
+                "icon": "📸",
+                "image_url": sm.image_url
+            })
+
+    consumed_macros = {
+        "calories": consumed_calories,
+        "protein": consumed_protein,
+        "carbs": consumed_carbs,
+        "fats": consumed_fats,
+    }
     macro_breakdown = {
         "protein": {"grams": protein_goal, "percentage": 25, "color": "#FF6B6B"},
         "carbs": {"grams": round(tdee * 0.50 / 4), "percentage": 50, "color": "#FDCB6E"},
         "fats": {"grams": round(tdee * 0.25 / 9), "percentage": 25, "color": "#00D2D3"},
     }
+
+    unit = profile.measurement_unit if profile and getattr(profile, 'measurement_unit', None) else "metric"
+    weight_display = weight
+    weight_unit_label = "kg"
+    if unit == "imperial":
+        weight_display = round(weight * 2.20462, 1)
+        weight_unit_label = "lbs"
 
     return NutritionPlanResponse(
         tdee=tdee,
@@ -160,11 +208,12 @@ async def get_nutrition_plan(user_id: CurrentUserId, db: AsyncSession = Depends(
         meals=meals,
         macro_breakdown=macro_breakdown,
         recommendations=[
-            {"icon": "💧", "text": f"Drink {water_goal}L of water daily (based on your {weight}kg weight)"},
+            {"icon": "💧", "text": f"Drink {water_goal}L of water daily (based on your {weight_display}{weight_unit_label} weight)"},
             {"icon": "🥩", "text": f"Aim for {protein_goal}g of protein daily for muscle maintenance"},
             {"icon": "🥗", "text": "Eat 5 servings of fruits and vegetables daily"},
             {"icon": "🕐", "text": "Eat meals at regular intervals. Don't skip breakfast."},
         ],
+        consumed_macros=consumed_macros,
     )
 
 
@@ -220,11 +269,13 @@ async def nutrition_stats(user_id: CurrentUserId, db: AsyncSession = Depends(get
     gender = profile.gender if profile else "Male"
 
     bmr = calculate_bmr(weight, height, age, gender)
+    tdee = profile.calorie_goal if profile and getattr(profile, 'calorie_goal', None) else calculate_tdee(bmr, "moderate")
+    
     return {
         "bmr": bmr,
         "tdee_sedentary": calculate_tdee(bmr, "sedentary"),
         "tdee_light": calculate_tdee(bmr, "light"),
-        "tdee_moderate": calculate_tdee(bmr, "moderate"),
+        "tdee_moderate": tdee,
         "tdee_active": calculate_tdee(bmr, "very_active"),
         "water_goal_liters": round(weight * 0.033, 1),
         "protein_goal_grams": round(weight * 1.2),
@@ -248,7 +299,7 @@ async def ai_diet_recommendations(user_id: CurrentUserId, db: AsyncSession = Dep
         context=context,
     )
     return {"recommendations": response}
-@router.delete("/nutrition/scan/{meal_id}")
+@router.delete("/scan/{meal_id}")
 async def delete_scanned_meal(
     meal_id: str,
     user_id: CurrentUserId,
@@ -263,3 +314,36 @@ async def delete_scanned_meal(
     meal.is_deleted = True
     await db.commit()
     return {"success": True, "message": "Meal deleted"}
+
+from pydantic import BaseModel
+class ConsumeMealRequest(BaseModel):
+    name: str
+    calories: int
+    protein: int
+    carbs: int = 0
+    fats: int = 0
+    meal_type: str = "snack"
+    image_url: str = None
+
+@router.post("/consume")
+async def consume_meal(
+    data: ConsumeMealRequest,
+    user_id: CurrentUserId,
+    db: AsyncSession = Depends(get_db)
+):
+    from app.models.diet import ScannedMeal
+    sm = ScannedMeal(
+        user_id=user_id,
+        name=data.name,
+        calories=data.calories,
+        protein=data.protein,
+        carbs=data.carbs,
+        fats=data.fats,
+        meal_type=data.meal_type,
+        image_url=data.image_url,
+        is_deleted=False
+    )
+    db.add(sm)
+    await db.commit()
+    await db.refresh(sm)
+    return {"success": True, "id": sm.id}

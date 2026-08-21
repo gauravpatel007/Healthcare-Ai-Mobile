@@ -3,14 +3,15 @@ import { CalendarDays, History, UtensilsCrossed, Camera } from 'lucide-react';
 import AdminMealPlans from './AdminMealPlans';
 import AdminMeals from './AdminMeals';
 import AdminScannedMeals from './AdminScannedMeals';
+import { usePersistentTab } from '../../hooks/usePersistentTab';
 
 export default function AdminDiet() {
-  const [activeTab, setActiveTab] = useState('meals');
+  const [activeTab, setActiveTab] = usePersistentTab('admin_diet', 'meals');
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
 
-      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-row flex-wrap md:flex-nowrap items-center justify-between gap-4 relative overflow-hidden w-full">
+      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-row flex-wrap md:flex-nowrap items-center justify-between gap-4 relative overflow-visible w-full">
         <div className="flex items-center gap-4 lg:gap-6 relative z-10 w-auto">
           <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
             <UtensilsCrossed className="w-8 h-8" />

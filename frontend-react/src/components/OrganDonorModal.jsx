@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, HeartPulse, Brain, Check, Info, FileText, Share2, Activity } from 'lucide-react';
 import API from '../utils/api';
+import CustomSelect from './ui/CustomSelect';
 
 const ORGANS = [
   { id: 'heart', label: 'Heart' },
@@ -186,21 +187,31 @@ const OrganDonorModal = ({ isOpen, onClose, profile, onSave }) => {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Smoking History</label>
-                      <select value={questionnaire.smoking} onChange={(e) => setQuestionnaire({...questionnaire, smoking: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none transition-shadow">
-                        <option>No</option>
-                        <option>Occasional</option>
-                        <option>Frequent</option>
-                        <option>Former Smoker</option>
-                      </select>
+                      <CustomSelect
+                        value={questionnaire.smoking}
+                        onChange={(e) => setQuestionnaire({...questionnaire, smoking: e.target.value})}
+                        options={[
+                          { value: "No", label: "No" },
+                          { value: "Occasional", label: "Occasional" },
+                          { value: "Frequent", label: "Frequent" },
+                          { value: "Former Smoker", label: "Former Smoker" }
+                        ]}
+                        className="!bg-gray-50 dark:!bg-gray-900 border border-gray-200 dark:border-gray-700 !font-normal !py-3 !shadow-none !text-gray-900 dark:!text-white !text-base"
+                      />
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Alcohol Consumption</label>
-                      <select value={questionnaire.alcohol} onChange={(e) => setQuestionnaire({...questionnaire, alcohol: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none transition-shadow">
-                        <option>None</option>
-                        <option>Occasional</option>
-                        <option>Frequent</option>
-                        <option>Heavy</option>
-                      </select>
+                      <CustomSelect
+                        value={questionnaire.alcohol}
+                        onChange={(e) => setQuestionnaire({...questionnaire, alcohol: e.target.value})}
+                        options={[
+                          { value: "None", label: "None" },
+                          { value: "Occasional", label: "Occasional" },
+                          { value: "Frequent", label: "Frequent" },
+                          { value: "Heavy", label: "Heavy" }
+                        ]}
+                        className="!bg-gray-50 dark:!bg-gray-900 border border-gray-200 dark:border-gray-700 !font-normal !py-3 !shadow-none !text-gray-900 dark:!text-white !text-base"
+                      />
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Recent Infections (Last 6 Months)</label>

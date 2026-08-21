@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { User, Printer, Heart, FileText, Syringe, Phone, Shield, Activity, Lock } from 'lucide-react';
 import API from '../utils/api';
+import { useUnit } from '../contexts/UnitContext';
 import '../index.css';
 
 const SharedProfile = () => {
@@ -9,6 +10,7 @@ const SharedProfile = () => {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
+  const { displayWeight, displayHeight } = useUnit();
 
   useEffect(() => {
     // Force light mode for printing
@@ -156,9 +158,9 @@ const SharedProfile = () => {
               <span className="text-slate-300 dark:text-gray-600">&bull;</span>
               <span className="text-red-500 dark:text-red-400">Blood: {profile.blood_type || 'Unknown'}</span>
               <span className="text-slate-300 dark:text-gray-600">&bull;</span>
-              <span>{profile.height ? `${profile.height} cm` : 'Height N/A'}</span>
+              <span>{profile.height ? `${displayHeight(profile.height).value} ${displayHeight(profile.height).label}` : 'Height N/A'}</span>
               <span className="text-slate-300 dark:text-gray-600">&bull;</span>
-              <span>{profile.weight ? `${profile.weight} kg` : 'Weight N/A'}</span>
+              <span>{profile.weight ? `${displayWeight(profile.weight).value} ${displayWeight(profile.weight).label}` : 'Weight N/A'}</span>
             </div>
           </div>
         </div>

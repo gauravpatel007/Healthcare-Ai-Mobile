@@ -321,7 +321,7 @@ const LoginModal = ({ show, onClose }) => {
         setFaceLoading(true);
         return;
       }
-      await faceapi.nets.ssdMobilenetv1.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
+      await faceapi.nets.tinyFaceDetector.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
       await faceapi.nets.faceLandmark68Net.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
       await faceapi.nets.faceRecognitionNet.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
       setFaceModelsLoaded(true);
@@ -375,7 +375,7 @@ const LoginModal = ({ show, onClose }) => {
     setLoading(true);
     try {
       const detection = await faceapi
-        .detectSingleFace(videoRef.current)
+        .detectSingleFace(videoRef.current, new faceapi.TinyFaceDetectorOptions({ inputSize: 224 }))
         .withFaceLandmarks()
         .withFaceDescriptor();
       if (!detection) {

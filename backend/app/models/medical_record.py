@@ -3,7 +3,7 @@ LifeOS Backend — Medical Record Model
 """
 
 from sqlalchemy import Date, Enum as SAEnum, ForeignKey, String, Text, Boolean, Integer
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base, TimestampMixin, generate_uuid
 
@@ -35,3 +35,8 @@ class MedicalRecord(Base, TimestampMixin):
     approved_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     download_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    ai_analyzed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    ai_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Relationships
+    lab_metrics = relationship("LabMetric", back_populates="record", cascade="all, delete-orphan")

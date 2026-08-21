@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import API from '../utils/api';
 import MedicalDisclaimer from '../components/MedicalDisclaimer';
+import { useLang } from '../contexts/LangContext';
 import { 
   Bot,
   MessageSquare,
@@ -17,7 +18,9 @@ import {
   Trash2,
   X,
   Star,
-  Check
+  Check,
+  History,
+  Plus
 } from 'lucide-react';
 
 /* ─── Reusable Action Card (Matches Dashboard StatCard) ──────────── */
@@ -47,6 +50,7 @@ const ActionCard = ({ title, value, subtitle, icon: Icon, colorClass, onClick })
 );
 
 const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
+  const { t } = useLang();
   useEffect(() => {
     const appContainer = document.querySelector('.app-container');
     const rightPanel = document.querySelector('.right-panel');
@@ -67,17 +71,25 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
   const [isTyping, setIsTyping] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [showTipsModal, setShowTipsModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [healthTips, setHealthTips] = useState([]);
   const [copiedMessageId, setCopiedMessageId] = useState(null);
+  const [sessionId, setSessionId] = useState(null);
+  const [chatSessions, setChatSessions] = useState([]);
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
   const chatClearedRef = useRef(false);
   const abortControllerRef = useRef(null);
+  
+  const messagesRef = useRef(messages);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   const startVoiceRecognition = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert('Voice recognition is not supported in your browser.');
+      alert(t('error_voice_support'));
       return;
     }
 
@@ -93,13 +105,15 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
     };
     recognition.onerror = (event) => {
       console.error('Speech recognition error', event.error);
-      alert('Could not recognize voice. Try again.');
+      alert(t('error_voice'));
       setIsListening(false);
     };
     recognition.onend = () => setIsListening(false);
 
     recognition.start();
   };
+
+  const sampleQuestions = [t('sample_q_1'), t('sample_q_2'), t('sample_q_3'), t('sample_q_4')];
 
   const defaultGreeting = (
     <div className="bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-800/30 rounded-[2rem] p-6 mb-6 w-full max-w-2xl">
@@ -108,17 +122,17 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
           <Bot className="w-7 h-7" />
         </div>
         <div>
-          <h3 className="font-extrabold text-gray-900 dark:text-white text-lg">LifeOS AI</h3>
-          <p className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Health Assistant</p>
+          <h3 className="font-extrabold text-gray-900 dark:text-white text-lg">{t('greeting_title')}</h3>
+          <p className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">{t('health_assistant_role')}</p>
         </div>
       </div>
       <p className="text-gray-700 dark:text-gray-300 font-medium leading-relaxed mb-5">
-        Hello! I'm your LifeOS AI Health Assistant. How can I help you today?
+        {t('greeting_message')}
       </p>
       <div className="bg-white dark:bg-gray-800/50 rounded-2xl p-5 border border-gray-100 dark:border-gray-700/50">
-        <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Try asking me:</p>
+        <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">{t('try_asking_me')}</p>
         <ul className="space-y-3">
-          {['What is paracetamol used for?', 'First aid for burns', 'Why is my hemoglobin low?', 'Give me a health tip'].map((q, i) => (
+          {sampleQuestions.map((q, i) => (
             <li 
               key={i} 
               className="text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center gap-3 cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors p-2 -mx-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800" 
@@ -138,23 +152,36 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
   useEffect(() => {
     const initChat = async () => {
       try {
-        const [historyRes, tipsRes] = await Promise.all([
-          API.get('/ai/chat/history', { 
-            headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
-            cache: 'no-store' 
-          }),
-          API.get('/ai/chat/tips')
+        const [sessionsRes, tipsRes] = await Promise.all([
+          API.get('/ai/chat/sessions').catch(() => []),
+          API.get('/ai/chat/tips').catch(() => ({}))
         ]);
         
-        if (historyRes && historyRes.length > 0) {
-          setMessages(historyRes.map(m => ({ role: m.role, text: m.content, id: m.id, feedback: m.feedback })));
+        if (tipsRes && tipsRes.tips) {
+          setHealthTips(tipsRes.tips.map(tip => tip.tip));
+        }
+        
+        const isFirstVisit = !sessionStorage.getItem('aiChatVisited');
+        sessionStorage.setItem('aiChatVisited', 'true');
+
+        if (isFirstVisit) {
+          setSessionId(null);
+          setMessages([{ role: 'assistant', custom: defaultGreeting }]);
+          if (sessionsRes && sessionsRes.length > 0) {
+            setChatSessions(sessionsRes);
+          }
+        } else if (sessionsRes && sessionsRes.length > 0) {
+          setChatSessions(sessionsRes);
+          const latestSessionId = sessionsRes[0].session_id;
+          setSessionId(latestSessionId);
+          const historyRes = await API.get(`/ai/chat/history?session_id=${latestSessionId}`).catch(() => []);
+          if (historyRes && historyRes.length > 0) {
+            setMessages(historyRes.map(m => ({ role: m.role, text: m.content, id: m.id, feedback: m.feedback })));
+          } else {
+            setMessages([{ role: 'assistant', custom: defaultGreeting }]);
+          }
         } else {
           setMessages([{ role: 'assistant', custom: defaultGreeting }]);
-        }
-
-        if (tipsRes && tipsRes.tips) {
-          // Remove emoji from tips array since we redesign it
-          setHealthTips(tipsRes.tips.map(t => t.tip));
         }
       } catch (e) {
         console.error(e);
@@ -162,6 +189,22 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
     };
     initChat();
   }, []);
+  
+  const loadSession = async (sid) => {
+    try {
+      setShowHistoryModal(false);
+      setSessionId(sid);
+      setMessages([]); // clear current
+      const historyRes = await API.get(`/ai/chat/history?session_id=${sid}`);
+      if (historyRes && historyRes.length > 0) {
+        setMessages(historyRes.map(m => ({ role: m.role, text: m.content, id: m.id, feedback: m.feedback })));
+      } else {
+        setMessages([{ role: 'assistant', custom: defaultGreeting }]);
+      }
+    } catch(e) {
+      console.error(e);
+    }
+  };
 
   const scrollToBottom = () => {
     if (chatContainerRef.current) {
@@ -209,18 +252,26 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
     setIsTyping(true);
 
     try {
+      const payload = { message: userMessage };
+      if (sessionId) payload.session_id = sessionId;
+      
       const res = await API.request('/ai/chat', {
         method: 'POST',
-        body: { message: userMessage },
+        body: payload,
         signal: controller.signal
       });
       if (!chatClearedRef.current) {
         setMessages(prev => [...prev, { role: 'assistant', text: res.response, id: res.message_id }]);
+        if (res.session_id && res.session_id !== sessionId) {
+          setSessionId(res.session_id);
+          // Refresh sessions list
+          API.get('/ai/chat/sessions').then(setChatSessions).catch(console.error);
+        }
       }
     } catch (e) {
       if (e.name === 'AbortError') return; 
       if (!chatClearedRef.current) {
-        setMessages(prev => [...prev, { role: 'assistant', text: "Sorry, I couldn't reach the server right now." }]);
+        setMessages(prev => [...prev, { role: 'assistant', text: t('error_server') }]);
       }
     } finally {
       setIsTyping(false);
@@ -228,24 +279,17 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
     }
   };
 
-  const clearChat = async () => {
-    if (confirm('Clear chat history?')) {
-      try {
-        chatClearedRef.current = true;
-        setIsTyping(false);
+  const startNewChat = () => {
+    chatClearedRef.current = true;
+    setIsTyping(false);
 
-        if (abortControllerRef.current) {
-          abortControllerRef.current.abort();
-          abortControllerRef.current = null;
-        }
-
-        await API.delete('/ai/chat/history');
-        setMessages([{ role: 'assistant', custom: defaultGreeting }]);
-      } catch (e) {
-        chatClearedRef.current = false;
-        alert('Failed to clear chat history');
-      }
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
     }
+
+    setSessionId(null);
+    setMessages([{ role: 'assistant', custom: defaultGreeting }]);
   };
 
   const handleKeyDown = (e) => {
@@ -267,11 +311,45 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
           setMessages(prev => [...prev, { role: 'user', text: userMessage }]);
           setInput('');
           setIsTyping(true);
-          API.request('/ai/chat', { method: 'POST', body: { message: userMessage }, signal: controller.signal })
-            .then(res => { if (!chatClearedRef.current) setMessages(prev => [...prev, { role: 'assistant', text: res.response, id: res.message_id }]); })
-            .catch(e => { if (e.name !== 'AbortError' && !chatClearedRef.current) setMessages(prev => [...prev, { role: 'assistant', text: "Sorry, I couldn't reach the server." }]); })
+          const payload = { message: userMessage };
+          if (sessionId) payload.session_id = sessionId;
+          API.request('/ai/chat', { method: 'POST', body: payload, signal: controller.signal })
+            .then(res => { 
+              if (!chatClearedRef.current) {
+                setMessages(prev => [...prev, { role: 'assistant', text: res.response, id: res.message_id }]); 
+                if (res.session_id && res.session_id !== sessionId) {
+                  setSessionId(res.session_id);
+                  API.get('/ai/chat/sessions').then(setChatSessions).catch(console.error);
+                }
+              }
+            })
+            .catch(e => { if (e.name !== 'AbortError' && !chatClearedRef.current) setMessages(prev => [...prev, { role: 'assistant', text: t('error_server') }]); })
             .finally(() => { setIsTyping(false); abortControllerRef.current = null; });
         }, 500);
+      } else if (voiceAction.action_name === 'open_history') {
+        setShowHistoryModal(true);
+      } else if (voiceAction.action_name === 'open_daily_tips') {
+        setShowTipsModal(true);
+      } else if (voiceAction.action_name === 'new_chat') {
+        startNewChat();
+      } else if (voiceAction.action_name === 'like_last_message') {
+        const aiMsgs = messagesRef.current.map((m, i) => ({ ...m, originalIndex: i })).filter(m => (m.role === 'ai' || m.role === 'assistant') && !m.custom);
+        if (aiMsgs.length > 0) {
+          const lastMsg = aiMsgs[aiMsgs.length - 1];
+          handleFeedback(lastMsg.id, 1, lastMsg.originalIndex);
+        }
+      } else if (voiceAction.action_name === 'dislike_last_message') {
+        const aiMsgs = messagesRef.current.map((m, i) => ({ ...m, originalIndex: i })).filter(m => (m.role === 'ai' || m.role === 'assistant') && !m.custom);
+        if (aiMsgs.length > 0) {
+          const lastMsg = aiMsgs[aiMsgs.length - 1];
+          handleFeedback(lastMsg.id, -1, lastMsg.originalIndex);
+        }
+      } else if (voiceAction.action_name === 'copy_last_message') {
+        const aiMsgs = messagesRef.current.map((m, i) => ({ ...m, originalIndex: i })).filter(m => (m.role === 'ai' || m.role === 'assistant') && !m.custom);
+        if (aiMsgs.length > 0) {
+          const lastMsg = aiMsgs[aiMsgs.length - 1];
+          copyToClipboard(lastMsg.text, lastMsg.id || lastMsg.originalIndex);
+        }
       }
       if (onVoiceActionConsumed) onVoiceActionConsumed();
     }
@@ -279,10 +357,10 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
 
   const quickAction = (type) => {
     const prompts = {
-      medicine: 'Tell me about paracetamol',
-      firstaid: 'First aid for burns',
-      report: 'Why is my hemoglobin low?',
-      general: 'Give me a health tip'
+      medicine: t('sample_q_1'),
+      firstaid: t('sample_q_2'),
+      report: t('sample_q_3'),
+      general: t('sample_q_4')
     };
     setInput(prompts[type] || '');
   };
@@ -306,29 +384,36 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
             <Bot className="w-8 h-8" />
           </div>
           <div className="text-left">
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-1 text-left">
-              AI Health Assistant
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-1 text-left">
+              {t('ai_health_assistant_title')}
             </h1>
             <p className="text-xs sm:text-sm lg:text-base text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2 text-left">
               <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse shrink-0"></span>
-              24/7 AI-powered health guidance
+              {t('ai_health_assistant_subtitle')}
             </p>
           </div>
         </div>
         <div className="flex items-center justify-end gap-3 relative z-10 shrink-0 ml-auto pr-2">
           <button 
+            onClick={() => setShowHistoryModal(true)} 
+            className="flex items-center gap-2 p-3 rounded-xl transition-all bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"
+            title="Chat History"
+          >
+            <History className="w-5 h-5 shrink-0" />
+          </button>
+          <button 
             onClick={() => setShowTipsModal(true)} 
             className="flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50"
           >
             <Lightbulb className="w-4 h-4 shrink-0" />
-            <span className="whitespace-nowrap">Daily Tips</span>
+            <span className="whitespace-nowrap">{t('daily_tips_btn')}</span>
           </button>
           <button 
-            onClick={clearChat} 
-            className="flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all bg-rose-50 dark:bg-rose-900/20 text-rose-500 hover:bg-rose-100 dark:hover:bg-rose-900/40"
+            onClick={startNewChat} 
+            className="flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
           >
-            <Trash2 className="w-4 h-4 shrink-0" />
-            <span className="whitespace-nowrap">Clear</span>
+            <Plus className="w-4 h-4 shrink-0" />
+            <span className="whitespace-nowrap">New Chat</span>
           </button>
         </div>
       </div>
@@ -338,14 +423,14 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
       {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
         {[
-          { id: 'medicine', icon: Pill, title: 'Medicine Info', desc: 'Drug information', color: 'bg-indigo-500 text-indigo-500' },
-          { id: 'firstaid', icon: Stethoscope, title: 'First Aid', desc: 'Emergency guide', color: 'bg-emerald-500 text-emerald-500' },
-          { id: 'report', icon: FileText, title: 'Report Q&A', desc: 'Explain results', color: 'bg-sky-500 text-sky-500' },
-          { id: 'general', icon: HeartPulse, title: 'General Health', desc: 'Any question', color: 'bg-amber-500 text-amber-500' }
+          { id: 'medicine', icon: Pill, title: t('medicine_info'), desc: t('drug_information'), color: 'bg-indigo-500 text-indigo-500' },
+          { id: 'firstaid', icon: Stethoscope, title: t('first_aid'), desc: t('emergency_guide'), color: 'bg-emerald-500 text-emerald-500' },
+          { id: 'report', icon: FileText, title: t('report_qa'), desc: t('explain_results'), color: 'bg-sky-500 text-sky-500' },
+          { id: 'general', icon: HeartPulse, title: t('general_health'), desc: t('any_question'), color: 'bg-amber-500 text-amber-500' }
         ].map(action => (
           <ActionCard
             key={action.id}
-            title="Quick Action"
+            title={t('quick_action')}
             value={action.title}
             subtitle={action.desc}
             icon={action.icon}
@@ -369,7 +454,7 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
                     <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
                       <Bot className="w-3.5 h-3.5" />
                     </div>
-                    <span className="text-xs font-bold text-gray-500 dark:text-gray-400">LifeOS AI</span>
+                    <span className="text-xs font-bold text-gray-500 dark:text-gray-400">{t('greeting_title')}</span>
                   </div>
                 )}
                 
@@ -389,7 +474,7 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
                       {copiedMessageId === (m.id || i) ? (
                         <>
                           <Check className="w-4 h-4 text-emerald-500" />
-                          <span className="text-xs font-bold text-emerald-500">Copied!</span>
+                          <span className="text-xs font-bold text-emerald-500">{t('copied')}</span>
                         </>
                       ) : (
                         <Copy className="w-4 h-4" />
@@ -412,7 +497,7 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
                  <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
                    <Bot className="w-3.5 h-3.5" />
                  </div>
-                 <span className="text-xs font-bold text-gray-500 dark:text-gray-400">LifeOS AI</span>
+                 <span className="text-xs font-bold text-gray-500 dark:text-gray-400">{t('greeting_title')}</span>
                </div>
                <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 rounded-3xl rounded-tl-none p-5 flex gap-2">
                  <span className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0ms' }}></span>
@@ -440,7 +525,7 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
             </button>
             <input 
               type="text"
-              placeholder="Ask me anything about your health..."
+              placeholder={t('chat_placeholder')}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -460,14 +545,14 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
       {/* Daily Tips Modal */}
       {showTipsModal && (
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm !mt-0"
           onClick={(e) => { if (e.target === e.currentTarget) setShowTipsModal(false); }}
         >
-          <div className="bg-white dark:bg-gray-800 w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl border border-gray-100 dark:border-gray-700 transform transition-all">
-            <div className="flex items-center justify-between mb-6">
+          <div className="bg-white dark:bg-gray-800 w-full max-w-md rounded-[2.5rem] shadow-2xl border border-gray-100 dark:border-gray-700 transform transition-all h-fit overflow-hidden flex flex-col">
+            <div className="p-6 lg:p-8 flex items-center justify-between border-b border-gray-100 dark:border-gray-700">
               <h3 className="text-xl font-extrabold text-gray-900 dark:text-white flex items-center gap-2">
                 <Lightbulb className="w-6 h-6 text-amber-500" />
-                Daily Health Tips
+                {t('daily_health_tips')}
               </h3>
               <button 
                 onClick={() => setShowTipsModal(false)}
@@ -477,23 +562,72 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
               </button>
             </div>
             
+            <div className="p-6 lg:p-8 overflow-y-auto max-h-[60vh] custom-scrollbar">
             <div className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-[2rem] p-6 text-center border border-indigo-100 dark:border-indigo-800/30 mb-8">
               <Star className="w-10 h-10 text-amber-400 mx-auto mb-3 drop-shadow-sm" />
-              <h4 className="font-extrabold text-gray-900 dark:text-white mb-2">Today's Tip</h4>
+              <h4 className="font-extrabold text-gray-900 dark:text-white mb-2">{t('todays_tip')}</h4>
               <p className="text-sm font-bold text-indigo-900 dark:text-indigo-200 leading-relaxed">
-                {healthTips[new Date().getDate() % (healthTips.length || 1)] || "Stay hydrated and get 8 hours of sleep!"}
+                {healthTips[new Date().getDate() % (healthTips.length || 1)] || t('fallback_tip_1')}
               </p>
             </div>
             
             <div>
-              <h4 className="font-extrabold text-gray-900 dark:text-white mb-3 text-sm px-2 uppercase tracking-wider">More Tips</h4>
+              <h4 className="font-extrabold text-gray-900 dark:text-white mb-3 text-sm px-2 uppercase tracking-wider">{t('more_tips')}</h4>
               <div className="space-y-2">
-                {(healthTips.length > 0 ? healthTips.slice(0, 5) : ["Drink 8 glasses of water daily", "Exercise for 30 mins a day"]).map((t, i) => (
+                {(healthTips.length > 0 ? healthTips.slice(0, 5) : [t('fallback_tip_2'), t('fallback_tip_3')]).map((tip, i) => (
                   <div key={i} className="px-5 py-3.5 bg-gray-50 dark:bg-gray-900/50 rounded-2xl text-sm font-semibold text-gray-600 dark:text-gray-300 border border-gray-100 dark:border-gray-700/50">
-                    {t}
+                    {tip}
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      )}
+
+      {/* Chat History Modal */}
+      {showHistoryModal && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm !mt-0"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowHistoryModal(false); }}
+        >
+          <div className="bg-white dark:bg-gray-800 w-full max-w-md rounded-[2.5rem] shadow-2xl border border-gray-100 dark:border-gray-700 transform transition-all h-fit overflow-hidden flex flex-col">
+            <div className="p-6 lg:p-8 flex items-center justify-between border-b border-gray-100 dark:border-gray-700">
+              <h3 className="text-xl font-extrabold text-gray-900 dark:text-white flex items-center gap-2">
+                <History className="w-6 h-6 text-indigo-500" />
+                Recent Chats
+              </h3>
+              <button 
+                onClick={() => setShowHistoryModal(false)}
+                className="p-2 bg-gray-50 dark:bg-gray-900/50 hover:bg-gray-100 dark:hover:bg-gray-900 rounded-full text-gray-500 dark:text-gray-400 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 lg:p-8 space-y-3 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+              {chatSessions.length === 0 ? (
+                <div className="text-center text-gray-500 dark:text-gray-400 py-6 font-medium">No recent chats found.</div>
+              ) : (
+                chatSessions.map((session, i) => (
+                  <div 
+                    key={i} 
+                    onClick={() => loadSession(session.session_id)}
+                    className={`cursor-pointer px-5 py-4 rounded-2xl transition-all border ${
+                      sessionId === session.session_id 
+                        ? 'bg-indigo-50 border-indigo-200 dark:bg-indigo-900/30 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300' 
+                        : 'bg-gray-50 border-gray-100 hover:bg-indigo-50/50 dark:bg-gray-900/50 dark:border-gray-800 dark:hover:bg-gray-800/80 text-gray-700 dark:text-gray-300'
+                    }`}
+                  >
+                    <div className="font-bold text-sm mb-1 truncate">{session.title || "Chat Session"}</div>
+                    <div className="flex items-center justify-between text-xs opacity-70">
+                      <span>{new Date(session.created_at).toLocaleDateString()}</span>
+                      <span>{session.message_count} msgs</span>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>

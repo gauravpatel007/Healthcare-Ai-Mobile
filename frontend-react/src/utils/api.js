@@ -42,12 +42,18 @@ const API = {
       }
     } else {
       localStorage.removeItem('lifeos_accounts'); // Clear all on full logout
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('lifeos_tab_')) {
+          localStorage.removeItem(key);
+        }
+      });
     }
 
     this.setAuthenticated(false);
     try {
       await fetch(`${BASE_URL}/auth/logout`, { method: 'POST', credentials: 'include' });
     } catch (e) { }
+    sessionStorage.removeItem('aiChatVisited');
     window.location.href = '/';
   },
 
@@ -132,7 +138,7 @@ const API = {
       let response = await fetch(url, config);
       
       if (response.status === 401 && !options._retry) {
-        if (!url.includes('/auth/login') && !url.includes('/auth/register')) {
+        if (!url.includes('/auth/login') && !url.includes('/auth/register') && !url.includes('/auth/face-login') && !url.includes('/auth/google') && !url.includes('/auth/login/2fa')) {
           config._retry = true;
           let refreshed = await this.refreshToken();
           
@@ -455,6 +461,12 @@ const API = {
   getAdminSymptoms() {
     return this.get('/admin/symptoms');
   },
+  getCustomSymptoms(lang = 'en') {
+    return this.get(`/ai/symptoms/custom?lang=${lang}`);
+  },
+  deleteCustomSymptom(data) {
+    return this.delete('/ai/symptoms/custom', { body: data });
+  },
   createAdminSymptom(data) {
     return this.post('/admin/symptoms', data);
   },
@@ -573,6 +585,19 @@ const API = {
   },
   deleteAdminFile(id) {
     return this.delete(`/admin/files/${id}`);
+  },
+
+  // --- Document Analysis ---
+  analyzeMedicalDocument(recordId) {
+    return this.post(`/records/${recordId}/analyze`, {});
+  },
+  
+  getDocumentMetrics(recordId) {
+    return this.get(`/records/${recordId}/metrics`);
+  },
+  
+  getUserLabMetrics() {
+    return this.get('/records/user/lab-metrics');
   }
 };
 

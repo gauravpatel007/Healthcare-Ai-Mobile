@@ -1,4 +1,5 @@
 """
+# Trigger reload to ensure new schemas are loaded
 LifeOS Backend — FastAPI Application Entry Point
 """
 
@@ -22,10 +23,11 @@ from app.routers import (
     ai_assistant, ai_fitness, ai_mental, ai_nutrition, ai_symptom,
     analytics, appointments, auth, challenges, dashboard, emergency,
     expenses, family, health_trackers, medical_records, medicines, users, share, vision,
+    gamification,
     admin, admin_fitness, admin_medicine, admin_disease,
     admin_content, admin_notifications, admin_feedback, admin_diet,
     admin_settings, admin_files, admin_security, admin_audit, admin_analytics,
-    user_feedback, user_notifications
+    user_feedback, user_notifications, document_analysis
 )
 
 logger = logging.getLogger("lifeos")
@@ -37,6 +39,11 @@ async def lifespan(application: FastAPI):
     setup_logging()
     settings = get_settings()
     logger.info("🚀 Starting %s v%s", settings.APP_NAME, settings.APP_VERSION)
+
+    # Start background scheduler
+    import asyncio
+    from app.services.scheduler import check_medications_loop
+    scheduler_task = asyncio.create_task(check_medications_loop())
 
     # Run DB migration for AI models and MealPlans
     try:
@@ -84,6 +91,7 @@ async def lifespan(application: FastAPI):
     yield
 
     # Shutdown
+    scheduler_task.cancel()
     await close_db()
     logger.info(" %s shutdown complete", settings.APP_NAME)
 
@@ -139,6 +147,7 @@ def create_app() -> FastAPI:
     application.include_router(health_trackers.router, prefix=api_prefix)
     application.include_router(expenses.router, prefix=api_prefix)
     application.include_router(challenges.router, prefix=api_prefix)
+    application.include_router(gamification.router, prefix=api_prefix)
     application.include_router(analytics.router, prefix=api_prefix)
     application.include_router(share.router, prefix=api_prefix)
     application.include_router(ai_assistant.router, prefix=api_prefix)
@@ -160,6 +169,7 @@ def create_app() -> FastAPI:
     application.include_router(admin_security.router, prefix=api_prefix)
     application.include_router(admin_audit.router, prefix=api_prefix)
     application.include_router(admin_analytics.router, prefix=api_prefix)
+    application.include_router(document_analysis.router, prefix=api_prefix)
 
     # User Modules
     application.include_router(user_feedback.router, prefix=api_prefix)

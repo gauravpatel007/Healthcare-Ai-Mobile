@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../../utils/api';
 import { 
   FileText, Activity, AlertCircle, FilePlus, Download, 
   Trash2, RefreshCw, Eye, Search, Filter, CheckCircle2,
   XCircle, FileEdit, Clock, ChevronDown
 } from 'lucide-react';
+import CustomSelect from '../../components/ui/CustomSelect';
 
 const CATEGORIES = [
   'All', 'Blood Test', 'Imaging', 'Prescription', 'Surgery', 'Vaccination', 'Other'
@@ -18,6 +20,14 @@ export default function AdminMedicalRecords() {
   const [search, setSearch] = useState('');
   const [filterCategory, setFilterCategory] = useState('All');
   const [showDeleted, setShowDeleted] = useState(false);
+  const [displayCount, setDisplayCount] = useState(15);
+  
+  // New filters
+  const [showFilterPopover, setShowFilterPopover] = useState(false);
+  const [filterEmail, setFilterEmail] = useState('');
+  const [filterStartDate, setFilterStartDate] = useState('');
+  const [filterEndDate, setFilterEndDate] = useState('');
+  const [sortBy, setSortBy] = useState('date_desc');
 
   // Replace file state
   const [replacingId, setReplacingId] = useState(null);
@@ -98,10 +108,21 @@ export default function AdminMedicalRecords() {
   };
 
   const filteredRecords = useMemo(() => {
-    return records.filter(r => {
+    let result = records.filter(r => {
       if (!showDeleted && r.is_deleted) return false;
       if (showDeleted && !r.is_deleted) return false;
       if (filterCategory !== 'All' && r.category !== filterCategory) return false;
+      if (filterEmail && !(r.user_email || '').toLowerCase().includes(filterEmail.toLowerCase())) return false;
+      
+      if (filterStartDate) {
+        if (new Date(r.created_at) < new Date(filterStartDate)) return false;
+      }
+      if (filterEndDate) {
+        const end = new Date(filterEndDate);
+        end.setDate(end.getDate() + 1);
+        if (new Date(r.created_at) >= end) return false;
+      }
+
       if (search) {
         const q = search.toLowerCase();
         return (r.title || '').toLowerCase().includes(q) || 
@@ -110,13 +131,22 @@ export default function AdminMedicalRecords() {
       }
       return true;
     });
-  }, [records, search, filterCategory, showDeleted]);
+
+    result.sort((a, b) => {
+      if (sortBy === 'date_desc') return new Date(b.created_at) - new Date(a.created_at);
+      if (sortBy === 'date_asc') return new Date(a.created_at) - new Date(b.created_at);
+      if (sortBy === 'status') return (a.status || '').localeCompare(b.status || '');
+      return 0;
+    });
+
+    return result;
+  }, [records, search, filterCategory, showDeleted, filterEmail, filterStartDate, filterEndDate, sortBy]);
 
   return (
     <div className="space-y-6">
       
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-row flex-wrap md:flex-nowrap items-center justify-between gap-4 relative overflow-hidden w-full">
+      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-row flex-wrap md:flex-nowrap items-center justify-between gap-4 relative overflow-visible w-full">
         <div className="flex items-center gap-4 lg:gap-6 relative z-10 w-auto">
           <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
             <FileText className="w-8 h-8" />
@@ -140,15 +170,104 @@ export default function AdminMedicalRecords() {
               className="pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 w-64"
             />
           </div>
-          <div className="relative">
-            <select 
-              value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
-              className="pl-4 pr-10 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 appearance-none cursor-pointer text-gray-700 dark:text-gray-300 hover:border-gray-300 transition-colors"
-            >
-              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-          </div>
+          <button 
+            onClick={() => setShowFilterPopover(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-xl text-sm font-bold hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-700 dark:text-gray-300"
+          >
+            <Filter className="w-4 h-4" /> Filter
+          </button>
+          
+          {showFilterPopover && createPortal(
+            <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setShowFilterPopover(false)}>
+              <div className="bg-white dark:bg-gray-800 rounded-3xl w-full max-w-lg shadow-2xl border border-gray-100 dark:border-gray-700 p-6 animate-in zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <Filter className="w-6 h-6 text-indigo-500" />
+                    Filter & Sort Records
+                  </h3>
+                  <button onClick={() => setShowFilterPopover(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                    <XCircle className="w-6 h-6" />
+                  </button>
+                </div>
+                
+                <div className="space-y-4 pr-2">
+                  <div className="space-y-1">
+                    <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 block">Sort By</label>
+                    <CustomSelect
+                      value={sortBy}
+                      onChange={e => setSortBy(e.target.value)}
+                      options={[
+                        { value: 'date_desc', label: 'Newest First' },
+                        { value: 'date_asc', label: 'Oldest First' },
+                        { value: 'status', label: 'Status' }
+                      ]}
+                      className="!bg-gray-50 dark:!bg-gray-900 border border-gray-200 dark:border-gray-700 !font-normal !py-3 !shadow-none !text-gray-700 dark:!text-gray-200 !text-base"
+                    />
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 block">Category</label>
+                    <CustomSelect
+                      value={filterCategory}
+                      onChange={e => setFilterCategory(e.target.value)}
+                      options={CATEGORIES.map(c => ({ value: c, label: c }))}
+                      className="!bg-gray-50 dark:!bg-gray-900 border border-gray-200 dark:border-gray-700 !font-normal !py-3 !shadow-none !text-gray-700 dark:!text-gray-200 !text-base"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 block">Specific Email</label>
+                    <input 
+                      type="text" placeholder="e.g. user@example.com"
+                      value={filterEmail} onChange={e => setFilterEmail(e.target.value)}
+                      className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 outline-none text-gray-700 dark:text-gray-200"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 block">Start Date</label>
+                      <input 
+                        type="date"
+                        value={filterStartDate} onChange={e => setFilterStartDate(e.target.value)}
+                        className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 outline-none text-gray-700 dark:text-gray-200"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 block">End Date</label>
+                      <input 
+                        type="date"
+                        value={filterEndDate} onChange={e => setFilterEndDate(e.target.value)}
+                        className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 outline-none text-gray-700 dark:text-gray-200"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 flex gap-3">
+                  <button 
+                    onClick={() => {
+                      setFilterCategory('All');
+                      setFilterEmail('');
+                      setFilterStartDate('');
+                      setFilterEndDate('');
+                      setSortBy('date_desc');
+                    }}
+                    className="flex-1 py-3 px-4 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white rounded-xl font-bold transition-colors"
+                  >
+                    Clear Filters
+                  </button>
+                  <button 
+                    onClick={() => setShowFilterPopover(false)}
+                    className="flex-1 py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-colors"
+                  >
+                    Apply Filters
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )}
           <button 
             onClick={() => setShowDeleted(!showDeleted)}
             className={`px-4 py-2 rounded-xl text-sm font-bold border transition-colors ${showDeleted ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/50' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
@@ -184,7 +303,7 @@ export default function AdminMedicalRecords() {
                   </td>
                 </tr>
               ) : (
-                filteredRecords.map(record => (
+                filteredRecords.slice(0, displayCount).map(record => (
                   <tr key={record.id} className={`hover:bg-gray-50/50 transition-colors ${record.is_deleted ? 'opacity-60' : ''}`}>
                     <td className="p-4 pl-6">
                       <div className="flex items-center gap-3">
@@ -292,6 +411,16 @@ export default function AdminMedicalRecords() {
             </tbody>
           </table>
         </div>
+        {filteredRecords.length > displayCount && (
+          <div className="p-4 flex justify-center border-t border-gray-100 dark:border-gray-700">
+            <button
+              onClick={() => setDisplayCount(prev => prev + 20)}
+              className="px-4 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 rounded-lg transition-colors"
+            >
+              See More ({filteredRecords.length - displayCount} more)
+            </button>
+          </div>
+        )}
       </div>
 
     </div>

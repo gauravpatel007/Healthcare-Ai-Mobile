@@ -1030,15 +1030,13 @@ async def get_health_services(db: AsyncSession = Depends(get_db)):
     """Fetch health services data for Admin Dashboard."""
     from app.models.user import User
     today_date = datetime.now(timezone.utc).date()
-    # 1. Fetch upcoming appointments
+    # 1. Fetch all appointments (both upcoming and past)
     appts_res = await db.execute(
         select(Appointment, UserProfile.name, User.email)
         .outerjoin(UserProfile, Appointment.user_id == UserProfile.user_id)
         .outerjoin(User, Appointment.user_id == User.id)
-        .where(Appointment.status == "upcoming")
-        .where(Appointment.date >= today_date)
-        .order_by(Appointment.date.asc(), Appointment.time.asc())
-        .limit(30)
+        .order_by(Appointment.date.desc(), Appointment.time.desc())
+        .limit(200)
     )
     
     appointments = []

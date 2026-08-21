@@ -1,0 +1,359 @@
+/* HealthIDCard.css — Dark neon card matching LifeOS Health ID mockup */
+
+.hid-card {
+  background: #10121e;
+  border-radius: 2rem;
+  border: 1px solid rgba(255,255,255,0.06);
+  padding: 2.5rem;
+  position: relative;
+  overflow: hidden;
+  font-family: inherit;
+}
+
+.hid-glow-tr {
+  position: absolute;
+  top: -100px;
+  right: -60px;
+  width: 350px;
+  height: 350px;
+  background: radial-gradient(circle, rgba(99,60,255,0.25) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.hid-glow-bl {
+  position: absolute;
+  bottom: -80px;
+  left: -60px;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(139,60,255,0.18) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* HEADER */
+.hid-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  z-index: 2;
+  margin-bottom: 2rem;
+}
+
+.hid-header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.hid-icon-box {
+  width: 56px;
+  height: 56px;
+  border-radius: 1rem;
+  background: linear-gradient(135deg, #6366f1, #7c3aed);
+  box-shadow: 0 0 22px rgba(99,102,241,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.hid-title {
+  font-size: 1.65rem;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.hid-subtitle {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #818cf8;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  margin-top: 0.2rem;
+}
+
+/* Top-right ECG line */
+.top-right-ecg {
+  position: absolute;
+  top: 48px;
+  right: 125px;
+  width: 280px;
+  height: 70px;
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.top-right-ecg svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* Top-right shield */
+.top-right-shield {
+  position: absolute;
+  top: 30px;
+  right: 35px;
+  width: 85px;
+  height: 85px;
+  pointer-events: none;
+}
+
+.top-right-shield svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* PATIENT NAME */
+.hid-name-section {
+  position: relative;
+  z-index: 2;
+  margin-bottom: 1.5rem;
+}
+
+.hid-name-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin-bottom: 0.45rem;
+}
+
+.hid-name {
+  font-size: 2.75rem;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+/* STATS */
+.hid-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  background: #171929;
+  border-radius: 1.25rem;
+  border: 1px solid rgba(255,255,255,0.05);
+  overflow: hidden;
+  position: relative;
+  z-index: 2;
+  margin-bottom: 1.25rem;
+}
+
+.hid-stat {
+  padding: 1.25rem 0.75rem;
+  text-align: center;
+}
+
+.hid-stat + .hid-stat {
+  border-left: 1px solid rgba(255,255,255,0.06);
+}
+
+.hid-stat-label {
+  font-size: 0.58rem;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin-bottom: 0.55rem;
+}
+
+.hid-stat-value {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.hid-stat-value.blood {
+  color: #f43f5e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+/* TAGS */
+.hid-tags-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  position: relative;
+  z-index: 2;
+  margin-bottom: 1.25rem;
+}
+
+@media (max-width: 520px) {
+  .hid-tags-grid { grid-template-columns: 1fr; }
+}
+
+.hid-tag-box {
+  background: #171929;
+  border-radius: 1.25rem;
+  border: 1px solid rgba(255,255,255,0.04);
+  padding: 1.1rem 1.2rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.hid-tag-box.allergies {
+  border-left: 3px solid rgba(244,63,94,0.65);
+  box-shadow: -4px 0 16px rgba(244,63,94,0.28);
+}
+
+.hid-tag-box.conditions {
+  border-left: 3px solid rgba(56,189,248,0.65);
+  box-shadow: -4px 0 16px rgba(56,189,248,0.28);
+}
+
+.hid-tag-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin-bottom: 0.75rem;
+}
+
+.hid-tag-box.allergies .hid-tag-title { color: #fb7185; }
+.hid-tag-box.conditions .hid-tag-title { color: #38bdf8; }
+
+.hid-tag-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.hid-pill {
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.hid-pill.allergy {
+  background: rgba(244,63,94,0.13);
+  color: #fda4af;
+  border: 1px solid rgba(244,63,94,0.32);
+}
+
+.hid-pill.condition {
+  background: transparent;
+  color: #7dd3fc;
+  border: 1px solid rgba(56,189,248,0.32);
+}
+
+.hid-none {
+  font-size: 0.78rem;
+  font-style: italic;
+  color: #475569;
+}
+
+/* QR SECTION */
+.hid-qr-box {
+  background: #171929;
+  border-radius: 1.25rem;
+  border: 1px solid rgba(255,255,255,0.04);
+  padding: 1.75rem 2rem;
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  position: relative;
+  z-index: 2;
+  overflow: hidden;
+}
+
+.hid-qr-glow {
+  position: absolute;
+  bottom: -50px;
+  right: -30px;
+  width: 240px;
+  height: 240px;
+  background: radial-gradient(circle, rgba(109,40,217,0.2) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.hid-qr-wrapper {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.hid-qr-corner {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-color: rgba(139,92,246,0.8);
+  border-style: solid;
+  pointer-events: none;
+}
+
+.hid-qr-corner.tl { top: -9px; left: -9px; border-width: 2.5px 0 0 2.5px; border-radius: 3px 0 0 0; }
+.hid-qr-corner.tr { top: -9px; right: -9px; border-width: 2.5px 2.5px 0 0; border-radius: 0 3px 0 0; }
+.hid-qr-corner.bl { bottom: -9px; left: -9px; border-width: 0 0 2.5px 2.5px; border-radius: 0 0 0 3px; }
+.hid-qr-corner.br { bottom: -9px; right: -9px; border-width: 0 2.5px 2.5px 0; border-radius: 0 0 3px 0; }
+
+.hid-qr-img-box {
+  width: 152px;
+  height: 152px;
+  background: #fff;
+  border-radius: 1rem;
+  padding: 0.6rem;
+  box-shadow: 0 0 44px rgba(109,40,217,0.5);
+  position: relative;
+  z-index: 1;
+}
+
+.hid-qr-img-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  mix-blend-mode: multiply;
+}
+
+.hid-qr-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  position: relative;
+  z-index: 1;
+}
+
+.hid-shield-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(99,102,241,0.35);
+  background: rgba(99,102,241,0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.hid-scan-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.hid-scan-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #cbd5e1;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.hid-scan-sub {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #818cf8;
+}

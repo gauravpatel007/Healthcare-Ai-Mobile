@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Settings as SettingsIcon, Palette, Image as ImageIcon, 
   Mail, Phone, Globe, ShieldAlert, Link as LinkIcon, Save,
@@ -6,6 +7,7 @@ import {
 } from 'lucide-react';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
+import CustomSelect from '../../components/ui/CustomSelect';
 
 const AdminSettings = () => {
   const [settings, setSettings] = useState({
@@ -133,7 +135,7 @@ const AdminSettings = () => {
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-12">
       
-      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-row flex-wrap md:flex-nowrap items-center justify-between gap-4 relative overflow-hidden w-full">
+      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-row flex-wrap md:flex-nowrap items-center justify-between gap-4 relative overflow-visible w-full">
         <div className="flex items-center gap-4 lg:gap-6 relative z-10 w-auto">
           <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
             <SettingsIcon className="w-8 h-8" />
@@ -240,18 +242,18 @@ const AdminSettings = () => {
               <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">Timezone</label>
               <div className="relative">
                 <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <select 
-                  name="timezone"
+                <CustomSelect
                   value={settings.timezone}
-                  onChange={handleChange}
-                  className="w-full pl-9 pr-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 dark:border-gray-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 appearance-none dark:text-white"
-                >
-                  <option value="UTC">UTC (Coordinated Universal Time)</option>
-                  <option value="EST">EST (Eastern Standard Time)</option>
-                  <option value="PST">PST (Pacific Standard Time)</option>
-                  <option value="GMT">GMT (Greenwich Mean Time)</option>
-                  <option value="IST">IST (Indian Standard Time, GMT+5:30)</option>
-                </select>
+                  onChange={(e) => handleChange({ target: { name: 'timezone', value: e.target.value } })}
+                  options={[
+                    { value: "UTC", label: "UTC (Coordinated Universal Time)" },
+                    { value: "EST", label: "EST (Eastern Standard Time)" },
+                    { value: "PST", label: "PST (Pacific Standard Time)" },
+                    { value: "GMT", label: "GMT (Greenwich Mean Time)" },
+                    { value: "IST", label: "IST (Indian Standard Time, GMT+5:30)" }
+                  ]}
+                  className="w-full !bg-gray-50 dark:!bg-gray-900 border border-gray-200 dark:border-gray-600 dark:border-gray-700 !py-2.5 !pl-[34px] !font-normal !shadow-none !text-gray-900 dark:!text-white"
+                />
               </div>
             </div>
             </div>
@@ -360,8 +362,8 @@ const AdminSettings = () => {
       </div>
 
       {/* Fullscreen Logo Modal */}
-      {viewingLogo && settings.site_logo && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      {viewingLogo && settings.site_logo && createPortal(
+        <div className="fixed inset-0 z-[100000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={() => setViewingLogo(false)}>
           <button 
             onClick={() => setViewingLogo(false)}
             className="absolute top-6 right-6 text-white hover:text-gray-300 transition-colors p-2 bg-black/40 hover:bg-black/60 rounded-full"
@@ -372,8 +374,10 @@ const AdminSettings = () => {
             src={settings.site_logo} 
             alt="Logo Fullscreen" 
             className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl animate-in zoom-in-95 duration-200" 
+            onClick={(e) => e.stopPropagation()}
           />
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

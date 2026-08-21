@@ -5,6 +5,9 @@ Loads environment variables using Pydantic Settings.
 
 from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from dotenv import load_dotenv
+
+load_dotenv(override=True)
 
 
 class Settings(BaseSettings):
@@ -31,10 +34,10 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
-
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
     # --- Groq AI ---
     GROQ_API_KEY: str = ""
-    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    GROQ_MODEL: str = "llama-3.2-11b-vision-preview"
 
     # --- Google Sign In ---
     GOOGLE_CLIENT_ID: str = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com"
@@ -55,6 +58,10 @@ class Settings(BaseSettings):
     # --- File Uploads ---
     UPLOAD_DIR: str = "uploads"
     MAX_FILE_SIZE_MB: int = 10
+
+    # --- OneSignal Push Notifications ---
+    ONESIGNAL_APP_ID: str = ""
+    ONESIGNAL_REST_API_KEY: str = ""
 
     # --- CORS ---
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5500,http://127.0.0.1:5500,http://localhost:5173,http://127.0.0.1:5173"

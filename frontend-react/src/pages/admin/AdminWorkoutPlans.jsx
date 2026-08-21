@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../../utils/api';
 import { 
   Plus, Search, Edit2, Trash2, CalendarRange, 
   CheckCircle2, Archive
 } from 'lucide-react';
+import CustomSelect from '../../components/ui/CustomSelect';
 
 export default function AdminWorkoutPlans() {
   const [plans, setPlans] = useState([]);
@@ -173,9 +175,9 @@ export default function AdminWorkoutPlans() {
       </div>
 
       {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-gray-800 dark:bg-gray-800 rounded-[2rem] shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto border border-gray-100 dark:border-gray-700 animate-in fade-in zoom-in-95 duration-200">
+      {showModal && createPortal(
+        <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm" onClick={() => setShowModal(false)}>
+          <div className="bg-white dark:bg-gray-800 dark:bg-gray-800 rounded-[2rem] shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto border border-gray-100 dark:border-gray-700 animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
             <div className="p-6 md:p-8">
               <h2 className="text-2xl font-extrabold text-gray-900 dark:text-white mb-6">
                 {editingId ? 'Edit Workout Plan' : 'Create Workout Plan'}
@@ -205,26 +207,30 @@ export default function AdminWorkoutPlans() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Difficulty</label>
-                    <select 
-                      value={formData.difficulty} onChange={e => setFormData({...formData, difficulty: e.target.value})}
-                      className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-gray-900 dark:text-white font-bold focus:ring-2 focus:ring-blue-500/20"
-                    >
-                      <option>Beginner</option>
-                      <option>Intermediate</option>
-                      <option>Advanced</option>
-                    </select>
+                    <CustomSelect
+                      value={formData.difficulty}
+                      onChange={e => setFormData({...formData, difficulty: e.target.value})}
+                      options={[
+                        { value: "Beginner", label: "Beginner" },
+                        { value: "Intermediate", label: "Intermediate" },
+                        { value: "Advanced", label: "Advanced" }
+                      ]}
+                      className="bg-gray-50 dark:bg-gray-900 border-none font-bold py-[10px]"
+                    />
                   </div>
                   
                   <div className="space-y-1.5">
                     <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Status</label>
-                    <select 
-                      value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}
-                      className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-gray-900 dark:text-white font-bold focus:ring-2 focus:ring-blue-500/20"
-                    >
-                      <option>Draft</option>
-                      <option>Published</option>
-                      <option>Archived</option>
-                    </select>
+                    <CustomSelect
+                      value={formData.status}
+                      onChange={e => setFormData({...formData, status: e.target.value})}
+                      options={[
+                        { value: "Draft", label: "Draft" },
+                        { value: "Published", label: "Published" },
+                        { value: "Archived", label: "Archived" }
+                      ]}
+                      className="bg-gray-50 dark:bg-gray-900 border-none font-bold py-[10px]"
+                    />
                   </div>
                 </div>
 
@@ -254,7 +260,8 @@ export default function AdminWorkoutPlans() {
               </form>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

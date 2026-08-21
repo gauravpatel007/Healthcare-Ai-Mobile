@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import API from '../utils/api';
+import CustomSelect from './ui/CustomSelect';
 
 const FeedbackModal = ({ isOpen, onClose }) => {
   const [activeTab, setActiveTab] = useState('new'); // 'new' or 'history'
@@ -89,19 +90,17 @@ const FeedbackModal = ({ isOpen, onClose }) => {
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div>
               <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, color: 'var(--text-secondary)' }}>Feedback Type</label>
-              <select 
-                value={type} 
+              <CustomSelect
+                value={type}
                 onChange={e => setType(e.target.value)}
-                style={{
-                  width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-color)',
-                  background: 'var(--bg-secondary)', color: 'var(--text-primary)', outline: 'none'
-                }}
-              >
-                <option value="Suggestion">Suggestion</option>
-                <option value="Bug Report">Bug Report</option>
-                <option value="Rating">Rating</option>
-                <option value="Complaint">Complaint</option>
-              </select>
+                options={[
+                  { value: "Suggestion", label: "Suggestion" },
+                  { value: "Bug Report", label: "Bug Report" },
+                  { value: "Rating", label: "Rating" },
+                  { value: "Complaint", label: "Complaint" }
+                ]}
+                className="bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-primary)] font-normal py-[10px]"
+              />
             </div>
             
             <div>

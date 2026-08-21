@@ -1,14 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../../utils/api';
 import { 
-  Plus, Search, Edit2, Trash2, Pill, User, Clock, CheckCircle
+  Plus, Search, Edit2, Trash2, Pill, User, Clock, CheckCircle, X
 } from 'lucide-react';
+import CustomSelect from '../../components/ui/CustomSelect';
 
 export default function AdminMedicineDB() {
   const [medicines, setMedicines] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [displayCount, setDisplayCount] = useState(15);
   
   // Modal state
   const [showModal, setShowModal] = useState(false);
@@ -114,7 +117,7 @@ export default function AdminMedicineDB() {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       
-      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-row flex-wrap md:flex-nowrap items-center justify-between gap-4 relative overflow-hidden w-full">
+      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-row flex-wrap md:flex-nowrap items-center justify-between gap-4 relative overflow-visible w-full">
         <div className="flex items-center gap-4 lg:gap-6 relative z-10 w-auto">
           <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
             <Pill className="w-8 h-8" />
@@ -166,7 +169,7 @@ export default function AdminMedicineDB() {
             ) : filteredMedicines.length === 0 ? (
               <tr><td colSpan="4" className="p-8 text-center text-gray-400 font-medium">No medicines found.</td></tr>
             ) : (
-              filteredMedicines.map(med => (
+              filteredMedicines.slice(0, displayCount).map(med => (
                 <tr key={med.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-700/50 transition-colors">
                   <td className="p-4 pl-6">
                     <div className="flex items-center gap-3">
@@ -219,13 +222,23 @@ export default function AdminMedicineDB() {
             )}
           </tbody>
         </table>
+        {filteredMedicines.length > displayCount && (
+          <div className="p-4 flex justify-center border-t border-gray-100 dark:border-gray-700">
+            <button
+              onClick={() => setDisplayCount(prev => prev + 20)}
+              className="px-4 py-2 text-sm font-medium text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 hover:bg-teal-100 rounded-lg transition-colors"
+            >
+              See More ({filteredMedicines.length - displayCount} more)
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-gray-800 rounded-[2rem] shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-gray-100 dark:border-gray-700 animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-6 md:p-8">
+      {showModal && createPortal(
+        <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm" onClick={() => setShowModal(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-[2rem] shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col border border-gray-100 dark:border-gray-700 animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar">
               <h2 className="text-2xl font-extrabold text-gray-900 dark:text-white mb-6">
                 {editingId ? 'Edit Medicine' : 'Add Medicine'}
               </h2>
@@ -235,15 +248,12 @@ export default function AdminMedicineDB() {
                 {!editingId && users.length > 0 && (
                   <div className="space-y-1.5">
                     <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Assign to User</label>
-                    <select
+                    <CustomSelect
                       value={formData.user_id}
                       onChange={e => setFormData({...formData, user_id: e.target.value})}
-                      className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-3 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
-                    >
-                      {users.map(u => (
-                        <option key={u.id} value={u.id}>{u.name || u.email} ({u.email})</option>
-                      ))}
-                    </select>
+                      options={users.map(u => ({ value: u.id, label: `${u.name || u.email} (${u.email})` }))}
+                      className="!bg-white dark:!bg-gray-800 border border-gray-200 dark:border-gray-600 !font-medium !py-3 !shadow-none !text-gray-900 dark:!text-white !text-base"
+                    />
                   </div>
                 )}
 
@@ -270,31 +280,35 @@ export default function AdminMedicineDB() {
 
                   <div className="space-y-1.5">
                     <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Type</label>
-                    <select
-                      value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}
-                      className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-3 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
-                    >
-                      <option value="tablet">Tablet 💊</option>
-                      <option value="capsule">Capsule 🔵</option>
-                      <option value="syrup">Syrup 🧴</option>
-                      <option value="injection">Injection 💉</option>
-                      <option value="drops">Drops 💧</option>
-                      <option value="cream">Cream 🧴</option>
-                    </select>
+                    <CustomSelect
+                      value={formData.type}
+                      onChange={e => setFormData({...formData, type: e.target.value})}
+                      options={[
+                        { value: "tablet", label: "Tablet 💊" },
+                        { value: "capsule", label: "Capsule 🔵" },
+                        { value: "syrup", label: "Syrup 🧴" },
+                        { value: "injection", label: "Injection 💉" },
+                        { value: "drops", label: "Drops 💧" },
+                        { value: "cream", label: "Cream 🧴" }
+                      ]}
+                      className="!bg-white dark:!bg-gray-800 border border-gray-200 dark:border-gray-600 !font-medium !py-3 !shadow-none !text-gray-900 dark:!text-white !text-base"
+                    />
                   </div>
 
                   <div className="space-y-1.5">
                     <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Frequency</label>
-                    <select
-                      value={formData.frequency} onChange={e => setFormData({...formData, frequency: e.target.value})}
-                      className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-3 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
-                    >
-                      <option value="once_daily">Once Daily</option>
-                      <option value="twice_daily">Twice Daily</option>
-                      <option value="thrice_daily">Thrice Daily</option>
-                      <option value="once_weekly">Once Weekly</option>
-                      <option value="as_needed">As Needed</option>
-                    </select>
+                    <CustomSelect
+                      value={formData.frequency}
+                      onChange={e => setFormData({...formData, frequency: e.target.value})}
+                      options={[
+                        { value: "once_daily", label: "Once Daily" },
+                        { value: "twice_daily", label: "Twice Daily" },
+                        { value: "thrice_daily", label: "Thrice Daily" },
+                        { value: "once_weekly", label: "Once Weekly" },
+                        { value: "as_needed", label: "As Needed" }
+                      ]}
+                      className="!bg-white dark:!bg-gray-800 border border-gray-200 dark:border-gray-600 !font-medium !py-3 !shadow-none !text-gray-900 dark:!text-white !text-base"
+                    />
                   </div>
 
                   <div className="space-y-1.5">
@@ -343,7 +357,8 @@ export default function AdminMedicineDB() {
               </form>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

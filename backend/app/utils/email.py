@@ -359,3 +359,75 @@ def send_organ_match_email(recipient_email: str, recipient_name: str, requester_
     except Exception as e:
         logger.error(f"Failed to send organ match email to {recipient_email}: {str(e)}")
         return False
+
+def send_mental_health_alert_email(recipient_emails: List[str], user_name: str) -> bool:
+    """
+    Sends an email to the emergency contact when a concerning mental health trend is detected.
+    """
+    settings = get_settings()
+    
+    if not settings.SMTP_EMAIL or not settings.SMTP_PASSWORD or settings.SMTP_PASSWORD == "PASTE_16_CHAR_APP_PASSWORD_HERE":
+        return False
+        
+    if not recipient_emails:
+        return True
+        
+    try:
+        msg = EmailMessage()
+        text_content = (
+            f"Notification from LifeOS regarding {user_name}.\n\n"
+            f"{user_name}'s recent journal entries indicate a concerning downward trend in their emotional well-being.\n"
+            f"Please reach out to them and offer support.\n\n"
+            f"This is an automated proactive wellness message."
+        )
+        msg.set_content(text_content)
+        msg["Subject"] = f"LifeOS Wellness Alert: Please check on {user_name}"
+        msg["From"] = f"LifeOS Wellness <{settings.SMTP_EMAIL}>"
+        msg["To"] = ", ".join(recipient_emails)
+        
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(settings.SMTP_EMAIL, settings.SMTP_PASSWORD)
+            server.send_message(msg)
+            
+        logger.info(f"Mental health alert email successfully sent to {len(recipient_emails)} contacts")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send mental health alert email: {str(e)}")
+        return False
+
+def send_mental_health_alert_sms(phone_numbers: List[str], user_name: str) -> bool:
+    """
+    Sends an SMS via Twilio to the emergency contact.
+    """
+    settings = get_settings()
+    
+    if not settings.TWILIO_ACCOUNT_SID or not settings.TWILIO_AUTH_TOKEN or not settings.TWILIO_FROM_NUMBER:
+        return False
+        
+    if not phone_numbers:
+        return True
+        
+    try:
+        from twilio.rest import Client
+        client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
+        
+        text = f"LifeOS Wellness Alert: {user_name}'s recent mood tracking indicates they might be going through a tough time. Please reach out to check on them."
+            
+        success_count = 0
+        for number in phone_numbers:
+            try:
+                formatted_number = number if number.startswith('+') else f"+{number}"
+                message = client.messages.create(
+                    body=text,
+                    from_=settings.TWILIO_FROM_NUMBER,
+                    to=formatted_number
+                )
+                logger.info(f"Mental health SMS sent to {formatted_number} (SID: {message.sid})")
+                success_count += 1
+            except Exception as inner_e:
+                logger.error(f"Failed to send Mental health SMS to {number}: {str(inner_e)}")
+                
+        return success_count > 0
+    except Exception as e:
+        logger.error(f"Failed to connect to Twilio: {str(e)}")
+        return False

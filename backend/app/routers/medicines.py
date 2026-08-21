@@ -44,8 +44,15 @@ async def list_medicines(user_id: CurrentUserId, db: AsyncSession = Depends(get_
     return result.scalars().all()
 
 
+from fastapi import BackgroundTasks
+
 @router.post("", response_model=MedicineResponse, status_code=201)
-async def create_medicine(data: MedicineCreate, user_id: CurrentUserId, db: AsyncSession = Depends(get_db)):
+async def create_medicine(
+    data: MedicineCreate, 
+    user_id: CurrentUserId, 
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db)
+):
     """Add a new medicine."""
     med = Medicine(user_id=user_id, **data.model_dump())
     db.add(med)
@@ -62,6 +69,28 @@ async def create_medicine(data: MedicineCreate, user_id: CurrentUserId, db: Asyn
     
     await db.flush()
     await db.refresh(med)
+    
+    # Notification logic
+    from app.models.user import User, UserProfile
+    user_res = await db.execute(select(User).where(User.id == user_id))
+    user = user_res.scalar_one_or_none()
+    prof_res = await db.execute(select(UserProfile).where(UserProfile.user_id == user_id))
+    profile = prof_res.scalar_one_or_none()
+    
+    if user and profile and profile.notification_preferences:
+        prefs = profile.notification_preferences.get("medicine", {})
+        times_str = ', '.join(med.times) if med.times else 'scheduled times'
+        msg = f"LifeOS Medicine Reminder: Time to take {med.name} ({med.dosage}) at {times_str}. Stay healthy!"
+        
+        if prefs.get("email", False) and user.email:
+            from app.utils.email import send_sos_email
+            background_tasks.add_task(send_sos_email, [user.email], profile.name, None)
+            # In a real app we'd have a specific medicine email template, using SOS email as fallback
+            
+        if prefs.get("sms", False) and profile.phone:
+            from app.utils.email import send_sos_sms_twilio
+            background_tasks.add_task(send_sos_sms_twilio, [profile.phone], profile.name, msg)
+            
     await db.commit()
     return med
 
@@ -166,11 +195,9 @@ async def check_interactions(user_id: CurrentUserId, db: AsyncSession = Depends(
         med_names = [m.name for m in meds]
         prompt = (
             f"I am taking the following medications: {', '.join(med_names)}. "
-            "Are there any known severe or moderate drug interactions between these? "
-            "Please format the response strictly with bullet points starting with '* ' if there are interactions. "
-            "If there are NO interactions, say exactly 'NO_INTERACTIONS'."
+            "Please check for severe or moderate drug interactions."
         )
-        ai_response = await generate_ai_response("assistant", prompt, max_tokens=256)
+        ai_response = await generate_ai_response("interactions", prompt, max_tokens=512)
         
         if "NO_INTERACTIONS" not in ai_response.upper():
             warnings.append(InteractionWarning(

@@ -16,6 +16,18 @@ from app.services import file_service, ai_service
 
 router = APIRouter(prefix="/records", tags=["Medical Records"])
 
+LANG_MAP = {
+    "hi": "Hindi",
+    "gu": "Gujarati",
+    "en": "English",
+    "hindi": "Hindi",
+    "gujarati": "Gujarati",
+    "english": "English",
+    "Hindi": "Hindi",
+    "Gujarati": "Gujarati",
+    "English": "English",
+}
+
 
 @router.get("", response_model=list[RecordResponse])
 async def list_records(
@@ -151,8 +163,8 @@ async def delete_record(record_id: str, user_id: CurrentUserId, db: AsyncSession
 
 
 @router.post("/{record_id}/ai-summary")
-async def ai_record_summary(record_id: str, user_id: CurrentUserId, db: AsyncSession = Depends(get_db)):
-    """Generate an AI summary of a medical record."""
+async def ai_record_summary(record_id: str, user_id: CurrentUserId, language: str = "en", db: AsyncSession = Depends(get_db)):
+    """Return a summary of the medical record from pre-saved metrics or analyze newly uploaded reports."""
     result = await db.execute(
         select(MedicalRecord).where(MedicalRecord.id == record_id, MedicalRecord.user_id == user_id)
     )
@@ -160,8 +172,9 @@ async def ai_record_summary(record_id: str, user_id: CurrentUserId, db: AsyncSes
     if not record:
         raise NotFoundException("Medical record", record_id)
 
-    extracted_text = ""
-    if record.file_path:
+    # --- 1. If not yet analyzed, run the exact same AI extraction logic as upload-ai ---
+    if not record.ai_analyzed and record.file_path:
+        extracted_text = ""
         try:
             import fitz
             full_path = file_service.get_file_path(record.file_path)
@@ -170,29 +183,111 @@ async def ai_record_summary(record_id: str, user_id: CurrentUserId, db: AsyncSes
                 for page in doc:
                     extracted_text += page.get_text()
                 doc.close()
-        except Exception:
+        except Exception as e:
             pass
+            
+        if extracted_text.strip():
+            prompt = (
+                f"Extract all health metrics from this medical lab report text. "
+                f"Return ONLY a JSON object with metric names as keys and numeric values as values.\n\n"
+                f"Report text:\n{extracted_text[:6000]}"
+            )
+            metrics = await ai_service.generate_json_response("report_parser", prompt)
+            
+            if metrics and isinstance(metrics, dict) and not metrics.get("_error"):
+                # Save findings string exactly like upload-ai
+                findings_summary = ", ".join(f"{k}: {v}" for k, v in metrics.items())
+                record.findings = findings_summary
+                record.ai_analyzed = True
+                
+                # Create HealthEntry items exactly like upload-ai
+                from app.models.health_tracker import HealthEntry
+                from datetime import datetime, timezone
+                now = datetime.now(timezone.utc)
+                today_label = now.strftime("%b")
+                
+                systolic = None
+                diastolic = None
+                
+                for metric_name, value in metrics.items():
+                    if not isinstance(value, (int, float)):
+                        try:
+                            value = float(value)
+                        except (ValueError, TypeError):
+                            continue
+                            
+                    key = metric_name.lower().strip()
+                    if key in ("systolic", "systolic bp", "systolic blood pressure"):
+                        systolic = value
+                        continue
+                    if key in ("diastolic", "diastolic bp", "diastolic blood pressure"):
+                        diastolic = value
+                        continue
+                        
+                    category = None
+                    for pattern, cat in METRIC_CATEGORY_MAP.items():
+                        if pattern in key:
+                            category = cat
+                            break
+                            
+                    if category and category != "blood_pressure":
+                        entry = HealthEntry(
+                            user_id=user_id,
+                            category=category,
+                            value=value,
+                            label=today_label,
+                            recorded_at=now,
+                        )
+                        db.add(entry)
+                        
+                if systolic is not None and diastolic is not None:
+                    bp_entry = HealthEntry(
+                        user_id=user_id,
+                        category="blood_pressure",
+                        value=systolic,
+                        secondary_value=diastolic,
+                        label=today_label,
+                        recorded_at=now,
+                    )
+                    db.add(bp_entry)
+                    
+                await db.flush()
+                await db.commit()
 
-    FORMATTING_PROMPT = """
-Format your response following these rules:
-1. Never return plain text paragraphs. Always use Markdown (headings, bold, lists, tables).
-2. Structure the report professionally with sections like Patient Information, Test Results (in a table with Normal Ranges and Status), Key Findings, Recommendations, and Conclusion.
-3. Highlight abnormal values using 🔴 (Low/High/High Risk), 🟠 (Moderate), 🟡 (Slightly Abnormal), and ✅ (Normal).
-4. Do not output raw JSON. Use clean GitHub-flavored Markdown.
-"""
+    # --- 2. Display existing or newly extracted metrics ---
+    metrics_data = {}
+    summary_markdown = ""
 
-    prompt = f"Summarize this medical record:\nTitle: {record.title}\nCategory: {record.category}\nDoctor: {record.doctor}\nHospital: {record.hospital}\nFindings: {record.findings or 'None'}\nNotes: {record.notes or 'None'}"
-    if extracted_text.strip():
-        prompt += f"\n\nDocument Text:\n{extracted_text[:6000]}"
-    
-    prompt += "\n\n" + FORMATTING_PROMPT
+    # Parse the findings string (which contains our metrics from the upload step)
+    if record.findings and ":" in record.findings:
+        parts = [p.strip() for p in record.findings.split(",") if p.strip()]
+        is_ai_parsed = all(":" in p for p in parts)
         
-    summary = await ai_service.generate_ai_response("assistant", prompt)
+        if is_ai_parsed:
+            summary_markdown += "### 📊 Extracted Health Metrics\n\n"
+            summary_markdown += "| Test | Result |\n| ---- | ------ |\n"
+            for item in parts:
+                try:
+                    k, v = item.split(":", 1)
+                    metrics_data[k.strip()] = v.strip()
+                    summary_markdown += f"| {k.strip()} | {v.strip()} |\n"
+                except ValueError:
+                    continue
+                
+            summary_markdown += f"\n> {len(metrics_data)} health metrics were extracted from this report.\n"
+        else:
+            summary_markdown += f"**Findings:**\n{record.findings}\n"
+    else:
+        summary_markdown += f"**Findings:**\n{record.findings or 'No findings available for this report.'}\n"
+
+    if record.notes:
+        summary_markdown += f"\n**Notes:**\n{record.notes}\n"
 
     return {
         "record_id": record.id,
-        "summary": summary,
-        "disclaimer": "This is an AI-generated summary. Always consult your doctor for medical advice.",
+        "summary": summary_markdown,
+        "metrics": metrics_data,
+        "disclaimer": "This data was automatically extracted. Always consult your doctor for medical advice.",
     }
 
 
@@ -242,6 +337,10 @@ Format your response following these rules:
         prompt += f"Document Text 2:\n{t2[:3000]}\n"
         
     prompt += "\nProvide a comparison and highlight any significant changes.\n\n" + FORMATTING_PROMPT
+
+    resolved_lang = LANG_MAP.get(data.language, data.language) if data.language else "English"
+    if resolved_lang and resolved_lang.lower() != "english":
+        prompt += f"\n\nCRITICAL INSTRUCTION: You MUST respond ENTIRELY in {resolved_lang} language. Every heading, label, sentence, table header, and finding MUST be in {resolved_lang}. Do NOT use English, Spanish, or any other language. If you output anything in a language other than {resolved_lang}, the system will fail."
     
     comparison = await ai_service.generate_ai_response("assistant", prompt)
 

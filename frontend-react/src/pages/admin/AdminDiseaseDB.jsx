@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../../utils/api';
 import { 
   Plus, Search, Edit2, Trash2, HeartPulse, Activity, ShieldAlert
 } from 'lucide-react';
+import CustomSelect from '../../components/ui/CustomSelect';
 
 export default function AdminDiseaseDB() {
   const [diseases, setDiseases] = useState([]);
@@ -112,7 +114,7 @@ export default function AdminDiseaseDB() {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       
-      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-row flex-wrap md:flex-nowrap items-center justify-between gap-4 relative overflow-hidden w-full">
+      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-row flex-wrap md:flex-nowrap items-center justify-between gap-4 relative overflow-visible w-full">
         <div className="flex items-center gap-4 lg:gap-6 relative z-10 w-auto">
           <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
             <HeartPulse className="w-8 h-8" />
@@ -215,10 +217,10 @@ export default function AdminDiseaseDB() {
       </div>
 
       {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-gray-800 rounded-[2rem] shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto overflow-x-hidden border border-gray-100 dark:border-gray-700 animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-6 md:p-8">
+      {showModal && createPortal(
+        <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm" onClick={() => setShowModal(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-[2rem] shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col border border-gray-100 dark:border-gray-700 animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6 md:p-8 overflow-y-auto overflow-x-hidden custom-scrollbar">
               <h2 className="text-2xl font-extrabold text-gray-900 dark:text-white mb-6">
                 {editingId ? 'Edit Disease' : 'Add Disease'}
               </h2>
@@ -239,26 +241,30 @@ export default function AdminDiseaseDB() {
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Severity</label>
-                      <select 
-                        value={formData.severity} onChange={e => setFormData({...formData, severity: e.target.value})}
-                        className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-3 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none"
-                      >
-                        <option>Mild</option>
-                        <option>Moderate</option>
-                        <option>Severe</option>
-                        <option>Critical</option>
-                      </select>
+                      <CustomSelect
+                        value={formData.severity}
+                        onChange={e => setFormData({...formData, severity: e.target.value})}
+                        options={[
+                          { value: "Mild", label: "Mild" },
+                          { value: "Moderate", label: "Moderate" },
+                          { value: "Severe", label: "Severe" },
+                          { value: "Critical", label: "Critical" }
+                        ]}
+                        className="!bg-white dark:!bg-gray-800 border border-gray-200 dark:border-gray-600 !font-medium !py-3 !shadow-none !text-gray-900 dark:!text-white !text-base"
+                      />
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Emergency Level</label>
-                      <select 
-                        value={formData.emergency_level} onChange={e => setFormData({...formData, emergency_level: e.target.value})}
-                        className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-3 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none"
-                      >
-                        <option>Low</option>
-                        <option>Medium</option>
-                        <option>High</option>
-                      </select>
+                      <CustomSelect
+                        value={formData.emergency_level}
+                        onChange={e => setFormData({...formData, emergency_level: e.target.value})}
+                        options={[
+                          { value: "Low", label: "Low" },
+                          { value: "Medium", label: "Medium" },
+                          { value: "High", label: "High" }
+                        ]}
+                        className="!bg-white dark:!bg-gray-800 border border-gray-200 dark:border-gray-600 !font-medium !py-3 !shadow-none !text-gray-900 dark:!text-white !text-base"
+                      />
                     </div>
                   </div>
                 </div>
@@ -355,7 +361,8 @@ export default function AdminDiseaseDB() {
               </form>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

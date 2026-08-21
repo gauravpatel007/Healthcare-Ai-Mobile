@@ -5,12 +5,15 @@ import { toast } from 'react-hot-toast';
 import {
   Activity, HeartPulse, Flame, Target, Calendar,
   Stethoscope, FileText, Pill, Plus, ArrowRight,
-  TrendingUp, Droplet, Moon, Link, Dumbbell, UtensilsCrossed, Check, Sparkles, Brain
+  TrendingUp, Droplet, Moon, Link, Dumbbell, UtensilsCrossed, Check, Sparkles, Brain, ChevronDown
 } from 'lucide-react';
+import { useLang } from '../contexts/LangContext';
+import { useUnit } from '../contexts/UnitContext';
+import CustomSelect from '../components/ui/CustomSelect';
 
 /* ─── Reusable Card (Matches AdminUI) ──────────── */
 const StatCard = ({ title, value, subtitle, icon: Icon, colorClass, onClick }) => (
-  <div 
+  <div
     onClick={onClick}
     tabIndex={0}
     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick?.(e); } }}
@@ -45,8 +48,10 @@ const SectionHeader = ({ title, subtitle, className = "mb-4" }) => (
   </div>
 );
 
-const DashboardOverview = ({ currentUser }) => {
+const DashboardOverview = ({ currentUser, voiceAction, onVoiceActionConsumed }) => {
   const navigate = useNavigate();
+  const { t } = useLang();
+  const { displayWeight, weightUnit, toStorageWeight } = useUnit();
   const [loading, setLoading] = useState(true);
 
   const [healthData, setHealthData] = useState({});
@@ -64,13 +69,39 @@ const DashboardOverview = ({ currentUser }) => {
 
   // States for interactive components
   const [activeParam, setActiveParam] = useState('weight'); // 'weight', 'bp', 'pulse'
-  const [paramTimeframe, setParamTimeframe] = useState('6months'); // '6months', '3months', 'thisMonth'
+  const [paramTimeframe, setParamTimeframe] = useState('thisMonth'); // '6months', '3months', 'thisMonth'
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [aptTimeframe, setAptTimeframe] = useState('today'); // 'today', 'week'
 
-  // Parameter logging state
   const [showParamModal, setShowParamModal] = useState(false);
   const [newParam, setNewParam] = useState({ category: 'weight', value: '', secondary_value: '' });
   const [savingParam, setSavingParam] = useState(false);
+
+  useEffect(() => {
+    if (voiceAction && voiceAction.target_feature === 'dashboard') {
+      if (voiceAction.action_name === 'share_doctor_summary') {
+        if (!isSharing && !sharedLink) {
+          handleShareSummary();
+        }
+        if (onVoiceActionConsumed) onVoiceActionConsumed();
+      } else if (voiceAction.action_name === 'change_param_view') {
+        const p = voiceAction.data?.param;
+        const tf = voiceAction.data?.timeframe;
+        if (p && ['weight', 'bp', 'pulse'].includes(p)) {
+          setActiveParam(p);
+        }
+        if (tf && ['6months', '3months', 'thisMonth'].includes(tf)) {
+          setParamTimeframe(tf);
+        }
+        if (onVoiceActionConsumed) onVoiceActionConsumed();
+      } else if (voiceAction.action_name === 'refresh_data') {
+        API.get('/medicines/today-logs').then(res => setTodayMedLogs(res || [])).catch(err => console.error(err));
+        API.get('/trackers/health-data').then(res => setHealthData(res || {})).catch(err => console.error(err));
+        API.get('/dashboard/summary').then(res => setDashboardSummary(res)).catch(err => console.error(err));
+        if (onVoiceActionConsumed) onVoiceActionConsumed();
+      }
+    }
+  }, [voiceAction]);
 
   const handleSaveParam = async () => {
     if (!newParam.value) return;
@@ -78,7 +109,7 @@ const DashboardOverview = ({ currentUser }) => {
     try {
       const payload = {
         category: newParam.category,
-        value: parseFloat(newParam.value),
+        value: newParam.category === 'weight' ? toStorageWeight(parseFloat(newParam.value)) : parseFloat(newParam.value),
         label: new Date().toLocaleDateString('en-US', { month: 'short' })
       };
       if (newParam.category === 'blood_pressure') {
@@ -105,8 +136,17 @@ const DashboardOverview = ({ currentUser }) => {
     setIsSharing(true);
     try {
       const res = await API.post('/share/generate');
-      setSharedLink(`${window.location.origin}/shared/${res.token}`);
-      toast.success('Sharing link generated');
+      const link = `${window.location.origin}/shared/${res.token}`;
+      setSharedLink(link);
+
+      try {
+        await navigator.clipboard.writeText(link);
+        setIsCopied(true);
+        setTimeout(() => setIsCopied(false), 5000);
+        toast.success('Sharing link generated and copied to clipboard!');
+      } catch (err) {
+        toast.success('Sharing link generated');
+      }
     } catch (e) {
       toast.error('Failed to generate sharing link.');
     } finally {
@@ -132,7 +172,7 @@ const DashboardOverview = ({ currentUser }) => {
         setFitnessStats(fStats || { steps: 0, calories_burned: 0, step_goal: 10000 });
         setNutritionPlan(nPlan || { tdee: 2200, protein_goal_grams: 84, carbs_goal_grams: 200, fat_goal_grams: 60 });
         setRecentRecords(records ? records.slice(0, 3) : []);
-        setMyMeds(meds ? meds.filter(m => m.is_active).slice(0, 3) : []);
+        setMyMeds(meds ? meds.filter(m => m.is_active) : []);
         setAppointments(apts || []);
         setTodayMedLogs(medLogs || []);
         setLoading(false);
@@ -163,7 +203,7 @@ const DashboardOverview = ({ currentUser }) => {
 
       const now = new Date();
       let cutoffDate = new Date();
-      
+
       if (paramTimeframe === 'thisMonth') {
         cutoffDate = new Date(now.getFullYear(), now.getMonth(), 1); // Start of this month
       } else if (paramTimeframe === '3months') {
@@ -173,17 +213,26 @@ const DashboardOverview = ({ currentUser }) => {
       }
 
       const filteredRecords = records.filter(r => new Date(r.recorded_at || r.date) >= cutoffDate);
-      
+
       if (filteredRecords.length === 0) return getEmptyState();
 
       filteredRecords.sort((a, b) => new Date(a.recorded_at || a.date) - new Date(b.recorded_at || b.date));
-      
-      const labels = filteredRecords.map(r => {
+
+      // Aggregate by day, keeping only the last entered value
+      const dailyMap = new Map();
+      filteredRecords.forEach(r => {
+        const d = new Date(r.recorded_at || r.date);
+        const dateKey = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        dailyMap.set(dateKey, r); // Later chronological entries overwrite earlier ones for the same day
+      });
+      const uniqueDailyRecords = Array.from(dailyMap.values());
+
+      const labels = uniqueDailyRecords.map(r => {
         const d = new Date(r.recorded_at || r.date);
         return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       });
-      
-      const data = filteredRecords.map(r => extractor(r));
+
+      const data = uniqueDailyRecords.map(r => extractor(r));
 
       if (labels.length === 1) {
         labels.unshift('Start');
@@ -194,8 +243,9 @@ const DashboardOverview = ({ currentUser }) => {
     };
 
     if (activeParam === 'weight') {
-      const { labels: l, data: weightData } = getAggregatedData(healthData.weight, r => r.value, 'weight');
+      const { labels: l, data: weightDataRaw } = getAggregatedData(healthData.weight, r => r.value, 'weight');
       labels = l || [];
+      const weightData = weightDataRaw.map(w => w ? displayWeight(w).raw : null);
       const fatData = weightData.map(w => w ? w * 0.25 : null);
       datasets = [
         { label: 'Weight', data: weightData },
@@ -257,11 +307,11 @@ const DashboardOverview = ({ currentUser }) => {
           ds.backgroundColor = createGradient(rgb);
           ds.borderWidth = 4;
           ds.tension = 0.45; // Smooth curves!
-          ds.pointBackgroundColor = '#fff';
+          ds.pointBackgroundColor = '#ffffff';
           ds.pointBorderColor = hex;
-          ds.pointBorderWidth = 3;
-          ds.pointRadius = 4;
-          ds.pointHoverRadius = 7;
+          ds.pointBorderWidth = 2;
+          ds.pointRadius = 3;
+          ds.pointHoverRadius = 5;
           ds.fill = true;
         });
 
@@ -280,11 +330,31 @@ const DashboardOverview = ({ currentUser }) => {
                 }
               },
               tooltip: {
-                backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                titleFont: { family: "'Inter', sans-serif", size: 13, weight: '700' },
-                bodyFont: { family: "'Inter', sans-serif", size: 13 },
-                padding: 12, cornerRadius: 12, displayColors: true, boxPadding: 6,
-                borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1
+                backgroundColor: document.documentElement.classList.contains('dark') ? '#1e293b' : '#ffffff',
+                titleColor: '#9ca3af',
+                titleFont: { family: "'Inter', sans-serif", weight: '500', size: 12 },
+                bodyColor: document.documentElement.classList.contains('dark') ? '#f3f4f6' : '#111827',
+                bodyFont: { family: "'Inter', sans-serif", weight: '700', size: 13 },
+                padding: 12,
+                cornerRadius: 12,
+                borderColor: document.documentElement.classList.contains('dark') ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
+                borderWidth: 1,
+                displayColors: false,
+                callbacks: {
+                  title: function (context) { return context[0].label; },
+                  label: function (context) {
+                    let label = context.dataset.label || '';
+                    if (label) label += ': ';
+                    if (context.parsed.y !== null) {
+                      label += context.parsed.y;
+                      const l = label.toLowerCase();
+                      if (l.includes('weight')) label += ` ${weightUnit}`;
+                      else if (l.includes('heart') || l.includes('bpm')) label += ' bpm';
+                      else if (l.includes('blood') || l.includes('systolic') || l.includes('diastolic')) label += ' mmHg';
+                    }
+                    return label;
+                  }
+                }
               }
             },
             scales: {
@@ -304,21 +374,25 @@ const DashboardOverview = ({ currentUser }) => {
     }, 50);
   }, [loading, healthData, activeParam, paramTimeframe]);
 
-  const getGreetingTime = () => {
+  const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Morning';
-    if (hour < 17) return 'Afternoon';
-    return 'Evening';
+    if (hour < 12) return t('greeting_morning') || 'Good Morning';
+    if (hour < 18) return t('greeting_afternoon') || 'Good Afternoon';
+    return t('greeting_evening') || 'Good Evening';
   };
 
   const handleLogMedicine = async (medicineId, date, scheduledTime, currentStatus) => {
+    if (currentStatus === 'taken') {
+      toast.success(t('This medicine is already taken') || 'This medicine is already taken');
+      return;
+    }
+
     try {
-      const newStatus = currentStatus === 'taken' ? 'pending' : 'taken';
       const logData = {
         medicine_id: medicineId,
         date: date,
         scheduled_time: scheduledTime,
-        status: newStatus
+        status: 'taken'
       };
 
       const updatedLog = await API.post('/medicines/log', logData);
@@ -378,10 +452,10 @@ const DashboardOverview = ({ currentUser }) => {
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-gray-100 tracking-tight leading-tight">
-            Good {getGreetingTime()}, <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">{userName}</span>
+            {getGreeting()}, <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">{userName}</span>
           </h1>
           <p className="text-gray-500 dark:text-gray-400 font-medium text-sm mt-1">
-            Keep up the great work with your personalized health goals!
+            {t('greeting_msg') || 'Keep up the great work with your personalized health goals!'}
           </p>
         </div>
 
@@ -432,30 +506,30 @@ const DashboardOverview = ({ currentUser }) => {
       {/* ── Main Quick Stats (Vitals & Activity) ────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
-          title="Steps Today"
+          title={t('steps_today') || 'Steps Today'}
           value={(fitnessStats?.steps || 0).toLocaleString()}
-          subtitle={`Goal: ${(fitnessStats?.step_goal || 10000).toLocaleString()}`}
+          subtitle={`${t('goal') || 'Goal'}: ${(fitnessStats?.step_goal || 10000).toLocaleString()}`}
           icon={Activity}
           colorClass="bg-emerald-500 text-emerald-500"
         />
         <StatCard
-          title="Calories Burned"
+          title={t('calories_burned') || 'Calories Burned'}
           value={fitnessStats?.calories_burned || 0}
-          subtitle="Kcal active"
+          subtitle={t('kcal_active') || 'Kcal active'}
           icon={Flame}
           colorClass="bg-orange-500 text-orange-500"
         />
         <StatCard
-          title="Heart Rate"
-          value={healthData?.heart_rate?.[healthData.heart_rate.length - 1]?.value || '--'}
-          subtitle="bpm (Last reading)"
+          title={t('heart_rate_caps') || 'Heart Rate'}
+          value={healthData?.heart_rate?.[(healthData?.heart_rate?.length || 1) - 1]?.value || '--'}
+          subtitle={t('bpm_last') || 'bpm (Last reading)'}
           icon={HeartPulse}
           colorClass="bg-rose-500 text-rose-500"
         />
         <StatCard
-          title="Sleep"
-          value={`${healthData?.sleep?.[healthData.sleep.length - 1]?.value || '--'}h`}
-          subtitle="Last night"
+          title={t('sleep_caps') || 'Sleep'}
+          value={healthData?.sleep?.[(healthData?.sleep?.length || 1) - 1]?.value ? `${healthData?.sleep?.[(healthData?.sleep?.length || 1) - 1]?.value}h` : '--'}
+          subtitle={t('last_night') || 'Last night'}
           icon={Moon}
           colorClass="bg-indigo-500 text-indigo-500"
         />
@@ -471,12 +545,12 @@ const DashboardOverview = ({ currentUser }) => {
           {/* Health Parameters Chart */}
           <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
             <div className="flex flex-wrap justify-between items-center mb-6 gap-4 w-full">
-              <SectionHeader title="My Parameters" subtitle="Track key health metrics over time" className="mb-0" />
+              <SectionHeader title={t('my_parameters') || 'My Parameters'} subtitle={t('track_metrics') || 'Track key health metrics over time'} className="mb-0" />
               <button
                 onClick={() => setShowParamModal(true)}
                 className="flex items-center justify-center gap-2 px-5 py-2.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors shrink-0"
               >
-                <Plus className="w-4 h-4" /> Log Data
+                <Plus className="w-4 h-4" /> {t('log_data') || 'Log Data'}
               </button>
             </div>
 
@@ -487,38 +561,33 @@ const DashboardOverview = ({ currentUser }) => {
                   className={`px-4 py-2 rounded-xl text-sm font-bold transition-all duration-200 ${activeParam === 'weight' ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
                   onClick={() => setActiveParam('weight')}
                 >
-                  Weight
+                  {t('weight') || 'Weight'}
                 </button>
                 <button
                   className={`px-4 py-2 rounded-xl text-sm font-bold transition-all duration-200 ${activeParam === 'bp' ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
                   onClick={() => setActiveParam('bp')}
                 >
-                  Blood Pressure
+                  {t('blood_pressure') || 'Blood Pressure'}
                 </button>
                 <button
                   className={`px-4 py-2 rounded-xl text-sm font-bold transition-all duration-200 ${activeParam === 'pulse' ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
                   onClick={() => setActiveParam('pulse')}
                 >
-                  Pulse
+                  {t('pulse') || 'Pulse'}
                 </button>
               </div>
 
               {/* Styled Select */}
-              <div className="relative shrink-0 min-w-[140px]">
-                <select
-                  className="appearance-none bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-bold rounded-xl px-4 py-2.5 pr-10 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all cursor-pointer shadow-sm w-full"
+              <div className="relative shrink-0 min-w-[150px]">
+                <CustomSelect
                   value={paramTimeframe}
                   onChange={(e) => setParamTimeframe(e.target.value)}
-                >
-                  <option value="6months">Past 6 Months</option>
-                  <option value="3months">Past 3 Months</option>
-                  <option value="thisMonth">This Month</option>
-                </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
-                  <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                    <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
-                  </svg>
-                </div>
+                  options={[
+                    { value: '6months', label: t('past_6_months') || 'Past 6 Months' },
+                    { value: '3months', label: t('past_3_months') || 'Past 3 Months' },
+                    { value: 'thisMonth', label: t('this_month') || 'This Month' }
+                  ]}
+                />
               </div>
             </div>
 
@@ -538,8 +607,8 @@ const DashboardOverview = ({ currentUser }) => {
                   <Dumbbell className="w-7 h-7" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-xl group-hover:text-cyan-900 dark:group-hover:text-cyan-100 transition-colors">Start Workout</h3>
-                  <p className="text-gray-500 dark:text-gray-400 group-hover:text-cyan-600 dark:group-hover:text-cyan-300 font-medium text-sm transition-colors">AI personalized plan</p>
+                  <h3 className="font-extrabold text-xl group-hover:text-cyan-900 dark:group-hover:text-cyan-100 transition-colors">{t('start_workout') || 'Start Workout'}</h3>
+                  <p className="text-gray-500 dark:text-gray-400 group-hover:text-cyan-600 dark:group-hover:text-cyan-300 font-medium text-sm transition-colors">{t('ai_plan') || 'AI personalized plan'}</p>
                 </div>
               </div>
               <ArrowRight className="w-6 h-6 text-gray-400 group-hover:text-cyan-500 opacity-50 group-hover:opacity-100 transition-all group-hover:translate-x-1" />
@@ -553,8 +622,8 @@ const DashboardOverview = ({ currentUser }) => {
                       <Link className="w-7 h-7" />
                     </div>
                     <div>
-                      <h3 className="font-extrabold text-xl group-hover:text-pink-900 dark:group-hover:text-pink-100 transition-colors">{isSharing ? 'Generating...' : 'Doctor Summary'}</h3>
-                      <p className="text-gray-500 dark:text-gray-400 group-hover:text-pink-600 dark:group-hover:text-pink-300 font-medium text-sm transition-colors">Share your health data</p>
+                      <h3 className="font-extrabold text-xl group-hover:text-pink-900 dark:group-hover:text-pink-100 transition-colors">{isSharing ? 'Generating...' : (t('doctor_summary') || 'Doctor Summary')}</h3>
+                      <p className="text-gray-500 dark:text-gray-400 group-hover:text-pink-600 dark:group-hover:text-pink-300 font-medium text-sm transition-colors">{t('share_data') || 'Share your health data'}</p>
                     </div>
                   </div>
                   <ArrowRight className="w-6 h-6 text-gray-400 group-hover:text-pink-500 opacity-50 group-hover:opacity-100 transition-all group-hover:translate-x-1" />
@@ -594,7 +663,7 @@ const DashboardOverview = ({ currentUser }) => {
             {/* Recent Activity Card */}
             <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 shadow-sm border border-gray-100 dark:border-gray-700">
               <div className="flex justify-between items-center mb-4">
-                <SectionHeader title="Recent Activity" />
+                <SectionHeader title={t('recent_activity') || 'Recent Activity'} />
               </div>
               <div className="space-y-3">
                 {recentRecords.length > 0 ? recentRecords.map(r => (
@@ -616,7 +685,7 @@ const DashboardOverview = ({ currentUser }) => {
             {/* Today's Medications Card */}
             <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 shadow-sm border border-gray-100 dark:border-gray-700">
               <div className="flex justify-between items-center mb-6">
-                <SectionHeader title="Medications" />
+                <SectionHeader title={t('medications') || 'Medications'} />
               </div>
               <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
                 {(() => {
@@ -642,10 +711,23 @@ const DashboardOverview = ({ currentUser }) => {
                     });
                   });
 
-                  const currentSlot = getGreetingTime();
+                  const currentSlot = (() => {
+                    const hour = new Date().getHours();
+                    if (hour < 12) return 'Morning';
+                    if (hour < 18) return 'Afternoon';
+                    return 'Evening';
+                  })();
                   const filteredDoses = todayDoses.filter(d => d.slot === currentSlot || d.slot === 'Anytime');
 
                   if (!filteredDoses.length) return <p className="text-xs font-medium text-gray-400 py-2">No medications scheduled for this {currentSlot.toLowerCase()}.</p>;
+
+                  const getSlotTime = (times, slot) => {
+                    if (!times || !times.length) return 'Flexible';
+                    if (slot === 'Morning') return times[0];
+                    if (slot === 'Afternoon') return times.length > 1 ? times[1] : times[0];
+                    if (slot === 'Evening') return times[times.length - 1];
+                    return times[0];
+                  };
 
                   return filteredDoses.map((dose, idx) => {
                     const isTaken = dose.status === 'taken';
@@ -656,7 +738,7 @@ const DashboardOverview = ({ currentUser }) => {
                         </div>
                         <div className={isTaken ? 'opacity-50' : ''}>
                           <p className={`text-sm font-bold transition-colors ${isTaken ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400'}`}>{dose.med.name} {dose.med.dosage}</p>
-                          <p className="text-[11px] font-black text-indigo-500 uppercase tracking-wider mt-0.5">{dose.slot} • {dose.med.times?.[0] || 'Flexible'}</p>
+                          <p className="text-[11px] font-black text-indigo-500 uppercase tracking-wider mt-0.5">{dose.slot} • {getSlotTime(dose.med.times, dose.slot)}</p>
                         </div>
                       </div>
                     );
@@ -675,7 +757,7 @@ const DashboardOverview = ({ currentUser }) => {
           {/* Nutrition Tracker */}
           <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 shadow-sm border border-gray-100 dark:border-gray-700">
             <div className="flex justify-between items-center mb-6">
-              <SectionHeader title="Nutrition" />
+              <SectionHeader title={t('nutrition_caps') || 'Nutrition'} />
               <button onClick={() => navigate('/app/ai-nutrition')} className="w-10 h-10 rounded-full bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center justify-center text-gray-500 transition-colors">
                 <UtensilsCrossed className="w-5 h-5" />
               </button>
@@ -683,27 +765,23 @@ const DashboardOverview = ({ currentUser }) => {
 
             {(() => {
               let consumedProtein = 0, consumedCarbs = 0, consumedFats = 0, consumedCalories = 0;
-              if (nutritionPlan && nutritionPlan.meals) {
-                nutritionPlan.meals.forEach(m => {
-                  if (m.meal_type && m.meal_type.toLowerCase() === 'scanned snack' && !m.is_deleted) {
-                    consumedProtein += (m.protein || 0);
-                    consumedCarbs += (m.carbs || 0);
-                    consumedFats += (m.fat || m.fats || 0);
-                    consumedCalories += (m.calories || 0);
-                  }
-                });
+              if (nutritionPlan && nutritionPlan.consumed_macros) {
+                consumedProtein = nutritionPlan.consumed_macros.protein || 0;
+                consumedCarbs = nutritionPlan.consumed_macros.carbs || 0;
+                consumedFats = nutritionPlan.consumed_macros.fats || 0;
+                consumedCalories = nutritionPlan.consumed_macros.calories || 0;
               }
               const goalProtein = nutritionPlan?.protein_goal_grams || 84;
               const goalCarbs = nutritionPlan?.carbs_goal_grams || 200;
               const goalFats = nutritionPlan?.fat_goal_grams || 60;
               const goalCalories = nutritionPlan?.tdee || 2200;
-              
+
               return (
                 <>
                   <div className="space-y-5">
                     <div>
                       <div className="flex justify-between text-sm font-bold mb-2">
-                        <span className="flex items-center gap-2 text-rose-500"><Flame className="w-4 h-4" /> Protein</span>
+                        <span className="flex items-center gap-2 text-rose-500"><Flame className="w-4 h-4" /> {t('protein') || 'Protein'}</span>
                         <span className="text-gray-900 dark:text-gray-100">{consumedProtein} / {goalProtein}g</span>
                       </div>
                       <div className="h-2.5 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -712,7 +790,7 @@ const DashboardOverview = ({ currentUser }) => {
                     </div>
                     <div>
                       <div className="flex justify-between text-sm font-bold mb-2">
-                        <span className="flex items-center gap-2 text-amber-500"><Activity className="w-4 h-4" /> Carbs</span>
+                        <span className="flex items-center gap-2 text-amber-500"><Activity className="w-4 h-4" /> {t('carbs') || 'Carbs'}</span>
                         <span className="text-gray-900 dark:text-gray-100">{consumedCarbs} / {goalCarbs}g</span>
                       </div>
                       <div className="h-2.5 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -721,7 +799,7 @@ const DashboardOverview = ({ currentUser }) => {
                     </div>
                     <div>
                       <div className="flex justify-between text-sm font-bold mb-2">
-                        <span className="flex items-center gap-2 text-indigo-500"><Droplet className="w-4 h-4" /> Fats</span>
+                        <span className="flex items-center gap-2 text-indigo-500"><Droplet className="w-4 h-4" /> {t('fats') || 'Fats'}</span>
                         <span className="text-gray-900 dark:text-gray-100">{consumedFats} / {goalFats}g</span>
                       </div>
                       <div className="h-2.5 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -730,7 +808,7 @@ const DashboardOverview = ({ currentUser }) => {
                     </div>
                   </div>
                   <div className="mt-6 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-4 flex justify-between items-center border border-emerald-100 dark:border-emerald-800/50">
-                    <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-2"><Target className="w-4 h-4" /> Calories</span>
+                    <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-2"><Target className="w-4 h-4" /> {t('calories') || 'Calories'}</span>
                     <span className="font-extrabold text-gray-900 dark:text-gray-100">{consumedCalories} / {goalCalories} <span className="text-xs text-gray-500 font-medium">kcal/day</span></span>
                   </div>
                 </>
@@ -741,7 +819,7 @@ const DashboardOverview = ({ currentUser }) => {
           {/* My Appointments */}
           <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 shadow-sm border border-gray-100 dark:border-gray-700">
             <div className="flex flex-wrap justify-between items-center mb-6 gap-3">
-              <SectionHeader title="Appointments" className="mb-0" />
+              <SectionHeader title={t('appointments') || 'Appointments'} className="mb-0" />
               <div className="flex shrink-0 bg-gray-50 dark:bg-gray-900/50 p-1 rounded-xl border border-gray-100 dark:border-gray-700">
                 <button
                   onClick={() => setAptTimeframe('today')}
@@ -750,7 +828,7 @@ const DashboardOverview = ({ currentUser }) => {
                     : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
                     }`}
                 >
-                  Today
+                  {t('today') || 'Today'}
                 </button>
                 <button
                   onClick={() => setAptTimeframe('week')}
@@ -759,7 +837,7 @@ const DashboardOverview = ({ currentUser }) => {
                     : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
                     }`}
                 >
-                  This Week
+                  {t('this_week') || 'This Week'}
                 </button>
               </div>
             </div>
@@ -811,14 +889,14 @@ const DashboardOverview = ({ currentUser }) => {
               onClick={() => navigate('/app/appointments')}
               className="w-full mt-4 py-3 rounded-xl bg-gray-900 dark:bg-gray-700 text-white text-sm font-bold hover:bg-black dark:hover:bg-gray-600 transition-colors shadow-md"
             >
-              Book Appointment
+              {t('book_appointment') || 'Book Appointment'}
             </button>
           </div>
 
           {/* Weekly Goals Tracker */}
           <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-lg transition-all duration-300">
             <div className="flex justify-between items-center mb-6">
-              <SectionHeader title="Weekly Goals" />
+              <SectionHeader title={t('weekly_goals') || 'Weekly Goals'} />
               <div className="w-10 h-10 rounded-full bg-orange-50 dark:bg-orange-900/30 flex items-center justify-center text-orange-500 transition-transform hover:scale-110 cursor-pointer">
                 <Target className="w-5 h-5" />
               </div>
@@ -828,7 +906,7 @@ const DashboardOverview = ({ currentUser }) => {
               {/* Goal 1 */}
               <div>
                 <div className="flex justify-between text-sm font-bold mb-2">
-                  <span className="flex items-center gap-2 text-gray-700 dark:text-gray-300"><Dumbbell className="w-4 h-4 text-orange-500" /> Workouts</span>
+                  <span className="flex items-center gap-2 text-gray-700 dark:text-gray-300"><Dumbbell className="w-4 h-4 text-orange-500" /> {t('workouts') || 'Workouts'}</span>
                   <span className="text-gray-900 dark:text-gray-100">{fitnessStats?.workouts_this_week || 0} <span className="text-gray-400 font-medium">/ 5 Days</span></span>
                 </div>
                 <div className="h-2.5 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -839,7 +917,7 @@ const DashboardOverview = ({ currentUser }) => {
               {/* Goal 2 */}
               <div>
                 <div className="flex justify-between text-sm font-bold mb-2">
-                  <span className="flex items-center gap-2 text-gray-700 dark:text-gray-300"><Moon className="w-4 h-4 text-cyan-500" /> 8h Sleep</span>
+                  <span className="flex items-center gap-2 text-gray-700 dark:text-gray-300"><Moon className="w-4 h-4 text-cyan-500" /> {t('sleep_8h') || '8h Sleep'}</span>
                   <span className="text-gray-900 dark:text-gray-100">{
                     (healthData?.sleep || []).filter(s => s.value >= 8).length
                   } <span className="text-gray-400 font-medium">/ 7 Days</span></span>
@@ -879,27 +957,28 @@ const DashboardOverview = ({ currentUser }) => {
             <div className="space-y-5 mb-8">
               <div>
                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Parameter</label>
-                <select
+                <CustomSelect
                   value={newParam.category}
                   onChange={(e) => setNewParam({ ...newParam, category: e.target.value })}
-                  className="w-full bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 dark:text-white outline-none focus:border-indigo-500 transition-colors"
-                >
-                  <option value="weight">Weight (kg)</option>
-                  <option value="blood_pressure">Blood Pressure</option>
-                  <option value="heart_rate">Heart Rate (bpm)</option>
-                </select>
+                  options={[
+                    { value: "weight", label: t('weight') || 'Weight' },
+                    { value: "blood_pressure", label: "Blood Pressure" },
+                    { value: "heart_rate", label: "Heart Rate (bpm)" }
+                  ]}
+                  className="bg-gray-50 dark:bg-gray-900 border-2"
+                />
               </div>
 
               <div>
                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
-                  {newParam.category === 'blood_pressure' ? 'Systolic (mmHg)' : 'Value'}
+                  {newParam.category === 'blood_pressure' ? 'Systolic (mmHg)' : newParam.category === 'weight' ? `Value (${weightUnit})` : 'Value'}
                 </label>
                 <input
                   type="number"
                   value={newParam.value}
                   onChange={(e) => setNewParam({ ...newParam, value: e.target.value })}
                   className="w-full bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 dark:text-white outline-none focus:border-indigo-500 transition-colors"
-                  placeholder="e.g. 78"
+                  placeholder={newParam.category === 'weight' ? `e.g. ${weightUnit === 'lbs' ? '154' : '70'}` : "e.g. 78"}
                 />
               </div>
 

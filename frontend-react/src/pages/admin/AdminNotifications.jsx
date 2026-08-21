@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import API from '../../utils/api';
 import { Bell, Send, Users, Calendar, Trash2 } from 'lucide-react';
+import CustomSelect from '../../components/ui/CustomSelect';
 
 const AdminNotifications = () => {
   const [notifications, setNotifications] = useState([]);
@@ -107,23 +109,40 @@ const AdminNotifications = () => {
         </div>
       )}
 
-      {showModal && (
-        <div className="modal-overlay active" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div className="modal-content glass-card" style={{ background: 'var(--bg-card)', padding: '32px', borderRadius: '20px', width: '90%', maxWidth: '600px' }}>
+      {showModal && createPortal(
+        <div className="modal-overlay active" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100000, backdropFilter: 'blur(4px)' }} onClick={() => setShowModal(false)}>
+          <div className="modal-content glass-card" style={{ background: 'var(--bg-card)', padding: '32px', borderRadius: '20px', width: '90%', maxWidth: '600px' }} onClick={(e) => e.stopPropagation()}>
             <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '24px' }}>Send Notification</h2>
             
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
               <div className="form-group">
                 <label className="form-label">Delivery Method</label>
-                <select className="form-select" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>
-                  <option>Push</option><option>Email</option><option>SMS</option><option>In-App</option><option>Announcement</option>
-                </select>
+                <CustomSelect
+                  value={formData.type}
+                  onChange={e => setFormData({...formData, type: e.target.value})}
+                  options={[
+                    { value: "Push", label: "Push" },
+                    { value: "Email", label: "Email" },
+                    { value: "SMS", label: "SMS" },
+                    { value: "In-App", label: "In-App" },
+                    { value: "Announcement", label: "Announcement" }
+                  ]}
+                  className="bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-primary)] font-normal py-[10px]"
+                />
               </div>
               <div className="form-group">
                 <label className="form-label">Target Audience</label>
-                <select className="form-select" value={formData.target_audience} onChange={e => setFormData({...formData, target_audience: e.target.value})}>
-                  <option>Everyone</option><option>Premium</option><option>Doctors</option><option>Selected Users</option>
-                </select>
+                <CustomSelect
+                  value={formData.target_audience}
+                  onChange={e => setFormData({...formData, target_audience: e.target.value})}
+                  options={[
+                    { value: "Everyone", label: "Everyone" },
+                    { value: "Premium", label: "Premium" },
+                    { value: "Doctors", label: "Doctors" },
+                    { value: "Selected Users", label: "Selected Users" }
+                  ]}
+                  className="bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-primary)] font-normal py-[10px]"
+                />
               </div>
             </div>
 
@@ -151,7 +170,8 @@ const AdminNotifications = () => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

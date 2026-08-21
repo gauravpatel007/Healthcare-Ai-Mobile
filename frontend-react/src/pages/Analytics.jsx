@@ -25,6 +25,42 @@ import {
   Syringe,
   Sparkles
 } from 'lucide-react';
+import { usePersistentTab } from '../hooks/usePersistentTab';
+import { useLang } from '../contexts/LangContext';
+import { useUnit } from '../contexts/UnitContext';
+
+/* ─── Chart Tooltip Helper ─────────────────────────────────────── */
+const getTooltipOpts = (isDark, weightUnit = 'kg') => ({
+  backgroundColor: isDark ? '#1e293b' : '#ffffff',
+  titleColor: '#9ca3af',
+  titleFont: { family: "'Inter', sans-serif", weight: '500', size: 12 },
+  bodyColor: isDark ? '#f3f4f6' : '#111827',
+  bodyFont: { family: "'Inter', sans-serif", weight: '700', size: 13 },
+  padding: 12,
+  cornerRadius: 12,
+  borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
+  borderWidth: 1,
+  displayColors: false,
+  callbacks: {
+    title: function (context) { return context[0].label; },
+    label: function (context) {
+      let label = context.dataset.label || '';
+      if (label) label += ': ';
+      const val = context.parsed.y !== undefined ? context.parsed.y : context.parsed;
+      if (val !== null && val !== undefined) {
+        label += val;
+        const l = label.toLowerCase();
+        if (l.includes('weight')) label += ` ${weightUnit}`;
+        else if (l.includes('heart') || l.includes('bpm')) label += ' bpm';
+        else if (l.includes('blood') || l.includes('systolic') || l.includes('diastolic')) label += ' mmHg';
+        else if (l.includes('step')) label += ' steps';
+        else if (l.includes('calorie')) label += ' kcal';
+        else if (l.includes('sleep')) label += ' hrs';
+      }
+      return label;
+    }
+  }
+});
 
 /* ─── Shared UI Components ─────────────────────────────────────── */
 
@@ -39,7 +75,7 @@ const SectionHeader = ({ title, subtitle, className = "mb-4" }) => (
 );
 
 const StatCard = ({ title, value, subtitle, trend, trendValue, icon: Icon, colorClass, onClick }) => (
-  <div 
+  <div
     onClick={onClick}
     tabIndex={0}
     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick?.(e); } }}
@@ -78,7 +114,10 @@ const StatCard = ({ title, value, subtitle, trend, trendValue, icon: Icon, color
 
 /* ─── Main Analytics Component ─────────────────────────────────── */
 
-const Analytics = () => {
+const Analytics = ({ voiceAction, onVoiceActionConsumed }) => {
+  const { t } = useLang();
+  const { displayWeight, weightUnit } = useUnit();
+
   // Hide right panel for more room
   useEffect(() => {
     const appContainer = document.querySelector('.app-container');
@@ -95,7 +134,22 @@ const Analytics = () => {
     };
   }, []);
 
-  const [activeTab, setActiveTab] = useState('vitals');
+  const [activeTab, setActiveTab] = usePersistentTab('analytics', 'vitals');
+  
+  // Voice Action Listener
+  useEffect(() => {
+    if (voiceAction && voiceAction.target_feature === 'analytics' && voiceAction.action_name === 'open_tab' && voiceAction.data?.tab) {
+      const tabId = voiceAction.data.tab.toLowerCase();
+      const validTabs = ['vitals', 'adherence', 'risk', 'activity', 'lab_trends'];
+      if (validTabs.includes(tabId)) {
+        setActiveTab(tabId);
+      } else {
+        toast.error(`Unknown analytics tab: ${tabId}`);
+      }
+      if (onVoiceActionConsumed) onVoiceActionConsumed();
+    }
+  }, [voiceAction]);
+
   const [loading, setLoading] = useState(true);
 
   // Data states
@@ -108,6 +162,9 @@ const Analytics = () => {
   const [records, setRecords] = useState([]);
   const [appointments, setAppointments] = useState([]);
   const [timelineData, setTimelineData] = useState([]);
+  const [profile, setProfile] = useState(null);
+
+  const [labMetrics, setLabMetrics] = useState([]);
 
   // Sub-tab state for Tab 4
   const [activitySubTab, setActivitySubTab] = useState('fitness');
@@ -118,15 +175,20 @@ const Analytics = () => {
   const stepsChartRef = useRef(null);
   const caloriesChartRef = useRef(null);
   const recordsPieRef = useRef(null);
+  const labTrendChartRef = useRef(null);
   const chartInstances = useRef({});
 
+  const activeCalorieGoal = profile?.burn_calorie_goal || fitnessStats?.calorie_goal || 500;
   // Timeframe for vitals charts
   const [vitalsTimeframe, setVitalsTimeframe] = useState('1month');
+
+  // Selected metric for Lab Trends chart
+  const [selectedLabMetric, setSelectedLabMetric] = useState('');
 
   useEffect(() => {
     const fetchAll = async () => {
       try {
-        const [graphs, meds, logs, risks, fitness, hData, recs, timeline, apts] = await Promise.all([
+        const [graphs, meds, logs, risks, fitness, hData, recs, timeline, apts, userProfile, labs] = await Promise.all([
           API.get('/analytics/graphs').catch(() => ({})),
           API.get('/medicines').catch(() => []),
           API.get('/medicines/logs').catch(() => []),
@@ -135,7 +197,9 @@ const Analytics = () => {
           API.get('/trackers/health-data').catch(() => ({})),
           API.get('/records').catch(() => []),
           API.get('/analytics/timeline').catch(() => []),
-          API.get('/appointments').catch(() => [])
+          API.get('/appointments').catch(() => []),
+          API.get(`/users/profile?_t=${Date.now()}`).catch(() => null),
+          API.getUserLabMetrics().catch(() => [])
         ]);
         setGraphsData(graphs || {});
         setMedicines(meds || []);
@@ -146,6 +210,8 @@ const Analytics = () => {
         setRecords(recs || []);
         setAppointments(apts || []);
         setTimelineData(timeline || []);
+        setProfile(userProfile);
+        setLabMetrics(labs || []);
       } catch (e) {
         console.error('Analytics fetch error:', e);
       } finally {
@@ -183,11 +249,7 @@ const Analytics = () => {
           position: 'top', align: 'end',
           labels: { usePointStyle: true, pointStyle: 'circle', padding: 16, font: { family: "'Inter', sans-serif", weight: '600', size: 11 }, color: tickColor }
         },
-        tooltip: {
-          backgroundColor: 'rgba(15, 23, 42, 0.95)', titleFont: { family: "'Inter', sans-serif", weight: '700', size: 13 },
-          bodyFont: { family: "'Inter', sans-serif", size: 12 }, padding: 12, cornerRadius: 12,
-          borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1, boxPadding: 6
-        }
+        tooltip: getTooltipOpts(isDark, weightUnit)
       },
       scales: {
         x: { grid: { display: false, drawBorder: false }, ticks: { font: { family: "'Inter', sans-serif", weight: '500' }, color: tickColor } },
@@ -208,9 +270,9 @@ const Analytics = () => {
       let allRecords = [];
       const now = new Date();
       let cutoffDate = new Date();
-      
+
       if (vitalsTimeframe === '1month') {
-        cutoffDate = new Date(now.getFullYear(), now.getMonth(), 1); 
+        cutoffDate = new Date(now.getFullYear(), now.getMonth(), 1);
       } else if (vitalsTimeframe === '3months') {
         cutoffDate.setMonth(now.getMonth() - 3);
       } else {
@@ -220,27 +282,32 @@ const Analytics = () => {
       datasetsArgs.forEach((ds, dsIndex) => {
         if (!ds.entries) return;
         const filtered = ds.entries.filter(r => new Date(r.recorded_at || r.date) >= cutoffDate);
+        filtered.sort((a, b) => new Date(a.recorded_at || a.date) - new Date(b.recorded_at || b.date));
+
         filtered.forEach(r => {
-          allRecords.push({
-            timestamp: new Date(r.recorded_at || r.date).getTime(),
-            value: ds.extractor(r),
-            dsIndex: dsIndex
-          });
+          const d = new Date(r.recorded_at || r.date);
+          const dateKey = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          const existingIndex = allRecords.findIndex(x => x.dateKey === dateKey && x.dsIndex === dsIndex);
+          if (existingIndex > -1) {
+            allRecords[existingIndex] = { dateKey, value: ds.extractor(r), dsIndex, timestamp: d.getTime() };
+          } else {
+            allRecords.push({ dateKey, value: ds.extractor(r), dsIndex, timestamp: d.getTime() });
+          }
         });
       });
 
       if (allRecords.length === 0) return getEmptyState();
 
       allRecords.sort((a, b) => a.timestamp - b.timestamp);
-      const uniqueTimestamps = [...new Set(allRecords.map(r => r.timestamp))].sort((a, b) => a - b);
-      const labels = uniqueTimestamps.map(ts => new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+      const uniqueDateKeys = [...new Set(allRecords.map(r => r.dateKey))];
+      const labels = uniqueDateKeys;
 
       const dataArrays = datasetsArgs.map((ds, dsIndex) => {
         const dataArr = [];
-        uniqueTimestamps.forEach(ts => {
-          const matching = allRecords.filter(r => r.timestamp === ts && r.dsIndex === dsIndex);
+        uniqueDateKeys.forEach(dk => {
+          const matching = allRecords.filter(r => r.dateKey === dk && r.dsIndex === dsIndex);
           if (matching.length > 0) {
-            dataArr.push(matching[matching.length - 1].value);
+            dataArr.push(matching[0].value);
           } else {
             dataArr.push(null);
           }
@@ -248,14 +315,14 @@ const Analytics = () => {
 
         let currentLast = null;
         for (let i = 0; i < dataArr.length; i++) {
-           if (dataArr[i] !== null) { currentLast = dataArr[i]; break; }
+          if (dataArr[i] !== null) { currentLast = dataArr[i]; break; }
         }
         for (let i = 0; i < dataArr.length; i++) {
-            if (dataArr[i] !== null) {
-                currentLast = dataArr[i];
-            } else {
-                dataArr[i] = currentLast;
-            }
+          if (dataArr[i] !== null) {
+            currentLast = dataArr[i];
+          } else {
+            dataArr[i] = currentLast;
+          }
         }
         return dataArr;
       });
@@ -284,12 +351,12 @@ const Analytics = () => {
             labels: finalLabels,
             datasets: [
               {
-                label: 'Weight (kg)', data: dataArrays[0], borderColor: '#06b6d4', backgroundColor: createGradient(ctx, '6, 182, 212'),
-                borderWidth: 3, tension: 0.45, pointBackgroundColor: '#fff', pointBorderColor: '#06b6d4', pointBorderWidth: 3, pointRadius: 4, pointHoverRadius: 7, fill: true
+                label: `${t('weight') || 'Weight'} (${weightUnit})`, data: dataArrays[0].map(v => v ? displayWeight(v).raw : null), borderColor: '#06b6d4', backgroundColor: createGradient(ctx, '6, 182, 212'),
+                borderWidth: 3, tension: 0.45, pointBackgroundColor: '#ffffff', pointBorderColor: '#06b6d4', pointBorderWidth: 2, pointRadius: 3, pointHoverRadius: 5, fill: true
               },
               {
                 label: 'Heart Rate (bpm)', data: dataArrays[1], borderColor: '#3b82f6', backgroundColor: createGradient(ctx, '59, 130, 246'),
-                borderWidth: 3, tension: 0.45, pointBackgroundColor: '#fff', pointBorderColor: '#3b82f6', pointBorderWidth: 3, pointRadius: 4, pointHoverRadius: 7, fill: true
+                borderWidth: 3, tension: 0.45, pointBackgroundColor: '#ffffff', pointBorderColor: '#3b82f6', pointBorderWidth: 2, pointRadius: 3, pointHoverRadius: 5, fill: true
               }
             ]
           },
@@ -313,11 +380,11 @@ const Analytics = () => {
             datasets: [
               {
                 label: 'Systolic', data: dataArrays[0], borderColor: '#f97316', backgroundColor: createGradient(ctx, '249, 115, 22'),
-                borderWidth: 3, tension: 0.45, pointBackgroundColor: '#fff', pointBorderColor: '#f97316', pointBorderWidth: 3, pointRadius: 4, pointHoverRadius: 7, fill: true
+                borderWidth: 3, tension: 0.45, pointBackgroundColor: '#ffffff', pointBorderColor: '#f97316', pointBorderWidth: 2, pointRadius: 3, pointHoverRadius: 5, fill: true
               },
               {
                 label: 'Diastolic', data: dataArrays[1], borderColor: '#8b5cf6', backgroundColor: createGradient(ctx, '139, 92, 246'),
-                borderWidth: 3, tension: 0.45, pointBackgroundColor: '#fff', pointBorderColor: '#8b5cf6', pointBorderWidth: 3, pointRadius: 4, pointHoverRadius: 7, fill: true
+                borderWidth: 3, tension: 0.45, pointBackgroundColor: '#ffffff', pointBorderColor: '#8b5cf6', pointBorderWidth: 2, pointRadius: 3, pointHoverRadius: 5, fill: true
               }
             ]
           },
@@ -364,13 +431,13 @@ const Analytics = () => {
         const ed = new Date(e.recorded_at || e.date);
         return ed.toDateString() === d.toDateString();
       });
-      stepsArr.push(daySteps.length > 0 ? daySteps.reduce((s, e) => s + (e.value || 0), 0) : 0);
+      stepsArr.push(Math.max(0, daySteps.length > 0 ? daySteps.reduce((s, e) => s + (e.value || 0), 0) : 0));
 
       const dayCals = (healthData.calories || []).filter(e => {
         const ed = new Date(e.recorded_at || e.date);
         return ed.toDateString() === d.toDateString();
       });
-      calArr.push(dayCals.length > 0 ? dayCals.reduce((s, e) => s + (e.value || 0), 0) : 0);
+      calArr.push(Math.max(0, dayCals.length > 0 ? dayCals.reduce((s, e) => s + (e.value || 0), 0) : 0));
     }
 
     // Fallback dummy if all zero
@@ -386,15 +453,15 @@ const Analytics = () => {
             labels: last7Labels,
             datasets: [{
               label: 'Steps', data: finalSteps, borderColor: '#10b981', backgroundColor: createGradient(ctx, '16, 185, 129'),
-              borderWidth: 3, tension: 0.45, pointBackgroundColor: '#fff', pointBorderColor: '#10b981', pointBorderWidth: 3, pointRadius: 4, pointHoverRadius: 7, fill: true
+              borderWidth: 3, tension: 0.45, pointBackgroundColor: '#ffffff', pointBorderColor: '#10b981', pointBorderWidth: 2, pointRadius: 3, pointHoverRadius: 5, fill: true
             }]
           },
           options: {
             responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { display: false }, tooltip: { backgroundColor: 'rgba(15, 23, 42, 0.95)', cornerRadius: 12, padding: 12 } },
+            plugins: { legend: { display: false }, tooltip: getTooltipOpts(isDark, weightUnit) },
             scales: {
               x: { grid: { display: false }, ticks: { color: tickColor, font: { family: "'Inter', sans-serif", weight: '500' } } },
-              y: { grid: { color: gridColor, borderDash: [5, 5], drawBorder: false }, ticks: { color: tickColor, font: { family: "'Inter', sans-serif", weight: '500' } } }
+              y: { beginAtZero: true, min: 0, grid: { color: gridColor, borderDash: [5, 5], drawBorder: false }, ticks: { color: tickColor, font: { family: "'Inter', sans-serif", weight: '500' } } }
             }
           }
         });
@@ -417,10 +484,10 @@ const Analytics = () => {
           },
           options: {
             responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { display: false }, tooltip: { backgroundColor: 'rgba(15, 23, 42, 0.95)', cornerRadius: 12, padding: 12 } },
+            plugins: { legend: { display: false }, tooltip: getTooltipOpts(isDark, weightUnit) },
             scales: {
               x: { grid: { display: false }, ticks: { color: tickColor, font: { family: "'Inter', sans-serif", weight: '500' } } },
-              y: { grid: { color: gridColor, borderDash: [5, 5], drawBorder: false }, ticks: { color: tickColor, font: { family: "'Inter', sans-serif", weight: '500' } } }
+              y: { beginAtZero: true, min: 0, grid: { color: gridColor, borderDash: [5, 5], drawBorder: false }, ticks: { color: tickColor, font: { family: "'Inter', sans-serif", weight: '500' } } }
             }
           }
         });
@@ -440,6 +507,7 @@ const Analytics = () => {
 
     if (chartInstances.current.pie) { chartInstances.current.pie.destroy(); chartInstances.current.pie = null; }
 
+    const isDark = document.documentElement.classList.contains('dark');
     const categories = {};
     (records || []).forEach(r => {
       const cat = r.category || 'Other';
@@ -469,7 +537,7 @@ const Analytics = () => {
                 position: 'bottom',
                 labels: { usePointStyle: true, pointStyle: 'circle', padding: 16, font: { family: "'Inter', sans-serif", weight: '600', size: 12 }, color: '#64748b' }
               },
-              tooltip: { backgroundColor: 'rgba(15, 23, 42, 0.95)', cornerRadius: 12, padding: 12 }
+              tooltip: getTooltipOpts(isDark, weightUnit)
             }
           }
         });
@@ -480,6 +548,96 @@ const Analytics = () => {
       if (chartInstances.current.pie) { chartInstances.current.pie.destroy(); chartInstances.current.pie = null; }
     };
   }, [activeTab, activitySubTab, loading, records]);
+
+  /* ─── Chart rendering for Lab Trends tab ─── */
+  useEffect(() => {
+    if (activeTab !== 'lab_trends' || loading || !window.Chart) return;
+
+    if (chartInstances.current.lab_trends) {
+      chartInstances.current.lab_trends.destroy();
+      chartInstances.current.lab_trends = null;
+    }
+
+    if (!selectedLabMetric) return;
+
+    const isDark = document.documentElement.classList.contains('dark');
+    const gridColor = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)';
+    const tickColor = isDark ? '#94a3b8' : '#94a3b8';
+
+    const createGradient = (ctx, rgb) => {
+      const gradient = ctx.createLinearGradient(0, 0, 0, 250);
+      gradient.addColorStop(0, `rgba(${rgb}, 0.4)`);
+      gradient.addColorStop(1, `rgba(${rgb}, 0.0)`);
+      return gradient;
+    };
+
+    // Filter metrics matching the selected name
+    const metricData = labMetrics.filter(m => m.metric_name === selectedLabMetric);
+    // Sort by date ascending
+    metricData.sort((a, b) => new Date(a.recorded_date) - new Date(b.recorded_date));
+
+    if (metricData.length === 0) return;
+
+    const labels = metricData.map(m => new Date(m.recorded_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+    const dataValues = metricData.map(m => parseFloat(m.value) || 0);
+    const unit = metricData[metricData.length - 1].unit || '';
+
+    // Handle single data point
+    if (labels.length === 1) {
+      labels.unshift('Start');
+      dataValues.unshift(dataValues[0]);
+    }
+
+    setTimeout(() => {
+      if (labTrendChartRef.current) {
+        const ctx = labTrendChartRef.current.getContext('2d');
+
+        chartInstances.current.lab_trends = new window.Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: `${selectedLabMetric} ${unit ? `(${unit})` : ''}`,
+              data: dataValues,
+              borderColor: '#8b5cf6',
+              backgroundColor: createGradient(ctx, '139, 92, 246'),
+              borderWidth: 3,
+              tension: 0.45,
+              pointBackgroundColor: '#ffffff',
+              pointBorderColor: '#8b5cf6',
+              pointBorderWidth: 2,
+              pointRadius: 4,
+              pointHoverRadius: 6,
+              fill: true
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+              legend: {
+                position: 'top', align: 'end',
+                labels: { usePointStyle: true, pointStyle: 'circle', padding: 16, font: { family: "'Inter', sans-serif", weight: '600', size: 12 }, color: tickColor }
+              },
+              tooltip: getTooltipOpts(isDark, weightUnit)
+            },
+            scales: {
+              x: { grid: { display: false, drawBorder: false }, ticks: { font: { family: "'Inter', sans-serif", weight: '500' }, color: tickColor } },
+              y: { grid: { color: gridColor, drawBorder: false, borderDash: [5, 5] }, ticks: { font: { family: "'Inter', sans-serif", weight: '500' }, color: tickColor, padding: 8 }, beginAtZero: false }
+            }
+          }
+        });
+      }
+    }, 80);
+
+    return () => {
+      if (chartInstances.current.lab_trends) {
+        chartInstances.current.lab_trends.destroy();
+        chartInstances.current.lab_trends = null;
+      }
+    };
+  }, [activeTab, loading, labMetrics, selectedLabMetric]);
 
   /* ─── Helper functions ─── */
   const getLatestValue = (entries, key = 'value') => {
@@ -509,16 +667,17 @@ const Analytics = () => {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
-        <p className="text-gray-500 dark:text-gray-400 font-medium">Loading Analytics...</p>
+        <p className="text-gray-500 dark:text-gray-400 font-medium">{t('loading') || 'Loading Analytics...'}</p>
       </div>
     );
   }
 
   const tabs = [
-    { id: 'vitals', icon: HeartPulse, label: 'Health Vitals' },
-    { id: 'adherence', icon: Pill, label: 'Medicine Adherence' },
-    { id: 'risk', icon: Target, label: 'Health Risk Score' },
-    { id: 'activity', icon: Activity, label: 'Activity & Records' }
+    { id: 'vitals', icon: HeartPulse, label: t('health_vitals') || 'Health Vitals' },
+    { id: 'adherence', icon: Pill, label: t('medicine_adherence') || 'Medicine Adherence' },
+    { id: 'risk', icon: Target, label: t('health_risk_score') || 'Health Risk Score' },
+    { id: 'activity', icon: Activity, label: t('activity_records') || 'Activity & Records' },
+    { id: 'lab_trends', icon: FileText, label: t('Lab Trends') || 'Lab Trends' }
   ];
 
   const weightTrend = getTrend(healthData.weight);
@@ -529,18 +688,18 @@ const Analytics = () => {
     <div className="w-full max-w-7xl mx-auto space-y-6 pb-20">
 
       {/* ─── Header ─── */}
-      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-8 lg:p-10 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
         <div className="flex items-center gap-6 relative z-10 w-full">
           <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
             <BarChart3 className="w-8 h-8" />
           </div>
           <div>
-            <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-1">
-              Smart Analytics
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-1">
+              {t('smart_analytics') || 'Smart Analytics'}
             </h1>
-            <p className="text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2">
+            <p className="text-xs sm:text-sm lg:text-base text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
-              Deep insights into your health journey
+              {t('deep_insights') || 'Deep insights into your health journey'}
             </p>
           </div>
         </div>
@@ -574,15 +733,15 @@ const Analytics = () => {
         <div className="space-y-6">
           {/* Stat cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <StatCard icon={Scale} title="Weight" value={getLatestValue(healthData.weight)} subtitle="kg (Last reading)" trend={weightTrend.trend} trendValue={weightTrend.value} colorClass="bg-cyan-500 text-cyan-500" />
-            <StatCard icon={HeartPulse} title="Heart Rate" value={getLatestValue(healthData.heart_rate)} subtitle="bpm (Last reading)" trend={hrTrend.trend} trendValue={hrTrend.value} colorClass="bg-rose-500 text-rose-500" />
-            <StatCard icon={Activity} title="Blood Pressure" value={`${getLatestValue(healthData.blood_pressure, 'systolic') || getLatestValue(healthData.blood_pressure)}/${getLatestValue(healthData.blood_pressure, 'diastolic') || getLatestValue(healthData.blood_pressure, 'secondary_value') || '--'}`} subtitle="mmHg (Last reading)" trend={bpTrend.trend} trendValue={bpTrend.value} colorClass="bg-orange-500 text-orange-500" />
+            <StatCard icon={Scale} title={t('weight') || 'Weight'} value={getLatestValue(healthData.weight) ? displayWeight(getLatestValue(healthData.weight)).value : '--'} subtitle={`${weightUnit} (${t('last_reading') || 'Last reading'})`} trend={weightTrend.trend} trendValue={weightTrend.value} colorClass="bg-cyan-500 text-cyan-500" />
+            <StatCard icon={HeartPulse} title={t('heart_rate_caps') || 'Heart Rate'} value={getLatestValue(healthData.heart_rate)} subtitle={t('bpm_last') || 'bpm (Last reading)'} trend={hrTrend.trend} trendValue={hrTrend.value} colorClass="bg-rose-500 text-rose-500" />
+            <StatCard icon={Activity} title={t('blood_pressure') || 'Blood Pressure'} value={`${getLatestValue(healthData.blood_pressure, 'systolic') || getLatestValue(healthData.blood_pressure)}/${getLatestValue(healthData.blood_pressure, 'diastolic') || getLatestValue(healthData.blood_pressure, 'secondary_value') || '--'}`} subtitle={t('mmhg_last') || 'mmHg (Last reading)'} trend={bpTrend.trend} trendValue={bpTrend.value} colorClass="bg-orange-500 text-orange-500" />
           </div>
 
           {/* Timeframe selector */}
           <div className="flex justify-end">
             <div className="flex bg-gray-50 dark:bg-gray-900/50 p-1 rounded-xl border border-gray-100 dark:border-gray-700">
-              {[{ v: '1month', l: '1 Month' }, { v: '3months', l: '3 Months' }, { v: '6months', l: '6 Months' }].map(tf => (
+              {[{ v: '1month', l: t('1_month') || '1 Month' }, { v: '3months', l: t('3_months') || '3 Months' }, { v: '6months', l: t('6_months') || '6 Months' }].map(tf => (
                 <button key={tf.v} onClick={() => setVitalsTimeframe(tf.v)}
                   className={`px-3 py-1.5 text-xs font-bold whitespace-nowrap rounded-lg transition-all ${vitalsTimeframe === tf.v ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                 >{tf.l}</button>
@@ -593,11 +752,11 @@ const Analytics = () => {
           {/* Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
-              <SectionHeader title="Vitals Trend" subtitle="Weight & Heart Rate" className="mb-6" />
+              <SectionHeader title={t('vitals_trend') || 'Vitals Trend'} subtitle={t('weight_heart_rate') || 'Weight & Heart Rate'} className="mb-6" />
               <div className="h-[280px] relative"><canvas ref={vitalsChartRef}></canvas></div>
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
-              <SectionHeader title="Blood Pressure" subtitle="Systolic & Diastolic" className="mb-6" />
+              <SectionHeader title={t('blood_pressure') || 'Blood Pressure'} subtitle={t('sys_dia') || 'Systolic & Diastolic'} className="mb-6" />
               <div className="h-[280px] relative"><canvas ref={bpChartRef}></canvas></div>
             </div>
           </div>
@@ -613,7 +772,7 @@ const Analytics = () => {
 
             {/* Overall Adherence Gauge */}
             <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center justify-center">
-              <h3 className="text-lg font-extrabold text-gray-900 dark:text-white mb-6 tracking-tight">Overall Adherence</h3>
+              <h3 className="text-lg font-extrabold text-gray-900 dark:text-white mb-6 tracking-tight">{t('overall_adherence') || 'Overall Adherence'}</h3>
               <div className="relative w-44 h-44 mb-4">
                 <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
                   <circle cx="50" cy="50" r="42" fill="none" strokeWidth="8" className="stroke-gray-100 dark:stroke-gray-700" />
@@ -626,20 +785,20 @@ const Analytics = () => {
                   <span className="text-4xl font-black" style={{ color: adherencePercent >= 80 ? '#10b981' : adherencePercent >= 50 ? '#f59e0b' : '#ef4444' }}>
                     {adherencePercent}%
                   </span>
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Taken</span>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">{t('taken') || 'Taken'}</span>
                 </div>
               </div>
               <p className="text-sm text-gray-500 dark:text-gray-400 font-medium text-center">
-                {adherencePercent >= 80 ? 'Great consistency! Keep it up.' : adherencePercent >= 50 ? 'Room for improvement.' : 'Try setting reminders.'}
+                {adherencePercent >= 80 ? (t('adherence_great') || 'Great consistency! Keep it up.') : adherencePercent >= 50 ? (t('adherence_medium') || 'Room for improvement.') : (t('adherence_low') || 'Try setting reminders.')}
               </p>
             </div>
 
             {/* Per-medicine adherence */}
             <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-[2rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
-              <SectionHeader title="Per-Medicine Adherence" subtitle="How well you're following each prescription" className="mb-6" />
+              <SectionHeader title={t('per_medicine_adherence') || 'Per-Medicine Adherence'} subtitle={t('following_prescription') || "How well you're following each prescription"} className="mb-6" />
               <div className="space-y-5">
                 {activeMeds.length === 0 ? (
-                  <p className="text-gray-400 dark:text-gray-500 text-center py-8 font-medium">No active medications found. Add medicines to track adherence.</p>
+                  <p className="text-gray-400 dark:text-gray-500 text-center py-8 font-medium">{t('no_meds_adherence') || 'No active medications found. Add medicines to track adherence.'}</p>
                 ) : activeMeds.map((med, i) => {
                   const medSpecificLogs = medLogs.filter(l => l.medicine_id === med.id);
                   const taken = medSpecificLogs.filter(l => l.status === 'taken').length;
@@ -674,7 +833,7 @@ const Analytics = () => {
 
           {/* 30-day heatmap */}
           <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
-            <SectionHeader title="30-Day Overview" subtitle="Medicine intake pattern" className="mb-6" />
+            <SectionHeader title={t('30_day_overview') || '30-Day Overview'} subtitle={t('medicine_intake_pattern') || 'Medicine intake pattern'} className="mb-6" />
             <div className="flex flex-wrap gap-1.5">
               {Array.from({ length: 30 }, (_, i) => {
                 const d = new Date(); d.setDate(d.getDate() - (29 - i));
@@ -682,8 +841,33 @@ const Analytics = () => {
                   const ld = new Date(l.date || l.created_at);
                   return ld.toDateString() === d.toDateString();
                 });
+                const isPastDay = d.setHours(0, 0, 0, 0) < new Date().setHours(0, 0, 0, 0);
                 const hasTaken = dayLogs.some(l => l.status === 'taken');
-                const hasMissed = dayLogs.some(l => l.status === 'missed');
+
+                const missedNames = [];
+                // Explicitly marked as missed or pending on past day
+                dayLogs.forEach(l => {
+                  if (l.status === 'missed' || (isPastDay && l.status === 'pending')) {
+                    const m = medicines.find(med => med.id === l.medicine_id);
+                    if (m && !missedNames.includes(m.name)) missedNames.push(m.name);
+                  }
+                });
+
+                // Infer missed: if it's a past day, any active scheduled medicine without a taken log is missed
+                if (isPastDay) {
+                  activeMeds.forEach(m => {
+                    const dStart = new Date(d);
+                    const createdAt = new Date(m.created_at || m.start_date || dStart);
+                    if (createdAt <= dStart && m.frequency !== 'as_needed') {
+                      const wasTaken = dayLogs.some(l => l.medicine_id === m.id && l.status === 'taken');
+                      if (!wasTaken && !missedNames.includes(m.name)) {
+                        missedNames.push(m.name);
+                      }
+                    }
+                  });
+                }
+
+                const hasMissed = missedNames.length > 0;
                 const isToday = d.toDateString() === new Date().toDateString();
 
                 let bg = 'bg-gray-100 dark:bg-gray-700'; // no data
@@ -691,17 +875,11 @@ const Analytics = () => {
                 else if (hasMissed) bg = 'bg-rose-400 dark:bg-rose-500';
                 else if (hasTaken) bg = 'bg-emerald-400 dark:bg-emerald-500';
 
-                const missedLogs = dayLogs.filter(l => l.status === 'missed');
-                const missedNames = missedLogs.map(l => {
-                  const m = medicines.find(med => med.id === l.medicine_id);
-                  return m ? m.name : 'Unknown';
-                });
-                
                 let titleStr = `${d.toLocaleDateString()} — `;
-                if (hasTaken && !hasMissed) titleStr += 'All Taken';
-                else if (hasMissed && hasTaken) titleStr += `Partial (Missed: ${missedNames.join(', ')})`;
-                else if (hasMissed) titleStr += `Missed (${missedNames.join(', ')})`;
-                else titleStr += 'No data';
+                if (hasTaken && !hasMissed) titleStr += t('taken') || 'All Taken';
+                else if (hasMissed && hasTaken) titleStr += `${t('partial') || 'Partial'} (Missed: ${missedNames.join(', ')})`;
+                else if (hasMissed) titleStr += `${t('missed') || 'Missed'} (${missedNames.join(', ')})`;
+                else titleStr += t('no_data') || 'No data';
 
                 return (
                   <div key={i} className={`w-7 h-7 rounded-lg ${bg} ${isToday ? 'ring-2 ring-indigo-500 ring-offset-2 dark:ring-offset-gray-800' : ''} transition-all`}
@@ -711,10 +889,10 @@ const Analytics = () => {
               })}
             </div>
             <div className="flex items-center gap-4 mt-4 text-xs font-bold text-gray-500">
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-400"></span> Taken</span>
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-400"></span> Partial</span>
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-rose-400"></span> Missed</span>
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-gray-200 dark:bg-gray-600"></span> No data</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-400"></span> {t('taken') || 'Taken'}</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-400"></span> {t('partial') || 'Partial'}</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-rose-400"></span> {t('missed') || 'Missed'}</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-gray-200 dark:bg-gray-600"></span> {t('no_data') || 'No data'}</span>
             </div>
           </div>
         </div>
@@ -728,24 +906,24 @@ const Analytics = () => {
           {/* Hero Score - Premium Banner */}
           <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-700 px-8 py-6 lg:px-12 relative overflow-hidden group">
             <div className="relative z-10 flex flex-row items-center justify-between w-full gap-10">
-              
+
               {/* Left Side: Text & Insights */}
               <div className="text-left flex flex-col justify-center flex-1">
                 <h3 className="text-4xl lg:text-5xl font-extrabold text-gray-900 dark:text-white mb-5 tracking-tight leading-tight">
-                  Holistic <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-400">Health Score</span>
+                  {t('holistic') || 'Holistic'} <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-400">{t('health_score_caps') || 'Health Score'}</span>
                 </h3>
                 <p className="text-gray-500 dark:text-gray-400 font-medium text-sm lg:text-base leading-relaxed mb-8 max-w-lg">
-                  This score is dynamically calculated by analyzing your daily vitals, ongoing physical activity, and medical history. Maintaining a score above <strong className="text-gray-700 dark:text-gray-300">80</strong> significantly reduces your risk of chronic conditions.
+                  {t('score_description') || 'This score is dynamically calculated by analyzing your daily vitals, ongoing physical activity, and medical history. Maintaining a score above 80 significantly reduces your risk of chronic conditions.'}
                 </p>
                 <div className="flex items-center justify-start gap-8">
                   <div className="flex flex-col">
                     <span className="text-2xl font-black text-gray-900 dark:text-white">4+</span>
-                    <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mt-1">Metrics Analyzed</span>
+                    <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mt-1">{t('metrics_analyzed') || 'Metrics Analyzed'}</span>
                   </div>
                   <div className="w-px h-10 bg-gray-200 dark:bg-gray-700"></div>
                   <div className="flex flex-col">
                     <span className="text-2xl font-black text-gray-900 dark:text-white">24/7</span>
-                    <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mt-1">Continuous Tracking</span>
+                    <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mt-1">{t('continuous_tracking') || 'Continuous Tracking'}</span>
                   </div>
                 </div>
               </div>
@@ -764,7 +942,7 @@ const Analytics = () => {
                   <span className="text-6xl font-black drop-shadow-sm" style={{ color: riskData?.overall_score > 70 ? '#10b981' : riskData?.overall_score > 40 ? '#f59e0b' : '#ef4444' }}>
                     {riskData?.overall_score || 0}
                   </span>
-                  <span className="text-xs font-extrabold text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mt-2">Overall Score</span>
+                  <span className="text-xs font-extrabold text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mt-2">{t('overall_score') || 'Overall Score'}</span>
                 </div>
               </div>
 
@@ -775,12 +953,12 @@ const Analytics = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {(riskData?.risks || []).map((r, i) => {
               const level = r.score > 60 ? 'High' : r.score > 35 ? 'Medium' : 'Low';
-              
-              const colorInfo = level === 'Low' 
+
+              const colorInfo = level === 'Low'
                 ? { base: 'emerald', tagBg: 'bg-emerald-50 dark:bg-emerald-900/30', tagText: 'text-emerald-600 dark:text-emerald-400', iconBg: 'bg-emerald-100 dark:bg-emerald-900/40', text: 'text-emerald-500', bg: 'bg-emerald-500' }
-                : level === 'Medium' 
-                ? { base: 'amber', tagBg: 'bg-amber-50 dark:bg-amber-900/30', tagText: 'text-amber-600 dark:text-amber-400', iconBg: 'bg-amber-100 dark:bg-amber-900/40', text: 'text-amber-500', bg: 'bg-amber-500' }
-                : { base: 'rose', tagBg: 'bg-rose-50 dark:bg-rose-900/30', tagText: 'text-rose-600 dark:text-rose-400', iconBg: 'bg-rose-100 dark:bg-rose-900/40', text: 'text-rose-500', bg: 'bg-rose-500' };
+                : level === 'Medium'
+                  ? { base: 'amber', tagBg: 'bg-amber-50 dark:bg-amber-900/30', tagText: 'text-amber-600 dark:text-amber-400', iconBg: 'bg-amber-100 dark:bg-amber-900/40', text: 'text-amber-500', bg: 'bg-amber-500' }
+                  : { base: 'rose', tagBg: 'bg-rose-50 dark:bg-rose-900/30', tagText: 'text-rose-600 dark:text-rose-400', iconBg: 'bg-rose-100 dark:bg-rose-900/40', text: 'text-rose-500', bg: 'bg-rose-500' };
 
               const tips = {
                 'Heart Disease': 'Regular cardio exercise and low-sodium diet recommended.',
@@ -802,7 +980,7 @@ const Analytics = () => {
                 <div key={i} className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1.5 relative overflow-hidden group cursor-default flex flex-col justify-between">
                   {/* Decorative Blob */}
                   <div className={`absolute top-0 right-0 w-40 h-40 ${colorInfo.bg} opacity-10 rounded-bl-full -mr-10 -mt-10 transition-transform duration-700 group-hover:scale-110 pointer-events-none`}></div>
-                  
+
                   <div className="relative z-10">
                     <div className="flex justify-between items-start mb-6">
                       <div className="flex items-center gap-4">
@@ -815,10 +993,10 @@ const Analytics = () => {
                     </div>
 
                     <div className="flex items-baseline justify-between mb-2">
-                      <p className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Risk Score</p>
+                      <p className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">{t('risk_score') || 'Risk Score'}</p>
                       <span className={`text-3xl font-black ${colorInfo.text}`}>{Math.round(r.score)}%</span>
                     </div>
-                    
+
                     <div className="h-2.5 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden mb-6 shadow-inner">
                       <div className={`h-full ${colorInfo.bg} rounded-full transition-all duration-1000 ease-out`} style={{ width: `${r.score}%` }}></div>
                     </div>
@@ -834,7 +1012,7 @@ const Analytics = () => {
 
                   <div className="relative z-10 mt-auto bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl p-4 border border-indigo-100 dark:border-indigo-800/30 flex items-start gap-3 transition-colors group-hover:bg-indigo-100/50 dark:group-hover:bg-indigo-900/30">
                     <Sparkles className="w-5 h-5 shrink-0 text-indigo-500 mt-0.5" />
-                    <p className="text-xs font-bold text-indigo-700 dark:text-indigo-300 leading-relaxed">{tips[r.name] || 'Maintain a healthy lifestyle.'}</p>
+                    <p className="text-xs font-bold text-indigo-700 dark:text-indigo-300 leading-relaxed">{tips[r.name] || (t('healthy_lifestyle') || 'Maintain a healthy lifestyle.')}</p>
                   </div>
                 </div>
               );
@@ -852,11 +1030,11 @@ const Analytics = () => {
           <div className="flex items-center bg-gray-50 dark:bg-gray-900/50 p-1.5 rounded-2xl border border-gray-100 dark:border-gray-700 w-fit">
             <button onClick={() => setActivitySubTab('fitness')}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${activitySubTab === 'fitness' ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-              <Dumbbell className="w-4 h-4" /> Fitness & Activity
+              <Dumbbell className="w-4 h-4" /> {t('fitness_activity') || 'Fitness & Activity'}
             </button>
             <button onClick={() => setActivitySubTab('records')}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${activitySubTab === 'records' ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-              <Folder className="w-4 h-4" /> Medical Records
+              <Folder className="w-4 h-4" /> {t('medical_records') || 'Medical Records'}
             </button>
           </div>
 
@@ -865,9 +1043,9 @@ const Analytics = () => {
             <div className="space-y-6">
               {/* Stat cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <StatCard icon={Activity} title="Steps Today" value={(fitnessStats?.steps || 0).toLocaleString()} subtitle={`Goal: ${(fitnessStats?.step_goal || 10000).toLocaleString()}`} colorClass="bg-emerald-500 text-emerald-500" />
-                <StatCard icon={Flame} title="Calories Burned" value={fitnessStats?.calories_burned || 0} subtitle="Kcal active" colorClass="bg-orange-500 text-orange-500" />
-                <StatCard icon={CalendarCheck} title="Step Goal" value={`${Math.round(((fitnessStats?.steps || 0) / (fitnessStats?.step_goal || 10000)) * 100)}%`} subtitle="Completed" colorClass="bg-indigo-500 text-indigo-500" />
+                <StatCard icon={Activity} title={t('steps_today') || 'Steps Today'} value={(fitnessStats?.steps || 0).toLocaleString()} subtitle={`${t('goal') || 'Goal'}: ${(fitnessStats?.step_goal || 10000).toLocaleString()}`} colorClass="bg-emerald-500 text-emerald-500" />
+                <StatCard icon={Flame} title={t('calories_burned') || 'Calories Burned'} value={fitnessStats?.calories_burned || 0} subtitle={t('kcal_active') || 'Kcal active'} colorClass="bg-orange-500 text-orange-500" />
+                <StatCard icon={CalendarCheck} title={t('step_goal') || 'Step Goal'} value={`${Math.round(((fitnessStats?.steps || 0) / (fitnessStats?.step_goal || 10000)) * 100)}%`} subtitle={t('completed') || 'Completed'} colorClass="bg-indigo-500 text-indigo-500" />
               </div>
 
               {/* Fitness goal rings */}
@@ -886,9 +1064,9 @@ const Analytics = () => {
                     </div>
                   </div>
                   <div>
-                    <h4 className="text-lg font-extrabold text-gray-900 dark:text-white">Step Goal</h4>
+                    <h4 className="text-lg font-extrabold text-gray-900 dark:text-white">{t('step_goal') || 'Step Goal'}</h4>
                     <p className="text-3xl font-black text-emerald-500 mt-1">{(fitnessStats?.steps || 0).toLocaleString()}</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">of {(fitnessStats?.step_goal || 10000).toLocaleString()} steps</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">{(t('of_steps') || 'of {count} steps').replace('{count}', (fitnessStats?.step_goal || 10000).toLocaleString())}</p>
                   </div>
                 </div>
                 {/* Calorie Goal Ring */}
@@ -897,7 +1075,7 @@ const Analytics = () => {
                     <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
                       <circle cx="50" cy="50" r="42" fill="none" strokeWidth="8" className="stroke-gray-100 dark:stroke-gray-700" />
                       <circle cx="50" cy="50" r="42" fill="none" stroke="#f97316" strokeWidth="8" strokeDasharray="264"
-                        strokeDashoffset={264 - (264 * Math.min((fitnessStats?.calories_burned || 0) / 500, 1))}
+                        strokeDashoffset={264 - (264 * Math.min((fitnessStats?.calories_burned || 0) / activeCalorieGoal, 1))}
                         strokeLinecap="round" className="transition-all duration-1000" />
                     </svg>
                     <div className="absolute inset-0 flex items-center justify-center">
@@ -905,9 +1083,9 @@ const Analytics = () => {
                     </div>
                   </div>
                   <div>
-                    <h4 className="text-lg font-extrabold text-gray-900 dark:text-white">Calorie Goal</h4>
+                    <h4 className="text-lg font-extrabold text-gray-900 dark:text-white">{t('calorie_goal') || 'Calorie Goal'}</h4>
                     <p className="text-3xl font-black text-orange-500 mt-1">{fitnessStats?.calories_burned || 0}</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">of 500 kcal target</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">{(t('of_kcal_target') || 'of {count} kcal target').replace('{count}', activeCalorieGoal)}</p>
                   </div>
                 </div>
               </div>
@@ -915,11 +1093,11 @@ const Analytics = () => {
               {/* Charts */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
-                  <SectionHeader title="Steps Trend" subtitle="Last 7 days" className="mb-6" />
+                  <SectionHeader title={t('steps_trend') || 'Steps Trend'} subtitle={t('last_7_days') || 'Last 7 days'} className="mb-6" />
                   <div className="h-[240px] relative"><canvas ref={stepsChartRef}></canvas></div>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
-                  <SectionHeader title="Calories Burned" subtitle="Last 7 days" className="mb-6" />
+                  <SectionHeader title={t('calories_burned') || 'Calories Burned'} subtitle={t('last_7_days') || 'Last 7 days'} className="mb-6" />
                   <div className="h-[240px] relative"><canvas ref={caloriesChartRef}></canvas></div>
                 </div>
               </div>
@@ -938,12 +1116,13 @@ const Analytics = () => {
                   { cat: 'Appointment', icon: Stethoscope, colorClass: 'bg-emerald-500 text-emerald-500' }
                 ].map(({ cat, icon: CatIcon, colorClass }) => {
                   const count = cat === 'Appointment' ? appointments.length : records.filter(r => r.category === cat).length;
+                  const catKey = cat === 'Appointment' ? 'appointment_cat' : cat.toLowerCase().replace(' ', '_');
                   return (
                     <StatCard
                       key={cat}
-                      title={`${cat}s`}
+                      title={`${t(catKey) || cat}`}
                       value={count}
-                      subtitle="Total records"
+                      subtitle={t('total_records') || 'Total records'}
                       icon={CatIcon}
                       colorClass={colorClass}
                     />
@@ -954,16 +1133,16 @@ const Analytics = () => {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Donut chart */}
                 <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
-                  <SectionHeader title="Records Breakdown" subtitle="By category" className="mb-6" />
+                  <SectionHeader title={t('records_breakdown') || 'Records Breakdown'} subtitle={t('by_category') || 'By category'} className="mb-6" />
                   <div className="h-[280px] relative"><canvas ref={recordsPieRef}></canvas></div>
                 </div>
 
                 {/* Recent records */}
                 <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
-                  <SectionHeader title="Recent Records" subtitle="Latest medical records" className="mb-6" />
+                  <SectionHeader title={t('recent_records') || 'Recent Records'} subtitle={t('latest_medical_records') || 'Latest medical records'} className="mb-6" />
                   <div className="space-y-3">
                     {records.length === 0 ? (
-                      <p className="text-gray-400 dark:text-gray-500 text-center py-8 font-medium">No records uploaded yet.</p>
+                      <p className="text-gray-400 dark:text-gray-500 text-center py-8 font-medium">{t('no_records_uploaded') || 'No records uploaded yet.'}</p>
                     ) : records.slice(0, 5).map((r, i) => {
                       const catColor = {
                         'Blood Test': 'text-rose-500 bg-rose-50 dark:bg-rose-900/20',
@@ -993,6 +1172,51 @@ const Analytics = () => {
         </div>
       )}
 
+      {/* ══════════════════════════════════════════════════════════ */}
+      {/* ─── TAB 5: LAB TRENDS ─── */}
+      {/* ══════════════════════════════════════════════════════════ */}
+      {activeTab === 'lab_trends' && (
+        <div className="space-y-6">
+          <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
+            <div className="flex flex-col md:flex-row justify-between items-start mb-8 gap-4 w-full text-left">
+              <SectionHeader title={t('lab_trends') || 'Lab Trends'} subtitle={t('track_extracted_metrics') || 'Track AI-extracted metrics over time'} className="mb-0 w-full justify-start" />
+
+              <div className="w-full md:w-64">
+                <select
+                  className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm font-semibold text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
+                  value={selectedLabMetric}
+                  onChange={(e) => setSelectedLabMetric(e.target.value)}
+                >
+                  <option value="" disabled>{t('select_metric') || 'Select a metric'}</option>
+                  {[...new Set(labMetrics.map(m => m.metric_name))].map(name => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {labMetrics.length === 0 ? (
+              <div className="bg-gray-50 dark:bg-gray-900/50 rounded-[2rem] p-12 text-center border border-dashed border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center">
+                <div className="w-20 h-20 bg-white dark:bg-gray-800 text-gray-300 dark:text-gray-500 rounded-full flex items-center justify-center mb-4 shadow-sm">
+                  <Clock className="w-10 h-10 text-indigo-500 opacity-50" />
+                </div>
+                <h3 className="text-xl font-extrabold text-gray-900 dark:text-white mb-2">Coming Soon</h3>
+                <p className="text-gray-500 dark:text-gray-400 font-medium max-w-sm">
+                  This feature is currently under development and will be available in a future update.
+                </p>
+              </div>
+            ) : !selectedLabMetric ? (
+              <div className="h-[300px] flex items-center justify-center bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-700">
+                <p className="text-gray-500 dark:text-gray-400 font-medium">Select a metric from the dropdown to view its trend.</p>
+              </div>
+            ) : (
+              <div className="h-[400px] relative w-full">
+                <canvas ref={labTrendChartRef}></canvas>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

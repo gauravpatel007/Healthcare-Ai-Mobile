@@ -21,6 +21,7 @@ class MoodResponse(BaseModel):
 
 class JournalCreate(BaseModel):
     content: str = Field(..., min_length=1)
+    language: str = "en"
 
 
 class JournalResponse(BaseModel):
@@ -28,6 +29,7 @@ class JournalResponse(BaseModel):
     content: str
     sentiment: str | None
     ai_analysis: str | None
+    proactive_action: str | None = None
     created_at: datetime
     model_config = {"from_attributes": True}
 

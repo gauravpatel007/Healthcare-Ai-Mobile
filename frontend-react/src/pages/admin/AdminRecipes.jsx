@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../../utils/api';
 import {
   Plus, Search, Edit2, Trash2, UtensilsCrossed, Clock, Flame
 } from 'lucide-react';
+import CustomSelect from '../../components/ui/CustomSelect';
 
 export default function AdminRecipes() {
   const [recipes, setRecipes] = useState([]);
@@ -206,9 +208,9 @@ export default function AdminRecipes() {
       </div>
 
       {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-gray-800 rounded-[2rem] shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto overflow-x-hidden border border-gray-100 dark:border-gray-700 animate-in fade-in zoom-in-95 duration-200">
+      {showModal && createPortal(
+        <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm" onClick={() => setShowModal(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-[2rem] shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto overflow-x-hidden border border-gray-100 dark:border-gray-700 animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
             <div className="p-6 md:p-8">
               <h2 className="text-2xl font-extrabold text-gray-900 dark:text-white mb-6">
                 {editingId ? 'Edit Recipe' : 'Add Recipe'}
@@ -228,10 +230,17 @@ export default function AdminRecipes() {
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Meal Type</label>
-                      <select value={formData.meal_type} onChange={e => setFormData({ ...formData, meal_type: e.target.value })}
-                        className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-3 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-emerald-500/20 outline-none">
-                        <option>Breakfast</option><option>Lunch</option><option>Dinner</option><option>Snack</option>
-                      </select>
+                      <CustomSelect
+                        value={formData.meal_type}
+                        onChange={e => setFormData({ ...formData, meal_type: e.target.value })}
+                        options={[
+                          { value: "Breakfast", label: "Breakfast" },
+                          { value: "Lunch", label: "Lunch" },
+                          { value: "Dinner", label: "Dinner" },
+                          { value: "Snack", label: "Snack" }
+                        ]}
+                        className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 font-medium py-[8px]"
+                      />
                     </div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -298,10 +307,15 @@ export default function AdminRecipes() {
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Status</label>
-                    <select value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })}
-                      className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-3 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none">
-                      <option>Draft</option><option>Published</option>
-                    </select>
+                    <CustomSelect
+                      value={formData.status}
+                      onChange={e => setFormData({ ...formData, status: e.target.value })}
+                      options={[
+                        { value: "Draft", label: "Draft" },
+                        { value: "Published", label: "Published" }
+                      ]}
+                      className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 font-medium py-[8px]"
+                    />
                   </div>
                 </div>
 
@@ -318,7 +332,8 @@ export default function AdminRecipes() {
               </form>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

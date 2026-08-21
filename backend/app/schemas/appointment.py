@@ -46,6 +46,7 @@ class AppointmentResponse(BaseModel):
 
 class AppointmentPrepRequest(BaseModel):
     symptoms: str | None = None
+    language: str | None = None
 
 
 class AppointmentSuggestion(BaseModel):

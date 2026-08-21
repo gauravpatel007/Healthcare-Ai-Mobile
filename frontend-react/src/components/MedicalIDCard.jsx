@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useUnit } from '../contexts/UnitContext';
 
 const MedicalIDCard = () => {
   const [data, setData] = useState(null);
+  const { displayHeight, displayWeight } = useUnit();
 
   useEffect(() => {
     const offlineData = localStorage.getItem('offline_medical_id');
@@ -25,10 +27,10 @@ const MedicalIDCard = () => {
   const { profile, contacts } = data;
 
   return (
-    <div className="min-h-screen bg-red-50 p-4 sm:p-8 font-sans">
+    <div className="min-h-screen bg-transparent p-4 sm:p-8 font-sans">
       {/* Changed max-w-2xl to max-w-4xl to stretch the card wider */}
       <div className="max-w-4xl mx-auto w-full">
-        
+
         <div className="flex justify-between items-center mb-6">
           <Link to="/" className="flex items-center gap-2 text-slate-600 hover:text-slate-900 font-semibold no-underline">
             <span className="material-symbols-outlined">arrow_back</span>
@@ -77,17 +79,17 @@ const MedicalIDCard = () => {
             </div>
             <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
               <div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Height</div>
-              <div className="text-xl font-bold text-slate-800">{profile.height ? `${profile.height} cm` : '--'}</div>
+              <div className="text-xl font-bold text-slate-800">{profile.height ? `${displayHeight(profile.height).value} ${displayHeight(profile.height).label}` : '--'}</div>
             </div>
             <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
               <div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Weight</div>
-              <div className="text-xl font-bold text-slate-800">{profile.weight ? `${profile.weight} kg` : '--'}</div>
+              <div className="text-xl font-bold text-slate-800">{profile.weight ? `${displayWeight(profile.weight).value} ${displayWeight(profile.weight).label}` : '--'}</div>
             </div>
           </div>
 
           {/* Details Section */}
           <div className="p-8">
-            
+
             {/* Allergies */}
             <div className="mb-8">
               <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-4">
@@ -97,7 +99,7 @@ const MedicalIDCard = () => {
               {profile.allergies && profile.allergies.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                   {profile.allergies.map((a, i) => (
-                    <span key={i} className="bg-orange-50 text-orange-800 px-4 py-2 rounded-xl text-sm font-bold">{a}</span>
+                    <span key={i} className="bg-white border border-slate-200 text-slate-800 px-4 py-2 rounded-xl text-sm font-bold">{a}</span>
                   ))}
                 </div>
               ) : (
@@ -131,14 +133,14 @@ const MedicalIDCard = () => {
               {contacts && contacts.length > 0 ? (
                 <div className="grid sm:grid-cols-2 gap-4">
                   {contacts.map((contact, i) => (
-                    <div key={i} className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                      <div>
-                        <div className="font-bold text-slate-800">{contact.name}</div>
-                        <div className="text-slate-500 text-sm">{contact.relation}</div>
+                    <div key={i} className="flex justify-between items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-slate-800 truncate">{contact.name}</div>
+                        <div className="text-slate-500 text-sm truncate">{contact.relation}</div>
                       </div>
-                      <a href={`tel:${contact.phone}`} className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold transition-colors no-underline">
+                      <a href={`tel:${contact.phone}`} className="flex-shrink-0 flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold transition-colors no-underline">
                         <span className="material-symbols-outlined text-sm">call</span>
-                        Call
+                        {contact.phone}
                       </a>
                     </div>
                   ))}

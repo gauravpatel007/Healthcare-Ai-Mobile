@@ -6,6 +6,7 @@ Imports all models so Alembic and Base.metadata can discover them.
 from app.models.user import User, UserProfile, PasswordResetToken, LoginHistory, BlockedIP, UserActivity
 from app.models.medical_record import MedicalRecord
 from app.models.medicine import Medicine, MedicineLibrary
+from app.models.gamification import UserGamification
 from app.models.disease import DiseaseLibrary, SymptomLibrary, SymptomCheckHistory
 from app.models.diet import Recipe, MealPlan, ScannedMeal
 from app.models.appointment import Appointment
@@ -13,7 +14,7 @@ from app.models.emergency import EmergencyContact, SOSLog
 from app.models.family import FamilyMember, Vaccination
 from app.models.health_tracker import HealthEntry, SleepEntry, WaterLog
 from app.models.expense import MedicalExpense
-from app.models.challenge import ChallengeProgress, UserBadge
+from app.models.challenge import CommunityChallenge, ChallengeProgress, UserBadge
 from app.models.mood import MoodEntry, JournalEntry
 from app.models.chat import ChatMessage
 from app.models.share import SharedLink

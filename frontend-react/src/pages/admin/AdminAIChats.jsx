@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { 
-  MessageSquare, Trash2, Search, Filter, Flag, 
   ThumbsUp, BarChart2, Users, Activity, Bot
 } from 'lucide-react';
+import CustomSelect from '../../components/ui/CustomSelect';
 
 export default function AdminAIChats() {
   const [chats, setChats] = useState([]);
@@ -86,18 +86,20 @@ export default function AdminAIChats() {
                 className="pl-9 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 w-64"
               />
             </div>
-            <select 
-              value={moduleFilter} onChange={e => setModuleFilter(e.target.value)}
-              className="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 appearance-none min-w-[140px]"
-            >
-              <option value="all">All Modules</option>
-              <option value="assistant">Medical Assistant</option>
-              <option value="symptom">Symptom Checker</option>
-              <option value="fitness">Fitness Coach</option>
-              <option value="nutrition">Diet Planner</option>
-              <option value="mental">Mental Health</option>
-              <option value="report_parser">Scan Analyzer</option>
-            </select>
+            <CustomSelect
+              value={moduleFilter}
+              onChange={e => setModuleFilter(e.target.value)}
+              options={[
+                { value: "all", label: "All Modules" },
+                { value: "assistant", label: "Medical Assistant" },
+                { value: "symptom", label: "Symptom Checker" },
+                { value: "fitness", label: "Fitness Coach" },
+                { value: "nutrition", label: "Diet Planner" },
+                { value: "mental", label: "Mental Health" },
+                { value: "report_parser", label: "Scan Analyzer" }
+              ]}
+              className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 font-medium py-[8px]"
+            />
           </div>
         </div>
 

@@ -42,76 +42,80 @@ const AdminLogin = () => {
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#f0f4ff] flex items-center justify-center p-4 sm:p-8 font-sans">
-      {/* Main Container Card - Almost Full Screen */}
-      <div className="w-full max-w-[1400px] h-[85vh] min-h-[600px] bg-white dark:bg-gray-800 rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-row border border-white/60">
+    <div className="fixed inset-0 w-full h-full bg-[#f0f4ff] flex items-center justify-center p-2 sm:p-4 font-sans overflow-hidden">
+      {/* Main Container Card - Scales to screen to avoid scrollbars */}
+      <div className="w-full max-w-[1400px] h-[95%] max-h-[650px] bg-white dark:bg-gray-800 rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-row border border-white/60">
         
         {/* Left Side - Login Form (Always 50%) */}
-        <div className="w-1/2 h-full flex flex-col justify-center items-center relative p-8 bg-white dark:bg-gray-800">
+        <div className="w-1/2 h-full flex flex-col relative p-4 sm:p-6 bg-white dark:bg-gray-800 overflow-y-auto">
           
-          <div className="max-w-[420px] w-full">
+          <div className="max-w-[420px] w-full h-full mx-auto flex flex-col py-4">
             
-            <h1 className="text-[3.5rem] leading-tight font-extrabold text-gray-900 dark:text-white mb-2 tracking-tight">
-              Welcome to LifeOS
-            </h1>
-            <p className="text-gray-500 dark:text-gray-400 mb-10 text-lg">
-              Find Trusted Specialists for Your Practice
-            </p>
+            <div className="mt-2 mb-auto">
+              <h1 className="text-4xl sm:text-5xl leading-tight font-extrabold text-gray-900 dark:text-white mb-2 tracking-tight">
+                Welcome to LifeOS
+              </h1>
+              <p className="text-gray-500 dark:text-gray-400 text-base">
+                Find Trusted Specialists for Your Practice
+              </p>
+            </div>
 
-            {error && (
-              <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/30 border border-red-100 rounded-2xl text-red-600 dark:text-red-400 text-sm font-medium">
-                {error}
-              </div>
-            )}
+            <div className="my-auto w-full">
+              {error && (
+                <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/30 border border-red-100 rounded-2xl text-red-600 dark:text-red-400 text-sm font-medium">
+                  {error}
+                </div>
+              )}
 
-            <form onSubmit={handleLogin} className="space-y-6">
-              
-              {/* Username Field */}
-              <div className="space-y-3">
-                <label className="text-base font-bold text-gray-700 dark:text-gray-300 ml-1">USERNAME</label>
-                <input 
-                  type="text" 
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Enter your username"
-                  className="w-full bg-white dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 rounded-full py-5 px-6 text-gray-900 dark:text-white text-xl placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-400 transition-all font-medium"
-                  required
-                />
-              </div>
-
-              {/* Password Field */}
-              <div className="space-y-3">
-                <label className="text-base font-bold text-gray-700 dark:text-gray-300 ml-1">Password</label>
-                <div className="relative">
+              <form onSubmit={handleLogin} className="space-y-4">
+                
+                {/* Username Field */}
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-700 dark:text-gray-300 ml-1">USERNAME</label>
                   <input 
-                    type={showPassword ? "text" : "password"} 
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter your password"
-                    className="w-full bg-white dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 rounded-full py-5 pl-6 pr-12 text-gray-900 dark:text-white text-xl placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-400 transition-all font-medium"
+                    type="text" 
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="Enter your username"
+                    className="w-full bg-white dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 rounded-full py-4 px-6 text-gray-900 dark:text-white text-lg placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-400 transition-all font-medium"
                     required
                   />
-                  <button 
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
-                  >
-                    {showPassword ? <EyeOff className="w-6 h-6" /> : <Eye className="w-6 h-6" />}
-                  </button>
                 </div>
-              </div>
 
-              {/* Sign In Button */}
-              <button 
-                type="submit" 
-                className="w-full mt-6 bg-gradient-to-r from-[#4f46e5] to-[#06b6d4] hover:from-[#4338ca] hover:to-[#0891b2] text-white font-bold py-5 px-6 rounded-full transition-all shadow-[0_8px_20px_rgba(79,70,229,0.3)] hover:shadow-[0_10px_25px_rgba(79,70,229,0.4)] active:scale-[0.98] text-xl"
-              >
-                Sign up
-              </button>
-            </form>
+                {/* Password Field */}
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-700 dark:text-gray-300 ml-1">Password</label>
+                  <div className="relative">
+                    <input 
+                      type={showPassword ? "text" : "password"} 
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Enter your password"
+                      className="w-full bg-white dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 rounded-full py-4 pl-6 pr-12 text-gray-900 dark:text-white text-lg placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-400 transition-all font-medium"
+                      required
+                    />
+                    <button 
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sign In Button */}
+                <button 
+                  type="submit" 
+                  className="w-full mt-2 bg-gradient-to-r from-[#4f46e5] to-[#06b6d4] hover:from-[#4338ca] hover:to-[#0891b2] text-white font-bold py-4 px-6 rounded-full transition-all shadow-[0_8px_20px_rgba(79,70,229,0.3)] hover:shadow-[0_10px_25px_rgba(79,70,229,0.4)] active:scale-[0.98] text-xl"
+                >
+                  Sign In
+                </button>
+              </form>
+            </div>
             
-            <div className="mt-16 text-center">
-              <p className="text-sm font-medium text-gray-400">
+            <div className="mt-auto mb-2 text-center text-sm">
+              <p className="font-medium text-gray-400">
                 By using this service, you agree to our <a href="#" className="text-indigo-600 hover:underline">Terms of Use</a><br/>
                 and <a href="#" className="text-indigo-600 hover:underline">Privacy Policy</a>
               </p>

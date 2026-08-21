@@ -50,6 +50,7 @@ class RecordResponse(BaseModel):
 class RecordCompareRequest(BaseModel):
     record_id_1: str
     record_id_2: str
+    language: str | None = "en"
 
 
 class AIRecordSummary(BaseModel):

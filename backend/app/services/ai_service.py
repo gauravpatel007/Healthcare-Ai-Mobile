@@ -27,8 +27,8 @@ def _get_groq_client():
     global _groq_client
     if _groq_client is None and settings.GROQ_API_KEY:
         try:
-            from groq import Groq
-            _groq_client = Groq(api_key=settings.GROQ_API_KEY)
+            from groq import AsyncGroq
+            _groq_client = AsyncGroq(api_key=settings.GROQ_API_KEY)
             logger.info("Groq AI client initialized successfully")
         except Exception as e:
             logger.warning("Failed to initialize Groq client: %s", e)
@@ -59,6 +59,9 @@ SYSTEM_PROMPTS = {
         "Format the response as structured JSON with keys: urgency, conditions (list of {condition, probability}), "
         "specialists (list), recommendations (list)."
     ),
+    "symptom_validate": (
+        "You are a medical triage filter. Only accept text that could reasonably describe a health issue."
+    ),
     "nutrition": (
         "You are a nutrition expert AI. Based on user profile (age, weight, height, gender, conditions, allergies), "
         "provide personalized meal suggestions, dietary recommendations, and nutritional advice. "
@@ -73,7 +76,14 @@ SYSTEM_PROMPTS = {
         "You are a compassionate mental health support AI. Analyze mood patterns and journal entries. "
         "Provide supportive insights, coping strategies, and wellness recommendations. "
         "For concerning patterns, always recommend professional help. "
-        "Include Indian helpline numbers when appropriate (iCall: 9152987821)."
+        "Keep your response concise (under 4 paragraphs) and DO NOT repeat yourself. "
+        "If recommending helplines, include Indian helpline numbers (iCall: 9152987821) exactly ONCE at the very end of your response."
+    ),
+    "mental_trend": (
+        "You are a mental health trend analyzer. Given a list of recent journal entries (oldest to newest), "
+        "determine if there is a concerning downward trend in the user's emotional state (e.g., increasing anxiety, depression, burnout). "
+        "If the user shows a continuous downward trend or severe distress, recommend an action. "
+        "Format the response as structured JSON with keys: 'trend_detected' (boolean), 'proactive_action' (string or null: e.g., 'suggest_meditation', 'alert_emergency', null if okay)."
     ),
     "report_parser": (
         "You are a highly accurate medical data extraction AI. Given the raw text extracted from a medical lab report, "
@@ -84,10 +94,63 @@ SYSTEM_PROMPTS = {
         "Do NOT include units in the values, just numbers. Example JSON: {\"Hemoglobin\": 14.2, \"Blood Sugar\": 95, \"Cholesterol\": 180}. "
         "If a metric is not found, do not include it in the JSON."
     ),
+    "organ_suitability": (
+        "You are an AI medical pre-screening assistant for organ donation. "
+        "Based on the user's health profile and their questionnaire answers, evaluate their general suitability "
+        "as an organ donor. Highlight any potential contraindications (like recent infections, severe conditions, heavy smoking/alcohol) "
+        "and return a recommendation (Eligible, Proceed with Caution, Not Eligible) with concise reasons. "
+        "Keep it professional, empathetic, and concise (3-4 paragraphs). "
+        "Always include a disclaimer that this is only a preliminary AI assessment and final decisions are made by medical professionals at the time of donation."
+    ),
+    "interactions": (
+        "You are a pharmacology AI expert. Your task is to identify known severe or moderate drug interactions between the provided list of medications. "
+        "If there are ANY interactions, format the response strictly with bullet points starting with '* '. "
+        "CRITICAL FORMATTING RULES: You MUST use markdown bold (e.g., **Medicine A + Medicine B**) for the medicine names at the very beginning of the bullet point. "
+        "You MUST also use bold for keywords like **Precautions:** and **Side effects:**. "
+        "If there are NO interactions between the medications, you MUST reply with exactly 'NO_INTERACTIONS' and nothing else."
+    )
 }
 
 
 # ─── Core AI Function ────────────────────────────────────────────────
+
+_dynamic_model = None
+
+async def _get_best_model(client) -> str:
+    global _dynamic_model
+    if _dynamic_model:
+        return _dynamic_model
+    try:
+        models_response = await client.models.list()
+        model_ids = [m.id for m in models_response.data]
+        
+        # We MUST ONLY use openai/gpt-oss-120b for text models as requested by the user previously
+        if "openai/gpt-oss-120b" in model_ids:
+            _dynamic_model = "openai/gpt-oss-120b"
+            return _dynamic_model
+        # Priority 2: Gemma 2
+        for m_id in model_ids:
+            if "gemma2" in m_id.lower():
+                _dynamic_model = m_id
+                return _dynamic_model
+        # Priority 3: Mixtral
+        for m_id in model_ids:
+            if "mixtral" in m_id.lower():
+                _dynamic_model = m_id
+                return _dynamic_model
+                
+        # If no preferred model found but there are models, pick the first one
+        if model_ids:
+            _dynamic_model = model_ids[0]
+            return _dynamic_model
+            
+    except Exception as e:
+        logger.warning("Failed to fetch dynamic models: %s", e)
+    
+    # Fallback to configured model if api fails
+    _dynamic_model = "openai/gpt-oss-120b"
+    return _dynamic_model
+
 
 async def generate_ai_response(
     module: str,
@@ -119,37 +182,43 @@ async def generate_ai_response(
 
     if context:
         system_prompt += f"\n\nUser Health Context:\n{context}"
+        
+    global _dynamic_model
 
-    try:
-        start_t = time.time()
-        chat_completion = client.chat.completions.create(
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message},
-            ],
-            model=settings.GROQ_MODEL,
-            max_tokens=max_tokens,
-            temperature=0.7,
-        )
-        response = chat_completion.choices[0].message.content
-        logger.info("Groq AI response generated for module: %s", module)
-
-        # Log AI Usage
+    for attempt in range(3):
+        current_model = await _get_best_model(client)
         try:
-            async with AsyncSessionLocal() as db:
-                pt = chat_completion.usage.prompt_tokens if hasattr(chat_completion, 'usage') and chat_completion.usage else 0
-                ct = chat_completion.usage.completion_tokens if hasattr(chat_completion, 'usage') and chat_completion.usage else 0
-                elapsed_ms = int((time.time() - start_t) * 1000)
-                db.add(AIUsageLog(feature=module, model_used=settings.GROQ_MODEL, prompt_tokens=pt, completion_tokens=ct, response_time_ms=elapsed_ms))
-                await db.commit()
+            start_t = time.time()
+            chat_completion = await client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_message},
+                ],
+                model=current_model,
+                temperature=0.7,
+            )
+            response = chat_completion.choices[0].message.content
+            logger.info("Groq AI response generated for module: %s using model: %s", module, current_model)
+
+            # Log AI Usage
+            try:
+                async with AsyncSessionLocal() as db:
+                    pt = chat_completion.usage.prompt_tokens if hasattr(chat_completion, 'usage') and chat_completion.usage else 0
+                    ct = chat_completion.usage.completion_tokens if hasattr(chat_completion, 'usage') and chat_completion.usage else 0
+                    elapsed_ms = int((time.time() - start_t) * 1000)
+                    db.add(AIUsageLog(feature=module, model_used=current_model, prompt_tokens=pt, completion_tokens=ct, response_time_ms=elapsed_ms))
+                    await db.commit()
+            except Exception as e:
+                logger.error("Failed to log AI usage: %s", e)
+
+            return response
+
         except Exception as e:
-            logger.error("Failed to log AI usage: %s", e)
-
-        return response
-
-    except Exception as e:
-        logger.error("Groq API error: %s", e)
-        return _get_fallback_response(module, user_message)
+            logger.error(f"Groq API error on model {current_model}: {e}")
+            _dynamic_model = None  # Reset so it picks a different one next time or falls back
+            if attempt == 2:
+                # If we exhausted attempts, return fallback
+                return _get_fallback_response(module, user_message)
 
 
 async def generate_json_response(
@@ -183,36 +252,43 @@ async def generate_json_response(
     if context:
         system_prompt += f"\n\nContext:\n{context}"
 
-    try:
-        start_t = time.time()
-        chat_completion = client.chat.completions.create(
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message},
-            ],
-            model=settings.GROQ_MODEL,
-            max_tokens=max_tokens,
-            temperature=0.1,
-            response_format={"type": "json_object"},
-        )
-        response_text = chat_completion.choices[0].message.content
-        
-        # Log AI Usage
+    global _dynamic_model
+
+    for attempt in range(3):
+        current_model = await _get_best_model(client)
         try:
-            async with AsyncSessionLocal() as db:
-                pt = chat_completion.usage.prompt_tokens if hasattr(chat_completion, 'usage') and chat_completion.usage else 0
-                ct = chat_completion.usage.completion_tokens if hasattr(chat_completion, 'usage') and chat_completion.usage else 0
-                elapsed_ms = int((time.time() - start_t) * 1000)
-                db.add(AIUsageLog(feature=module, model_used=settings.GROQ_MODEL, prompt_tokens=pt, completion_tokens=ct, response_time_ms=elapsed_ms))
-                await db.commit()
+            start_t = time.time()
+            chat_completion = await client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_message},
+                ],
+                model=current_model,
+                temperature=0.1,
+                response_format={"type": "json_object"},
+            )
+            response_text = chat_completion.choices[0].message.content
+            
+            # Log AI Usage
+            try:
+                async with AsyncSessionLocal() as db:
+                    pt = chat_completion.usage.prompt_tokens if hasattr(chat_completion, 'usage') and chat_completion.usage else 0
+                    ct = chat_completion.usage.completion_tokens if hasattr(chat_completion, 'usage') and chat_completion.usage else 0
+                    elapsed_ms = int((time.time() - start_t) * 1000)
+                    db.add(AIUsageLog(feature=module, model_used=current_model, prompt_tokens=pt, completion_tokens=ct, response_time_ms=elapsed_ms))
+                    await db.commit()
+            except Exception as e:
+                logger.error("Failed to log AI usage: %s", e)
+
+            return json.loads(response_text)
+
         except Exception as e:
-            logger.error("Failed to log AI usage: %s", e)
+            logger.error(f"Groq JSON API error on model {current_model}: {e}")
+            _dynamic_model = None  # Reset so it picks a different one next time or falls back
+            if attempt == 2:
+                # If we exhausted attempts, return error json
+                return {"_error": str(e)}
 
-        return json.loads(response_text)
-
-    except Exception as e:
-        logger.error("Groq JSON API error: %s", e)
-        return {"_error": str(e)}
 
 
 # ─── Fallback Responses ─────────────────────────────────────────────
@@ -250,4 +326,6 @@ def _fallback_assistant(q: str) -> str:
     if "tip" in q or "advice" in q:
         return "💡 Health Tip: Drink at least 8 glasses of water daily, take a 30-minute walk, get 7-9 hours of sleep, and eat 5 servings of fruits and vegetables daily."
 
-    return f'I understand you\'re asking about "{q}". For the most accurate information, please consult a healthcare professional. I can help with medicine info, first aid guidance, and general health tips.'
+    # Truncate q to avoid dumping massive prompts to the UI
+    truncated_q = q[:50] + "..." if len(q) > 50 else q
+    return f'I understand you\'re asking about "{truncated_q}". For the most accurate information, please consult a healthcare professional. I can help with medicine info, first aid guidance, and general health tips.'
