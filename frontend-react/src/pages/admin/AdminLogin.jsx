@@ -13,7 +13,7 @@ const AdminLogin = () => {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    if (username === 'admin' && password === 'admin') {
+    if (username === 'admin' && password === 'LifeOS_Xy$89*Kp@Lq2!') {
       localStorage.setItem('admin_logged_in', 'true');
       navigate('/admin');
       return;
