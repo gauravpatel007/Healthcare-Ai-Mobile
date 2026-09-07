@@ -501,6 +501,18 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
     }
   };
 
+  const isDemoMode = localStorage.getItem('lifeos_demo_mode') === 'true';
+
+  if (isDemoMode) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[70vh] text-center text-gray-500">
+        <ShieldAlert className="w-16 h-16 mb-4 text-gray-400 mx-auto" />
+        <h2 className="text-xl font-bold mb-2">Settings Disabled</h2>
+        <p>Settings are disabled in Demo Mode to prevent account changes.</p>
+      </div>
+    );
+  }
+
   if (loading || !profile) {
     return (
       <div className="flex-1 flex items-center justify-center min-h-[100dvh]">

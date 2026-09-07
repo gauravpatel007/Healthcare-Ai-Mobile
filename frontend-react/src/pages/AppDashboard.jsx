@@ -63,6 +63,7 @@ const AppDashboard = () => {
   const { theme: userTheme, toggleTheme: toggleUserTheme } = useTheme('user_theme');
 
   const [currentUser, setCurrentUser] = useState({ name: 'Loading...', email: '' });
+  const [isDemoMode, setIsDemoMode] = useState(false);
   const [savedAccounts, setSavedAccounts] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -94,6 +95,10 @@ const AppDashboard = () => {
     if (!API.isAuthenticated()) {
       navigate('/');
       return;
+    }
+
+    if (localStorage.getItem('lifeos_demo_mode') === 'true') {
+      setIsDemoMode(true);
     }
 
     setSavedAccounts(API.getSavedAccounts());
@@ -149,6 +154,7 @@ const AppDashboard = () => {
 
   const handleLogout = (e, email = null) => {
     if (e) e.stopPropagation();
+    localStorage.removeItem('lifeos_demo_mode');
     API.logout(email);
   };
 
@@ -248,6 +254,17 @@ const AppDashboard = () => {
       // Spring transition config — snappy and responsive, matching the reference
       const springTransition = { type: 'spring', stiffness: 400, damping: 25, mass: 0.8 };
 
+      if (item.id === 'settings' && isDemoMode) {
+        return (
+          <div key={item.id} className={`flex items-center font-semibold relative z-10 text-gray-400 dark:text-gray-600 cursor-not-allowed ${isSidebarOpen ? 'px-3 py-2.5' : 'w-10 h-10 mx-auto justify-center'}`} title="Settings (Disabled in Demo)">
+            <div className={`flex items-center ${isSidebarOpen ? 'gap-3 w-full' : 'justify-center'}`}>
+              <Icon className="w-5 h-5 shrink-0 opacity-50" strokeWidth={2} />
+              {isSidebarOpen && <span className="truncate text-sm font-semibold tracking-wide flex items-center gap-2">{item.label} <span className="text-[10px] bg-gray-200 dark:bg-gray-800 px-1.5 py-0.5 rounded text-gray-500">Locked</span></span>}
+            </div>
+          </div>
+        );
+      }
+
       // Active items: no hover animation
       if (isActive) {
         return (
@@ -303,7 +320,18 @@ const AppDashboard = () => {
 
   return (
     <div className={userTheme === 'dark' ? 'dark' : ''} style={{ colorScheme: userTheme }} data-theme={userTheme}>
-      <div className="fixed inset-0 z-50 flex bg-gray-50 dark:bg-black text-gray-900 dark:text-gray-100 font-sans overflow-hidden">
+      {isDemoMode && (
+        <div className="w-full bg-blue-600 text-white text-xs md:text-sm font-semibold py-1.5 px-4 flex justify-between items-center z-[100] relative shadow-md">
+          <div className="flex items-center gap-2">
+            <span>👁</span>
+            <span>Demo Mode — Exploring as gaurav@lifeos.com</span>
+          </div>
+          <button onClick={handleLogout} className="bg-white/20 hover:bg-white/30 text-white px-3 py-1 rounded text-xs transition-colors">
+            Exit Demo
+          </button>
+        </div>
+      )}
+      <div className="fixed inset-0 z-50 flex bg-gray-50 dark:bg-black text-gray-900 dark:text-gray-100 font-sans overflow-hidden" style={{ top: isDemoMode ? '32px' : '0' }}>
 
         {/* Sidebar */}
         <aside

@@ -19,8 +19,8 @@ const LoginModal = ({ show, onClose }) => {
   const [twoFactorCode, setTwoFactorCode] = useState('');
 
   // Login form
-  const [email, setEmail] = useState('gaurav@lifeos.com');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [name, setName] = useState('');
 
@@ -464,10 +464,6 @@ const LoginModal = ({ show, onClose }) => {
   const switchToSignUp = (e) => {
     e.preventDefault();
     setError('');
-    if (email === 'gaurav@lifeos.com') {
-      setEmail('');
-      setPassword('');
-    }
     setMode('signup');
   };
 
@@ -480,7 +476,7 @@ const LoginModal = ({ show, onClose }) => {
   const switchToForgot = (e) => {
     e.preventDefault();
     setError('');
-    if (email && email !== 'gaurav@lifeos.com') {
+    if (email) {
       setForgotEmail(email);
     }
     setMode('forgot');

@@ -1,14 +1,41 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HeartPulse, Pill, Stethoscope, Clock3, Moon, Footprints, Flame, Bot, Check, Bell, BarChart3 } from 'lucide-react';
+import { HeartPulse, Pill, Stethoscope, Clock3, Moon, Footprints, Flame, Bot, Check, Bell, BarChart3, Eye } from 'lucide-react';
 import LandingChatbot from '../components/LandingChatbot';
 import LoginModal from '../components/LoginModal';
 import { useSettings } from '../contexts/SettingsContext';
+import API from '../utils/api';
 
 const LandingPage = () => {
   const [showLogin, setShowLogin] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(false);
   const navigate = useNavigate();
   const { settings } = useSettings();
+
+  // Watch Demo: log in as the sample account without showing the login modal
+  const handleWatchDemo = async () => {
+    if (demoLoading) return;
+    setDemoLoading(true);
+    try {
+      const response = await API.request('/auth/login', {
+        method: 'POST',
+        body: { email: 'gaurav@lifeos.com', password: 'password123' },
+      });
+      const tokenData = response?.data || response;
+      if (tokenData?.access_token) API.setToken(tokenData.access_token);
+      if (tokenData?.refresh_token) API.setRefreshToken(tokenData.refresh_token);
+      API.setAuthenticated(true);
+      await API.saveCurrentAccount(tokenData?.refresh_token);
+      localStorage.setItem('lifeos_demo_mode', 'true');
+      window.location.href = '/app';
+    } catch (err) {
+      console.error('Demo login failed:', err);
+      // Fallback: open normal login modal
+      setShowLogin(true);
+    } finally {
+      setDemoLoading(false);
+    }
+  };
 
   const [landingTheme, setLandingTheme] = useState(() => {
     return localStorage.getItem('landing_theme') || 'light';
@@ -277,16 +304,18 @@ const LandingPage = () => {
                 Get Started Free <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
               </button>
               <button
+                onClick={handleWatchDemo}
+                disabled={demoLoading}
                 className="w-full sm:w-auto px-8 py-3.5 rounded-full font-semibold flex items-center gap-2 justify-center cursor-pointer transition-all hover:shadow-md border text-[15px]"
                 style={{
                   background: 'rgba(255,255,255,0.75)',
                   backdropFilter: 'blur(12px)',
                   color: '#0c172e',
                   borderColor: 'rgba(255,255,255,0.8)',
+                  opacity: demoLoading ? 0.7 : 1,
                 }}
               >
-                <span className="material-symbols-outlined text-[20px] text-blue-600">play_circle</span>
-                Watch Demo
+                {demoLoading ? 'Loading Demo...' : <>Watch Demo <Eye size={18} className="text-blue-600" /></>}
               </button>
             </div>
           </div>
