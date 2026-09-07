@@ -1074,32 +1074,9 @@ async def get_health_services(db: AsyncSession = Depends(get_db)):
             "user_phone": user_phone or "No Phone",
             "user_id": sos.user_id
         })
-    # 3. Fetch Registered Organ Donors
-    donors_res = await db.execute(
-        select(UserProfile, User.email)
-        .join(User, UserProfile.user_id == User.id)
-        .where(UserProfile.organ_donor == True)
-    )
-    
-    organ_donors = []
-    for profile, email in donors_res.all():
-        prefs = getattr(profile, "organ_preferences", {}) or {}
-        pledged = [k for k, v in prefs.items() if v]
-        organ_donors.append({
-            "id": profile.id,
-            "user_id": profile.user_id,
-            "name": profile.name,
-            "email": email,
-            "age": profile.age,
-            "blood_type": profile.blood_type,
-            "preferences": pledged,
-            "registered_date": str(profile.updated_at or profile.created_at or "")
-        })
-        
     return {
         "appointments": appointments,
-        "emergencies": emergencies,
-        "organ_donors": organ_donors
+        "emergencies": emergencies
     }
 
 from pydantic import BaseModel

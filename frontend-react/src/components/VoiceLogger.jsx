@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import API from '../utils/api';
 
 /**
@@ -11,6 +12,8 @@ import API from '../utils/api';
  *   processing  → sending command to backend AI
  */
 const VoiceLogger = ({ onLogSuccess, onAction }) => {
+  const location = useLocation();
+  const isAiChat = location.pathname.includes('/app/ai-chat');
   const [state, setState] = useState('idle'); // idle | passive | active | processing
   const [command, setCommand] = useState('');
   const [interimText, setInterimText] = useState('');
@@ -465,16 +468,7 @@ const VoiceLogger = ({ onLogSuccess, onAction }) => {
   return (
     <>
       {/* Fixed bottom-right floating assistant */}
-      <div style={{
-        position: 'fixed',
-        bottom: '24px',
-        right: '24px',
-        zIndex: 999999,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'flex-end',
-        gap: '10px',
-      }}>
+      <div className={`fixed z-[999999] flex flex-col items-end gap-2.5 right-4 md:right-6 ${isAiChat ? 'bottom-[calc(9.5rem+env(safe-area-inset-bottom))] md:bottom-20' : 'bottom-[calc(6rem+env(safe-area-inset-bottom))] md:bottom-6'}`}>
         {/* Chat window — shown when chat is open */}
         {isChatOpen && (
           <div className="bg-white dark:bg-gray-800 rounded-2xl w-[320px] max-h-[400px] flex flex-col shadow-[0_10px_40px_rgba(0,0,0,0.2)] border border-slate-200 dark:border-gray-700 overflow-hidden mb-2" style={{ animation: 'fadeSlideUp 0.3s ease' }}>

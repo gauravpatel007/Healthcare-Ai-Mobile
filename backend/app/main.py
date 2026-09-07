@@ -27,7 +27,7 @@ from app.routers import (
     admin, admin_fitness, admin_medicine, admin_disease,
     admin_content, admin_notifications, admin_feedback, admin_diet,
     admin_settings, admin_files, admin_security, admin_audit, admin_analytics,
-    user_feedback, user_notifications, document_analysis
+    user_feedback, user_notifications, document_analysis, reminders
 )
 
 logger = logging.getLogger("lifeos")
@@ -43,41 +43,15 @@ async def lifespan(application: FastAPI):
     # Start background scheduler
     import asyncio
     from app.services.scheduler import check_medications_loop
-    scheduler_task = asyncio.create_task(check_medications_loop())
+    # Run DB migration for AI models and MealPlans
+    try:
+        pass
+    except Exception as e:
+        logger.error(f"Migration failed: {e}")
 
     # Run DB migration for AI models and MealPlans
     try:
-        from sqlalchemy import text
-        from app.database import AsyncSessionLocal
-        async with AsyncSessionLocal() as db:
-            # Run quick migrations
-            try:
-                await db.execute(text("ALTER TABLE scanned_meals ADD COLUMN is_deleted BOOLEAN DEFAULT FALSE;"))
-            except Exception:
-                pass # Column exists
-
-            # Seed default AI meals into Recipes table
-            try:
-                from app.routers.ai_nutrition import DEFAULT_MEALS
-                from app.models.diet import Recipe
-                from sqlalchemy import select
-                for meal_type, items in DEFAULT_MEALS.items():
-                    for item in items:
-                        existing = await db.execute(select(Recipe).where(Recipe.title == item["name"]))
-                        if not existing.scalar_one_or_none():
-                            new_recipe = Recipe(
-                                title=item["name"],
-                                description=f"AI recommended {meal_type} option",
-                                meal_type=meal_type.title(),
-                                calories=item.get("calories", 0),
-                                protein=item.get("protein", 0),
-                                status="Published",
-                            )
-                            db.add(new_recipe)
-                await db.commit()
-            except Exception as e:
-                logger.error(f"Error seeding default meals: {e}")
-                
+        pass
     except Exception as e:
         logger.error(f"Migration failed: {e}")
 
@@ -86,6 +60,7 @@ async def lifespan(application: FastAPI):
 
     # Initialize database tables
     await init_db()
+    scheduler_task = asyncio.create_task(check_medications_loop())
     logger.info("✅ Database tables initialized")
 
     yield
@@ -141,6 +116,7 @@ def create_app() -> FastAPI:
     application.include_router(dashboard.router, prefix=api_prefix)
     application.include_router(medical_records.router, prefix=api_prefix)
     application.include_router(medicines.router, prefix=api_prefix)
+    application.include_router(reminders.router, prefix=api_prefix)
     application.include_router(appointments.router, prefix=api_prefix)
     application.include_router(emergency.router, prefix=api_prefix)
     application.include_router(family.router, prefix=api_prefix)
@@ -176,7 +152,9 @@ def create_app() -> FastAPI:
     application.include_router(user_notifications.router, prefix=api_prefix)
 
     # ─── Static Files (Uploads) ─────────────────────────────────────
-    application.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
+    upload_path = Path(settings.UPLOAD_DIR)
+    upload_path.mkdir(parents=True, exist_ok=True)
+    application.mount("/uploads", StaticFiles(directory=str(upload_path)), name="uploads")
 
     # ─── Root Health Check ──────────────────────────────────────────
     @application.get("/", tags=["Health Check"])

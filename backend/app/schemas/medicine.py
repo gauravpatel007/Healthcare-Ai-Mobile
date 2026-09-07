@@ -4,10 +4,18 @@ LifeOS Backend — Medicine Schemas
 
 from datetime import date, datetime
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+import re
+
+def valid_medicine_times(value):
+    if value is not None and (len(value) > 24 or len(set(value)) != len(value) or
+        any(not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", clock) for clock in value)):
+        raise ValueError("Medicine times must be unique 24-hour HH:MM values")
+    return value
 
 
 class MedicineCreate(BaseModel):
+    _times = field_validator("times")(valid_medicine_times)
     name: str = Field(..., min_length=1, max_length=255)
     dosage: str = ""
     type: str = Field(default="tablet", pattern="^(tablet|capsule|syrup|injection|drops|cream)$")
@@ -21,6 +29,7 @@ class MedicineCreate(BaseModel):
 
 
 class MedicineUpdate(BaseModel):
+    _times = field_validator("times")(valid_medicine_times)
     name: str | None = Field(None, min_length=1, max_length=255)
     dosage: str | None = None
     type: str | None = None

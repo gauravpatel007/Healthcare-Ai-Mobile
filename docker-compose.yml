@@ -7,13 +7,13 @@ services:
     environment:
       POSTGRES_USER: lifeos
       POSTGRES_PASSWORD: YOUR_SECURE_PASSWORD
-      POSTGRES_DB: lifeos_db
+      POSTGRES_DB: lifeos_mobile_db
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U lifeos -d lifeos_db"]
+      test: ["CMD-SHELL", "pg_isready -U lifeos -d lifeos_mobile_db"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -28,7 +28,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql+asyncpg://xxxxx/xxxxx
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://lifeos:YOUR_SECURE_PASSWORD@db:5432/lifeos_mobile_db}
       SECRET_KEY: ${SECRET_KEY:-change-this-to-a-random-secret-key-in-production}
       ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: 30
@@ -37,18 +37,20 @@ services:
       GROQ_MODEL: ${GROQ_MODEL:-llama-3.3-70b-versatile}
       UPLOAD_DIR: /app/uploads
       MAX_FILE_SIZE_MB: 10
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5500,http://127.0.0.1:5500}
-      DEBUG: ${DEBUG:-true}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost,https://localhost,capacitor://localhost,http://localhost:5173,http://localhost:3000}
+      DEBUG: ${DEBUG:-false}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     volumes:
       - upload_data:/app/uploads
+      - ./backend:/app/backend
     depends_on:
       db:
         condition: service_healthy
     command: >
       sh -c "
-        alembic upgrade head 2>/dev/null || echo 'Alembic migration skipped (tables auto-created in DEBUG)' &&
-        uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+        cd backend &&
+        alembic upgrade head 2>/dev/null || echo 'Alembic migration skipped' &&
+        uvicorn app.main:app --host 0.0.0.0 --port 8000
       "
 
   # ─── Chatbot Backend (Flask) ──────────────────────────────────────

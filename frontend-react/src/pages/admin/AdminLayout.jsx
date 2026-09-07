@@ -16,13 +16,14 @@ import {
   Pill,
   Thermometer,
   MessageSquare,
-  UtensilsCrossed,
   Folder,
   Shield,
   ClipboardList,
   BarChart3
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import AdminBottomNav from './AdminBottomNav';
+import AdminTopNav from './AdminTopNav';
 
 const AdminLayout = () => {
   const location = useLocation();
@@ -30,6 +31,7 @@ const AdminLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const { settings } = useSettings();
   const { theme: adminTheme, toggleTheme: toggleAdminTheme } = useTheme('admin_theme');
+  const topNavRef = useRef(null);
 
   // Check if logged in
   const isLoggedIn = localStorage.getItem('admin_logged_in') === 'true';
@@ -50,7 +52,6 @@ const AdminLayout = () => {
     { name: 'Medicine DB', path: '/admin/medicine-db', icon: Pill },
     { name: 'Disease DB', path: '/admin/diseases', icon: HeartPulse },
     { name: 'Symptoms', path: '/admin/symptoms', icon: Thermometer },
-    { name: 'Diet Management', path: '/admin/diet', icon: UtensilsCrossed },
     { name: 'Health Services', path: '/admin/health', icon: HeartPulse },
     { name: 'File Manager', path: '/admin/file-manager', icon: Folder },
     { name: 'Security', path: '/admin/security', icon: Shield },
@@ -58,32 +59,62 @@ const AdminLayout = () => {
     { name: 'Settings', path: '/admin/settings', icon: Settings },
   ];
 
+  // Mobile nav grouping
+  const bottomNavItems = [
+    navItems.find(i => i.name === 'Overview'),
+    navItems.find(i => i.name === 'Users'),
+    navItems.find(i => i.name === 'Health Services'),
+    navItems.find(i => i.name === 'Security'),
+    navItems.find(i => i.name === 'Settings'),
+  ];
+  
+  const topNavItems = navItems.filter(item => !bottomNavItems.includes(item));
+
+  const checkIsActive = (itemPath) => {
+    if (itemPath === '/admin') {
+      return location.pathname === '/admin' || location.pathname === '/admin/';
+    }
+    return location.pathname === itemPath || location.pathname.startsWith(itemPath + '/');
+  };
+
+  // Scroll active top nav item into view on mobile
+  useEffect(() => {
+    if (topNavRef.current) {
+      const activeEl = topNavRef.current.querySelector('.active-admin-nav');
+      if (activeEl) {
+        const container = topNavRef.current;
+        const scrollLeft = activeEl.offsetLeft - container.offsetWidth / 2 + activeEl.offsetWidth / 2;
+        container.scrollTo({ left: scrollLeft, behavior: 'smooth' });
+      }
+    }
+  }, [location.pathname]);
+
   return (
     <div className={adminTheme === 'dark' ? 'dark' : ''} style={{colorScheme: adminTheme}} data-theme={adminTheme}>
     <div className="fixed inset-0 z-50 flex bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
       
-      {/* Sidebar */}
+      {/* Desktop Sidebar */}
       <aside 
-        className={`${
+        className={`hidden md:flex ${
           isSidebarOpen ? 'w-64' : 'w-20'
-        } transition-all duration-300 ease-in-out bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col justify-between`}
+        } transition-all duration-300 ease-in-out bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex-col justify-between shrink-0`}
       >
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Brand */}
           <div className="h-16 shrink-0 flex items-center justify-center border-b border-gray-200 dark:border-gray-600 dark:border-gray-700 px-4">
             {isSidebarOpen ? (
-              <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+              <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
                 LifeOS Admin
               </h1>
             ) : (
-              <span className="text-xl font-bold text-blue-600 dark:text-blue-400">A</span>
+              <span className="text-xl font-bold text-indigo-600 dark:text-indigo-400">A</span>
             )}
           </div>
 
           {/* Nav Links */}
           <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
             {navItems.map((item) => {
-              const isActive = location.pathname === item.path || (item.path !== '/admin' && location.pathname.startsWith(item.path));
+              const isActive = checkIsActive(item.path);
               const Icon = item.icon;
               return (
                 <Link
@@ -91,12 +122,12 @@ const AdminLayout = () => {
                   to={item.path}
                   className={`flex items-center space-x-3 p-3 rounded-xl transition-all duration-200 ${
                     isActive 
-                      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium shadow-sm' 
+                      ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-medium shadow-sm' 
                       : 'hover:bg-gray-100 dark:hover:bg-gray-700/50 text-gray-600 dark:text-gray-400'
                   }`}
                   title={!isSidebarOpen ? item.name : ''}
                 >
-                  <Icon className={`w-5 h-5 ${isActive ? 'text-blue-600 dark:text-blue-400' : ''}`} />
+                  <Icon className={`w-5 h-5 ${isActive ? 'text-indigo-600 dark:text-indigo-400' : ''}`} />
                   {isSidebarOpen && <span>{item.name}</span>}
                 </Link>
               );
@@ -108,7 +139,7 @@ const AdminLayout = () => {
         <div className="p-4 border-t border-gray-200 dark:border-gray-600 dark:border-gray-700">
            <button 
              onClick={handleLogout}
-             className="w-full flex items-center space-x-3 p-3 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 dark:bg-red-900/30 dark:hover:bg-red-900/30 dark:bg-red-900/30 dark:hover:bg-red-900/30 dark:bg-red-900/30 dark:hover:bg-red-900/20 rounded-xl transition-colors duration-200"
+             className="w-full flex items-center space-x-3 p-3 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors duration-200"
            >
              <LogOut className="w-5 h-5" />
              {isSidebarOpen && <span>Logout</span>}
@@ -116,45 +147,56 @@ const AdminLayout = () => {
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden">
+      {/* Main Content Area */}
+      <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
         {/* Top Header */}
-        <header className="h-16 bg-white dark:bg-gray-800/80 dark:bg-gray-800/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-600 dark:border-gray-700 flex items-center justify-between px-6 z-10 shadow-sm">
-          <div className="flex items-center">
+        <header className="min-h-[56px] md:min-h-[64px] pt-[env(safe-area-inset-top)] bg-white/90 dark:bg-gray-800/90 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4 md:px-6 z-30 shrink-0">
+          <div className="flex items-center flex-1 min-w-0">
+            {/* Mobile Brand */}
+            <div className="flex md:hidden items-center justify-start mr-3 shrink-0">
+              <span className="text-lg font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent truncate">
+                LifeOS Admin
+              </span>
+            </div>
+
+            {/* Desktop Sidebar Toggle */}
             <button 
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2 mr-4 rounded-lg hover:bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-700 transition-colors"
+              className="hidden md:block p-2 mr-4 rounded-lg hover:bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-700 transition-colors"
             >
               <LayoutDashboard className="w-5 h-5 text-gray-500 dark:text-gray-400" />
             </button>
-            <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-300 dark:text-gray-100">
-              {navItems.find(i => location.pathname === i.path || (i.path !== '/admin' && location.pathname.startsWith(i.path)))?.name || 'Admin Panel'}
+            <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-300 hidden md:block truncate">
+              {navItems.find(i => checkIsActive(i.path))?.name || 'Admin Panel'}
             </h2>
           </div>
           
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 md:space-x-4 shrink-0">
             <ThemeToggle theme={adminTheme} toggleTheme={toggleAdminTheme} />
-            <Link to="/admin/feedback" title="Feedback" className="p-2 rounded-full hover:bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-700 transition-colors">
-              <MessageSquare className="w-5 h-5 text-gray-600 dark:text-gray-300" />
-            </Link>
-            <Link to="/admin/notifications" title="Notifications" className="p-2 rounded-full hover:bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-700 relative transition-colors">
-              <Bell className="w-5 h-5 text-gray-600 dark:text-gray-300" />
-            </Link>
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-500 to-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-md">
+            <button onClick={handleLogout} className="md:hidden p-2 rounded-full hover:bg-gray-100 dark:bg-gray-700 transition-colors text-red-500">
+              <LogOut className="w-5 h-5" />
+            </button>
+            <div className="hidden md:flex items-center space-x-2">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm shadow-md">
                 A
               </div>
-              <span className="font-medium text-sm hidden md:block text-gray-700 dark:text-gray-200">Admin</span>
+              <span className="font-medium text-sm text-gray-700 dark:text-gray-200">Admin</span>
             </div>
           </div>
         </header>
 
+        {/* Mobile Secondary Nav */}
+        <AdminTopNav items={topNavItems} checkIsActive={checkIsActive} topNavRef={topNavRef} />
+
         {/* Page Content */}
-        <div className="flex-1 overflow-y-auto p-6 scroll-smooth">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 pb-16 md:pb-6 scroll-smooth z-10 relative">
           <Outlet />
         </div>
-      </main>
 
+        {/* Mobile Primary Nav */}
+        <AdminBottomNav items={bottomNavItems} checkIsActive={checkIsActive} />
+        
+      </main>
     </div>
     </div>
   );

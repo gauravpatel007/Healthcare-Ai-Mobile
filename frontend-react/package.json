@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",
-    "@capacitor/cli": "^8.5.0",
+    "@capacitor/cli": "^8.4.3",
     "@capacitor/core": "^8.5.0",
     "axios": "^1.6.7",
     "framer-motion": "^13.1.0",

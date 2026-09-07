@@ -50,14 +50,14 @@ const AIFitness = ({ voiceAction, onVoiceActionConsumed }) => {
   const { t } = useLang();
   const [stats, setStats] = useState({ steps: 0, calories_burned: 0, active_minutes: 0, distance_km: 0, step_goal: 10000 });
   const [currentCategory, setCurrentCategory] = useState('cardio');
-  const [customMinusVal, setCustomMinusVal] = useState('');
-  const [customAddVal, setCustomAddVal] = useState('');
   const [exercises, setExercises] = useState([]);
   const [weeklyPlan, setWeeklyPlan] = useState([]);
   const [selectedDayPlan, setSelectedDayPlan] = useState(null);
   const [dayPlanDetails, setDayPlanDetails] = useState(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
+  const [exerciseToLog, setExerciseToLog] = useState(null);
+  const [loggingDuration, setLoggingDuration] = useState(30);
 
   const regenerateWeeklyPlan = async () => {
     setIsGeneratingPlan(true);
@@ -187,52 +187,46 @@ const AIFitness = ({ voiceAction, onVoiceActionConsumed }) => {
     }
   };
 
-  const addSteps = async (count) => {
-    if (count === 0) return;
-    try {
-      await API.post(`/ai/fitness/steps?steps=${count}`);
-      await refreshStats();
-    } catch (e) {
-      console.error(e);
+
+
+  const handleLogClick = (e) => {
+    setExerciseToLog(e);
+    let base = 30;
+    if (e.duration) {
+      const m = String(e.duration).match(/\d+/);
+      if (m) base = parseInt(m[0]);
     }
+    setLoggingDuration(base);
   };
 
-  const handleCustomMinus = (e) => {
-    if (e.key === 'Enter') {
-      const count = parseInt(customMinusVal, 10);
-      if (!isNaN(count) && count > 0) {
-        if (count > stats.steps) {
-          toast.error(t('err_steps_exceed'));
-        } else {
-          addSteps(-count);
-        }
-      }
-      setCustomMinusVal('');
-    }
-  };
-
-  const logExercise = async (name, calories) => {
+  const confirmLogExercise = async () => {
+    if (!exerciseToLog) return;
     try {
-      await API.post(`/ai/fitness/log?exercise_name=${encodeURIComponent(name)}&duration_minutes=30&calories=${calories}`);
+      const baseDuration = parseInt(String(exerciseToLog.duration).match(/\d+/)?.[0] || '30');
+      const scaledCalories = Math.round((exerciseToLog.calories / baseDuration) * loggingDuration);
+      
+      await API.post(`/ai/fitness/log?exercise_name=${encodeURIComponent(exerciseToLog.name)}&duration_minutes=${loggingDuration}&calories=${scaledCalories}`);
       await refreshStats();
-      toast.success(`${name} logged! Burned ${calories} calories`);
+      toast.success(`${exerciseToLog.name} logged! Burned ${scaledCalories} calories in ${loggingDuration} min`);
+      setExerciseToLog(null);
     } catch (e) {
       console.error(e);
       toast.error(t('err_log_exercise'));
     }
   };
 
+  const logExerciseDirect = async (name, calories, durationMins) => {
+    try {
+      await API.post(`/ai/fitness/log?exercise_name=${encodeURIComponent(name)}&duration_minutes=${durationMins}&calories=${calories}`);
+      await refreshStats();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   useEffect(() => {
     if (voiceAction && voiceAction.target_feature === 'ai-fitness') {
-      if (voiceAction.action_name === 'add_steps' && voiceAction.data?.steps) {
-        addSteps(voiceAction.data.steps);
-      } else if (voiceAction.action_name === 'remove_steps' && voiceAction.data?.steps) {
-        if (voiceAction.data.steps > stats.steps) {
-          toast.error(t('err_steps_exceed') || 'Cannot remove more steps than you have today.');
-        } else {
-          addSteps(-voiceAction.data.steps);
-        }
-      } else if (voiceAction.action_name === 'regenerate_plan') {
+      if (voiceAction.action_name === 'regenerate_plan') {
         const regenerate = async () => {
           try {
             const planRes = await API.post('/ai/fitness/regenerate-plan');
@@ -245,7 +239,7 @@ const AIFitness = ({ voiceAction, onVoiceActionConsumed }) => {
         };
         regenerate();
       } else if (voiceAction.action_name === 'log_exercise' && voiceAction.data?.exercise) {
-        logExercise(voiceAction.data.exercise, voiceAction.data.calories || 150);
+        logExerciseDirect(voiceAction.data.exercise, voiceAction.data.calories || 150, 30);
       }
       if (onVoiceActionConsumed) onVoiceActionConsumed();
     }
@@ -258,13 +252,13 @@ const AIFitness = ({ voiceAction, onVoiceActionConsumed }) => {
     <div className="w-full max-w-7xl mx-auto space-y-6 pb-20">
 
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-row flex-wrap md:flex-nowrap items-center justify-between gap-4 relative overflow-hidden w-full">
-        <div className="flex items-center gap-4 lg:gap-6 relative z-10 w-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row justify-between items-start md:items-center w-full gap-4 md:gap-6 relative overflow-hidden">
+        <div className="flex items-center gap-4 md:gap-5 relative z-10 w-full md:w-auto">
           <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
             <Activity className="w-8 h-8" />
           </div>
-          <div className="text-left">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-1 text-left">
+          <div>
+            <h1 className="text-xl md:text-2xl lg:text-3xl font-bold md:font-extrabold text-gray-900 dark:text-white tracking-tight mb-1 text-left">
               {t('fit_title')}
             </h1>
             <p className="text-xs sm:text-sm lg:text-base text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2 text-left">
@@ -349,45 +343,10 @@ const AIFitness = ({ voiceAction, onVoiceActionConsumed }) => {
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 w-full">
-              <label className={`flex items-center justify-between bg-gray-50 dark:bg-gray-900/50 rounded-xl px-4 py-3 cursor-text transition-colors w-full focus-within:ring-2 focus-within:ring-rose-500/20 border border-gray-100 dark:border-gray-800 ${stats.steps <= 0 ? 'opacity-50' : 'opacity-100 hover:bg-gray-100 dark:hover:bg-gray-800'}`}>
-                <Minus className="w-4 h-4 text-rose-500 shrink-0 mr-2" />
-                <input
-                  type="number"
-                  className="flex-1 bg-transparent border-0 outline-none focus:ring-0 text-gray-900 dark:text-white font-bold text-center p-0"
-                  value={customMinusVal}
-                  onChange={(e) => setCustomMinusVal(e.target.value)}
-                  placeholder="0"
-                  disabled={stats.steps <= 0}
-                  onKeyDown={handleCustomMinus}
-                />
-              </label>
-
-              <button onClick={() => addSteps(1000)} className="bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 font-bold py-3 px-5 rounded-xl transition-colors flex items-center justify-center gap-1 w-full">
-                <Plus className="w-4 h-4" /> 1K
-              </button>
-
-              <button onClick={() => addSteps(5000)} className="bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 font-bold py-3 px-5 rounded-xl transition-colors flex items-center justify-center gap-1 w-full">
-                <Plus className="w-4 h-4" /> 5K
-              </button>
-
-              <label className="flex items-center justify-between bg-gray-50 dark:bg-gray-900/50 rounded-xl px-4 py-3 cursor-text transition-colors w-full focus-within:ring-2 focus-within:ring-emerald-500/20 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-100 dark:border-gray-800">
-                <Plus className="w-4 h-4 text-emerald-500 shrink-0 mr-2" />
-                <input
-                  type="number"
-                  className="flex-1 bg-transparent border-0 outline-none focus:ring-0 text-gray-900 dark:text-white font-bold text-center p-0"
-                  value={customAddVal}
-                  onChange={(e) => setCustomAddVal(e.target.value)}
-                  placeholder="0"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      const count = parseInt(customAddVal, 10);
-                      if (!isNaN(count) && count > 0) addSteps(count);
-                      setCustomAddVal('');
-                    }
-                  }}
-                />
-              </label>
+            <div className="flex flex-col gap-3 w-full items-center mt-2">
+              <p className="text-sm font-medium text-gray-500 dark:text-gray-400 px-4">
+                Connect a supported health device to track steps automatically.
+              </p>
             </div>
           </div>
         </div>
@@ -443,7 +402,7 @@ const AIFitness = ({ voiceAction, onVoiceActionConsumed }) => {
 
                   <button
                     className="w-full py-3 bg-blue-50 hover:bg-blue-600 text-blue-600 hover:text-white dark:bg-blue-900/30 dark:hover:bg-blue-600 dark:text-blue-400 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2"
-                    onClick={() => logExercise(e.name, e.calories)}
+                    onClick={() => handleLogClick(e)}
                   >
                     <CheckCircle className="w-4 h-4" /> {t('log_workout_btn')}
                   </button>
@@ -500,6 +459,43 @@ const AIFitness = ({ voiceAction, onVoiceActionConsumed }) => {
           ))}
         </div>
       </div>
+
+      {/* Duration Picker Modal */}
+      {exerciseToLog && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm transition-opacity" onClick={() => setExerciseToLog(null)} />
+          <div className="relative w-full max-w-sm bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-2xl overflow-hidden flex flex-col transform transition-all">
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Log {t(exerciseToLog.name)}</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Enter actual duration to accurately track active minutes and calories.</p>
+            
+            <div className="mb-6">
+              <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Duration (minutes)</label>
+              <input 
+                type="number" 
+                value={loggingDuration} 
+                onChange={e => setLoggingDuration(parseInt(e.target.value) || 0)}
+                className="w-full bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 rounded-xl px-4 py-3 text-lg font-bold text-gray-900 dark:text-white outline-none focus:border-blue-500 transition-colors"
+                min="1"
+              />
+            </div>
+            
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setExerciseToLog(null)}
+                className="flex-1 py-3 px-4 rounded-xl font-bold text-sm bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={confirmLogExercise}
+                className="flex-1 py-3 px-4 rounded-xl font-bold text-sm bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-md"
+              >
+                Log Workout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* AI Workout Plan Modal */}
       {selectedDayPlan && (

@@ -1,5 +1,9 @@
 {
   "appId": "com.lifeos.app",
   "appName": "LifeOS",
-  "webDir": "dist"
+  "webDir": "dist",
+  "server": {
+    "cleartext": true,
+    "androidScheme": "http"
+  }
 }

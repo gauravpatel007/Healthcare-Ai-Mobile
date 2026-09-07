@@ -245,18 +245,17 @@ def send_sos_email(recipient_emails: List[str], user_name: str, location_url: Op
         logger.error(f"Failed to send SOS email: {str(e)}")
         return False
 
-def send_sos_sms_twilio(phone_numbers: List[str], user_name: str, location_url: Optional[str] = None) -> bool:
+def send_sos_sms_twilio(phone_numbers: List[str], user_name: str, location_url: Optional[str] = None) -> tuple[bool, str]:
     """
-    Sends an SOS SMS via Twilio.
+    Sends an SOS SMS via Twilio. Returns (success, message).
     """
     settings = get_settings()
     
     if not settings.TWILIO_ACCOUNT_SID or not settings.TWILIO_AUTH_TOKEN or not settings.TWILIO_FROM_NUMBER:
-        logger.error("Twilio is not configured! Check TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER in .env")
-        return False
+        return False, "Twilio configuration missing"
         
     if not phone_numbers:
-        return True
+        return True, "No phone numbers provided"
         
     try:
         # pyrefly: ignore [missing-import]
@@ -268,10 +267,17 @@ def send_sos_sms_twilio(phone_numbers: List[str], user_name: str, location_url: 
             text += f" Loc: {location_url}"
             
         success_count = 0
+        errors = []
         for number in phone_numbers:
             try:
-                # Ensure the number has a '+' prefix if it's purely digits (usually a good practice for Twilio)
-                formatted_number = number if number.startswith('+') else f"+{number}"
+                # Ensure the number has a '+' prefix and correct country code
+                clean_number = "".join(filter(str.isdigit, number))
+                if number.startswith('+'):
+                    formatted_number = number
+                elif len(clean_number) == 10:
+                    formatted_number = f"+91{clean_number}" # Default to India for 10 digit numbers
+                else:
+                    formatted_number = f"+{clean_number}"
                 
                 message = client.messages.create(
                     body=text,
@@ -281,36 +287,50 @@ def send_sos_sms_twilio(phone_numbers: List[str], user_name: str, location_url: 
                 logger.info(f"SOS SMS sent to {formatted_number} (SID: {message.sid})")
                 success_count += 1
             except Exception as inner_e:
-                logger.error(f"Failed to send SOS SMS to {number}: {str(inner_e)}")
+                err_msg = f"SMS to {number} failed: {str(inner_e)}"
+                logger.error(err_msg)
+                errors.append(err_msg)
                 
-        return success_count > 0
+        if success_count > 0:
+            return True, f"Sent {success_count} SMS"
+        return False, " | ".join(errors)
     except Exception as e:
-        logger.error(f"Failed to connect to Twilio: {str(e)}")
-        return False
+        return False, f"Twilio connection failed: {str(e)}"
 
-def send_sos_call_twilio(phone_numbers: List[str], user_name: str, location_url: Optional[str] = None) -> bool:
+def send_sos_call_twilio(phone_numbers: List[str], user_name: str, location_url: Optional[str] = None, audio_url: Optional[str] = None) -> tuple[bool, str]:
     """
-    Initiates an automated voice call via Twilio.
+    Initiates an automated voice call via Twilio. Returns (success, message).
     """
     settings = get_settings()
     
     if not settings.TWILIO_ACCOUNT_SID or not settings.TWILIO_AUTH_TOKEN or not settings.TWILIO_FROM_NUMBER:
-        return False
+        return False, "Twilio configuration missing"
         
     if not phone_numbers:
-        return True
+        return True, "No phone numbers provided"
         
     try:
         # pyrefly: ignore [missing-import]
         from twilio.rest import Client
         client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
         
-        twiml_content = f"<Response><Say voice='alice' language='en-US'>Emergency Alert. {user_name} has an emergency. Immediately go there or check the sent text message for location details.</Say></Response>"
+        if audio_url:
+            twiml_content = f"<Response><Say voice='alice' language='en-US'>Emergency message from {user_name}.</Say><Play>{audio_url}</Play></Response>"
+        else:
+            twiml_content = f"<Response><Say voice='alice' language='en-US'>Emergency Alert. {user_name} has an emergency. Immediately go there or check the sent text message for location details.</Say></Response>"
         
         success_count = 0
+        errors = []
         for number in phone_numbers:
             try:
-                formatted_number = number if number.startswith('+') else f"+{number}"
+                # Ensure the number has a '+' prefix and correct country code
+                clean_number = "".join(filter(str.isdigit, number))
+                if number.startswith('+'):
+                    formatted_number = number
+                elif len(clean_number) == 10:
+                    formatted_number = f"+91{clean_number}" # Default to India for 10 digit numbers
+                else:
+                    formatted_number = f"+{clean_number}"
                 call = client.calls.create(
                     twiml=twiml_content,
                     to=formatted_number,
@@ -319,12 +339,15 @@ def send_sos_call_twilio(phone_numbers: List[str], user_name: str, location_url:
                 logger.info(f"SOS Voice call initiated to {formatted_number} (SID: {call.sid})")
                 success_count += 1
             except Exception as inner_e:
-                logger.error(f"Failed to initiate SOS call to {number}: {str(inner_e)}")
+                err_msg = f"Call to {number} failed: {str(inner_e)}"
+                logger.error(err_msg)
+                errors.append(err_msg)
                 
-        return success_count > 0
+        if success_count > 0:
+            return True, f"Initiated {success_count} calls"
+        return False, " | ".join(errors)
     except Exception as e:
-        logger.error(f"Failed to connect to Twilio for voice call: {str(e)}")
-        return False
+        return False, f"Twilio connection failed: {str(e)}"
 
 def send_organ_match_email(recipient_email: str, recipient_name: str, requester_name: str, organ: str, emergency_contact: str = None) -> bool:
     """
@@ -408,6 +431,7 @@ def send_mental_health_alert_sms(phone_numbers: List[str], user_name: str) -> bo
         return True
         
     try:
+        # pyrefly: ignore [missing-import]
         from twilio.rest import Client
         client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
         

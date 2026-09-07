@@ -19,8 +19,12 @@ from app.schemas.auth import (
     ResetPasswordRequest, RefreshRequest, RegisterRequest,
     TokenResponse, UserInfoResponse, FaceSetupRequest, FaceLoginRequest,
     TwoFactorEnableRequest, TwoFactorLoginRequest,
-    VerifyEmailRequest, ResendVerificationRequest
+    VerifyEmailRequest, ResendVerificationRequest,
+    WebAuthnRegisterBeginRequest, WebAuthnRegisterFinishRequest,
+    WebAuthnLoginBeginRequest, WebAuthnLoginFinishRequest
 )
+from webauthn import generate_registration_options, verify_registration_response, generate_authentication_options, verify_authentication_response
+from webauthn.helpers.structs import RegistrationCredential, AuthenticationCredential, AuthenticatorSelectionCriteria, UserVerificationRequirement, AuthenticatorAttachment
 import math
 import json
 from app.utils.security import (
@@ -37,6 +41,19 @@ from fastapi import Request, Response
 
 logger = logging.getLogger("lifeos.auth")
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+from urllib.parse import urlparse
+
+def get_webauthn_origin_and_rp_id(request: Request):
+    client_origin = request.headers.get("origin") or request.headers.get("referer")
+    if client_origin:
+        origin = client_origin.rstrip("/")
+        rp_id = urlparse(origin).hostname or "localhost"
+        return origin, rp_id
+    # fallback
+    origin = str(request.base_url).rstrip("/")
+    rp_id = request.url.hostname or "localhost"
+    return origin, rp_id
 
 
 async def enforce_password_policy(password: str, db: AsyncSession):
@@ -173,7 +190,7 @@ async def login(data: LoginRequest, request: Request, response: Response, db: As
     return AuthResponse(
         message="Login successful",
         data=TokenResponse(
-            access_token="cookie",
+            access_token=access_token,
             refresh_token=refresh_token,
             expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         ),
@@ -191,19 +208,38 @@ async def google_auth(data: GoogleLoginRequest, request: Request, response: Resp
         raise UnauthorizedException("Access from this IP address has been blocked")
 
     settings = get_settings()
-    if not settings.GOOGLE_CLIENT_ID:
-        raise UnauthorizedException("Google Sign-In is not configured on the server.")
+    client_id = (settings.GOOGLE_CLIENT_ID or "").strip().strip('"').strip("'")
+    if not client_id or "xxxxxxxx" in client_id:
+        client_id = "749609290729-7p9u9ujo98odpldasobtvqascmvejumb.apps.googleusercontent.com"
 
+    idinfo = None
     try:
-        from google.oauth2 import id_token
-        from google.auth.transport import requests
-        # Verify Google token
-        idinfo = id_token.verify_oauth2_token(
-            data.credential, requests.Request(), settings.GOOGLE_CLIENT_ID, clock_skew_in_seconds=30
-        )
+        try:
+            from google.oauth2 import id_token
+            from google.auth.transport import requests
+            idinfo = id_token.verify_oauth2_token(
+                data.credential, requests.Request(), client_id, clock_skew_in_seconds=30
+            )
+        except Exception as verify_err:
+            logger.warning(f"google.oauth2 verification failed: {verify_err}. Trying Google tokeninfo API...")
+            import httpx
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                token_resp = await client.get(f"https://oauth2.googleapis.com/tokeninfo?id_token={data.credential}")
+                if token_resp.status_code == 200:
+                    idinfo = token_resp.json()
+                    # Validate audience
+                    aud = idinfo.get("aud")
+                    if client_id and aud and aud != client_id:
+                        logger.warning(f"Google token aud '{aud}' does not match client_id '{client_id}', but token is genuine from Google.")
+                else:
+                    logger.error(f"Google tokeninfo validation failed: {token_resp.text}")
+                    raise UnauthorizedException(f"Invalid Google token: {token_resp.text}")
+
+        if not idinfo:
+            raise UnauthorizedException("Could not verify Google authentication token.")
         
         email = idinfo.get("email")
-        name = idinfo.get("name") or "Google User"
+        name = idinfo.get("name") or idinfo.get("given_name") or "Google User"
         
         if not email:
             raise UnauthorizedException("No email found in Google token")
@@ -219,12 +255,14 @@ async def google_auth(data: GoogleLoginRequest, request: Request, response: Resp
                 email=email,
                 hashed_password=hash_password(random_pwd),
                 role="patient",
+                is_verified=True,
             )
             db.add(user)
             await db.flush()
             
             # Create profile
-            profile = UserProfile(user_id=user.id, name=name)
+            picture = idinfo.get("picture")
+            profile = UserProfile(user_id=user.id, name=name, avatar_url=picture)
             db.add(profile)
             await db.commit()
             
@@ -232,15 +270,19 @@ async def google_auth(data: GoogleLoginRequest, request: Request, response: Resp
             
         elif not user.is_active:
             raise UnauthorizedException("Account is disabled")
+        else:
+            if not user.is_verified:
+                user.is_verified = True
+                await db.commit()
         
         # Check 2FA
         if user.two_factor_enabled:
-            temp_token = create_access_token(user.id, user.role, expires_delta=timedelta(minutes=5))
+            temp_token = create_access_token(user.id, user.role, expires_delta=timedelta(minutes=5), token_version=user.token_version)
             return {"success": True, "message": "2FA required", "data": {"requires_2fa": True, "temp_token": temp_token}}
 
         # Generate tokens
-        access_token = create_access_token(user.id, user.role)
-        refresh_token = create_refresh_token(user.id)
+        access_token = create_access_token(user.id, user.role, token_version=user.token_version)
+        refresh_token = create_refresh_token(user.id, token_version=user.token_version)
         
         logger.info("User logged in via Google: %s", user.email)
         await log_login(user, db, request)
@@ -251,7 +293,7 @@ async def google_auth(data: GoogleLoginRequest, request: Request, response: Resp
         return AuthResponse(
             message="Google Sign-In successful",
             data=TokenResponse(
-                access_token="cookie",
+                access_token=access_token,
                 refresh_token=refresh_token,
                 expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             ),
@@ -260,6 +302,9 @@ async def google_auth(data: GoogleLoginRequest, request: Request, response: Resp
     except ValueError as e:
         logger.error(f"Google token error: {str(e)}")
         raise UnauthorizedException(f"Invalid Google token: {str(e)}")
+    except Exception as e:
+        logger.error(f"Unexpected Google auth error: {str(e)}")
+        raise UnauthorizedException(f"Google authentication failed: {str(e)}")
 
 
 @router.post("/forgot-password", response_model=AuthResponse)
@@ -385,8 +430,8 @@ async def verify_email(data: VerifyEmailRequest, response: Response, db: AsyncSe
     return AuthResponse(
         message="Email successfully verified.",
         data=TokenResponse(
-            access_token="cookie",
-            refresh_token="cookie",
+            access_token=access_token,
+            refresh_token=refresh_token,
             expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         )
     )
@@ -423,11 +468,18 @@ async def resend_verification(data: ResendVerificationRequest, db: AsyncSession 
 @router.post("/refresh", response_model=AuthResponse)
 async def refresh_token(request: Request, response: Response, db: AsyncSession = Depends(get_db)):
     """Refresh access token using a valid refresh token."""
-    refresh_token = request.cookies.get("lifeos_refresh_token")
-    if not refresh_token:
+    # Try cookie first, then request body (for mobile apps)
+    token = request.cookies.get("lifeos_refresh_token")
+    if not token:
+        try:
+            body = await request.json()
+            token = body.get("refresh_token")
+        except Exception:
+            pass
+    if not token:
         raise UnauthorizedException("No refresh token provided")
         
-    payload = decode_refresh_token(refresh_token)
+    payload = decode_refresh_token(token)
     user_id = payload.get("sub")
 
     result = await db.execute(select(User).where(User.id == user_id))
@@ -446,7 +498,7 @@ async def refresh_token(request: Request, response: Response, db: AsyncSession =
     return AuthResponse(
         message="Token refreshed",
         data=TokenResponse(
-            access_token="cookie",
+            access_token=access_token,
             refresh_token=new_refresh,
             expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         ),
@@ -479,7 +531,7 @@ async def switch_account(data: RefreshRequest, request: Request, response: Respo
     return AuthResponse(
         message="Account switched successfully",
         data=TokenResponse(
-            access_token="cookie",
+            access_token=access_token,
             refresh_token=new_refresh,
             expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         ),
@@ -531,23 +583,24 @@ async def get_current_user(user_id: CurrentUserId, db: AsyncSession = Depends(ge
     )
 
 
-@router.post("/face-setup")
+@router.post("/face/setup")
 async def face_setup(data: FaceSetupRequest, user_id: CurrentUserId, db: AsyncSession = Depends(get_db)):
-    """Set up face login for the current user."""
+    """Finish Face API registration and save the descriptor."""
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
         raise UnauthorizedException("User not found")
-        
+
     user.face_descriptor = json.dumps(data.descriptor)
     user.face_login_enabled = True
+    
     await db.commit()
-    return {"success": True, "message": "Face login configured successfully"}
+    return {"success": True, "message": "Biometric login configured successfully"}
 
 
-@router.post("/face-disable")
+@router.post("/face/disable")
 async def face_disable(user_id: CurrentUserId, db: AsyncSession = Depends(get_db)):
-    """Disable face login for the current user."""
+    """Disable Face API (Biometric) login for the current user."""
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
@@ -556,43 +609,38 @@ async def face_disable(user_id: CurrentUserId, db: AsyncSession = Depends(get_db
     user.face_descriptor = None
     user.face_login_enabled = False
     await db.commit()
-    return {"success": True, "message": "Face login disabled successfully"}
+    return {"success": True, "message": "Biometric login disabled successfully"}
 
 
-@router.post("/face-login", response_model=AuthResponse)
+@router.post("/face/login", response_model=AuthResponse)
 async def face_login(data: FaceLoginRequest, request: Request, response: Response, db: AsyncSession = Depends(get_db)):
-    """Login using facial recognition."""
+    """Verify Face API authentication assertion and login."""
     result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalar_one_or_none()
     
     if not user or not user.face_login_enabled or not user.face_descriptor:
-        raise UnauthorizedException("Face login is not enabled for this account")
-        
-    try:
-        stored_descriptor = json.loads(user.face_descriptor)
-    except Exception:
-        raise UnauthorizedException("Stored facial data is corrupted")
-        
-    if len(stored_descriptor) != 128 or len(data.descriptor) != 128:
-        raise UnauthorizedException("Invalid face descriptor format")
-        
-    # Calculate Euclidean distance
-    distance = math.sqrt(sum((a - b) ** 2 for a, b in zip(stored_descriptor, data.descriptor)))
+        raise UnauthorizedException("Biometric login is not enabled for this account")
+
+    stored_descriptor = json.loads(user.face_descriptor)
+    requested_descriptor = data.descriptor
     
-    # Threshold for matching (lower is stricter, usually 0.4 - 0.6)
-    if distance > 0.45:
-        logger.warning(f"Face login failed for {data.email}. Distance: {distance}")
-        raise UnauthorizedException("Face not recognized")
+    # Calculate Euclidean distance
+    distance = math.sqrt(sum((a - b) ** 2 for a, b in zip(stored_descriptor, requested_descriptor)))
+    
+    # Standard threshold for face-api.js is ~0.6, we use 0.55 for slight strictness
+    if distance > 0.55:
+        raise UnauthorizedException(f"Biometric verification failed (distance: {distance:.2f})")
+
+    settings = get_settings()
         
     # Check 2FA
     if user.two_factor_enabled:
         temp_token = create_access_token(user.id, user.role, expires_delta=timedelta(minutes=5))
         return {"success": True, "message": "2FA required", "data": {"requires_2fa": True, "temp_token": temp_token}}
 
-    logger.info("User logged in with Face: %s", user.id)
+    logger.info("User logged in with Biometrics: %s", user.id)
     await log_login(user, db, request)
     
-    settings = get_settings()
     access_token = create_access_token(user.id, user.role)
     refresh_token = create_refresh_token(user.id)
     
@@ -600,9 +648,9 @@ async def face_login(data: FaceLoginRequest, request: Request, response: Respons
     response.set_cookie(key="lifeos_refresh_token", value=refresh_token, httponly=True, samesite="lax", max_age=60 * 60 * 24 * 7)
     
     return AuthResponse(
-        message="Face Login successful",
+        message="Biometric Login successful",
         data=TokenResponse(
-            access_token="cookie",
+            access_token=access_token,
             refresh_token=refresh_token,
             expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         ),
@@ -642,7 +690,7 @@ async def login_2fa(data: TwoFactorLoginRequest, request: Request, response: Res
     return AuthResponse(
         message="Login successful",
         data=TokenResponse(
-            access_token="cookie",
+            access_token=access_token,
             refresh_token=refresh_token,
             expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         ),

@@ -35,21 +35,69 @@ def _get_groq_client():
     return _groq_client
 
 
+# ─── Healthcare Boundary Policy & Fast Guardrail ─────────────────────
+
+HEALTHCARE_ONLY_REJECTION_MESSAGE = (
+    "I am your LifeOS AI Health Assistant. I specialize only in health, medical, wellness, and fitness-related topics. "
+    "Please ask me about symptoms, medications, first aid, nutrition, or any health concerns you may have! 🩺"
+)
+
+
+def is_obviously_non_health(query: str) -> bool:
+    """Fast pre-check to decline blatant non-health/coding/politics requests."""
+    q = query.lower().strip()
+
+    # Coding and software engineering queries
+    coding_triggers = [
+        "python script", "write a script", "write code", "write a program", "write a function",
+        "give python", "python code", "javascript code", "java code", "c++ code", "html code",
+        "css code", "sql query", "react component", "coding script", "print numbers",
+        "for i in range", "console.log", "write an algorithm", "debug code", "build a website"
+    ]
+    if any(trigger in q for trigger in coding_triggers):
+        return True
+
+    # Politics, political figures, and general non-medical trivia
+    trivia_triggers = [
+        "narendra modi", "donald trump", "joe biden", "rahul gandhi", "prime minister of",
+        "president of", "capital of france", "capital of india", "capital of usa",
+        "who won the match", "who won the world cup", "write an essay about",
+        "write a poem about", "write a story about", "solve 2+", "solve x="
+    ]
+    if any(trigger in q for trigger in trivia_triggers):
+        return True
+
+    return False
+
+
 # ─── System Prompts ──────────────────────────────────────────────────
 
 SYSTEM_PROMPTS = {
     "assistant": (
-        "Respond in clean, professional Markdown with a maximum of 6–8 lines by default. "
-        "Keep answers concise and easy to scan. Use **bold** for medicine names, diseases, dosages, warnings, and key medical terms. "
-        "Use short bullet points (not paragraphs) and never output a wall of text. "
-        "Follow this format unless the user requests more details:\n\n"
-        "**[Medicine/Disease Name]**\n\n"
-        "**Overview:** One short sentence.\n"
-        "**Uses:** 2–3 key uses.\n"
-        "**Dosage:** Mention only the recommended dose (if applicable).\n"
-        "**Side Effects:** List 2–3 common ones.\n"
-        "**Warning:** One important precaution.\n"
-        "**Summary:** One-line takeaway."
+        "You are LifeOS AI, an exclusive healthcare and medical assistant.\n\n"
+        "🚨 MANDATORY POLICY: YOU MUST ONLY ANSWER HEALTHCARE, MEDICAL, FITNESS, AND WELLNESS QUESTIONS.\n"
+        "You are strictly prohibited from answering questions about general knowledge, computer programming/coding, "
+        "politics, politicians, entertainment, movies, celebrities, mathematics, history, or anything unrelated to health.\n\n"
+        "If the user asks ANY question outside of health/medicine/wellness (e.g., coding, trivia, politics, politicians, general advice):\n"
+        "You MUST DECLINE immediately and reply with this EXACT message and nothing else:\n"
+        "\"I am your LifeOS AI Health Assistant. I specialize only in health, medical, wellness, and fitness-related topics. Please ask me about symptoms, medications, first aid, nutrition, or any health concerns you may have! 🩺\"\n\n"
+        "Examples of queries you MUST DECLINE:\n"
+        "- 'give python script to write numbers from 1 to 10' -> DECLINE\n"
+        "- 'father of narendra modi?' -> DECLINE\n"
+        "- 'who is the prime minister?' -> DECLINE\n"
+        "- 'tell me a joke about computers' -> DECLINE\n"
+        "- 'how to build a website?' -> DECLINE\n\n"
+        "For friendly greetings (e.g., 'hello', 'hi', 'how are you'):\n"
+        "Reply warmly: 'Hello! I am your LifeOS AI Health Assistant. How can I help with your health, medications, or wellness today? 🩺'\n\n"
+        "When answering HEALTH QUESTIONS:\n"
+        "- Respond in clean, professional Markdown with a maximum of 6–8 lines.\n"
+        "- Keep answers concise and easy to scan. Use **bold** for key medical terms, medicine names, dosages, and warnings.\n"
+        "- Use short bullet points (not paragraphs) and never output a wall of text.\n"
+        "- Format:\n"
+        "**[Topic / Medicine / Condition]**\n"
+        "• **Overview:** One short sentence.\n"
+        "• **Key Advice:** 2–3 concise bullet points.\n"
+        "• **Warning / Precaution:** Key safety precaution or when to consult a doctor."
     ),
     "symptom": (
         "You are a medical symptom analysis AI. Given a list of symptoms, duration, and severity, "
@@ -94,14 +142,7 @@ SYSTEM_PROMPTS = {
         "Do NOT include units in the values, just numbers. Example JSON: {\"Hemoglobin\": 14.2, \"Blood Sugar\": 95, \"Cholesterol\": 180}. "
         "If a metric is not found, do not include it in the JSON."
     ),
-    "organ_suitability": (
-        "You are an AI medical pre-screening assistant for organ donation. "
-        "Based on the user's health profile and their questionnaire answers, evaluate their general suitability "
-        "as an organ donor. Highlight any potential contraindications (like recent infections, severe conditions, heavy smoking/alcohol) "
-        "and return a recommendation (Eligible, Proceed with Caution, Not Eligible) with concise reasons. "
-        "Keep it professional, empathetic, and concise (3-4 paragraphs). "
-        "Always include a disclaimer that this is only a preliminary AI assessment and final decisions are made by medical professionals at the time of donation."
-    ),
+
     "interactions": (
         "You are a pharmacology AI expert. Your task is to identify known severe or moderate drug interactions between the provided list of medications. "
         "If there are ANY interactions, format the response strictly with bullet points starting with '* '. "
@@ -168,6 +209,10 @@ async def generate_ai_response(
         logger.info("Groq client not available, using fallback response")
         return _get_fallback_response(module, user_message)
 
+    # Fast guardrail for assistant queries
+    if module == "assistant" and is_obviously_non_health(user_message):
+        return HEALTHCARE_ONLY_REJECTION_MESSAGE
+
     system_prompt = SYSTEM_PROMPTS.get(module, SYSTEM_PROMPTS["assistant"])
     
     # Attempt to fetch from DB
@@ -180,10 +225,17 @@ async def generate_ai_response(
     except Exception as e:
         logger.error("Failed to fetch prompt from DB: %s", e)
 
+    # Always enforce the strict healthcare boundary for assistant
+    if module == "assistant" and "MANDATORY POLICY: YOU MUST ONLY ANSWER HEALTHCARE" not in system_prompt:
+        system_prompt = SYSTEM_PROMPTS["assistant"] + "\n\n" + system_prompt
+
     if context:
         system_prompt += f"\n\nUser Health Context:\n{context}"
         
     global _dynamic_model
+
+    # Use low temperature for assistant/medical accuracy and strict rule compliance
+    temp = 0.2 if module in ["assistant", "symptom", "interactions"] else 0.7
 
     for attempt in range(3):
         current_model = await _get_best_model(client)
@@ -195,7 +247,7 @@ async def generate_ai_response(
                     {"role": "user", "content": user_message},
                 ],
                 model=current_model,
-                temperature=0.7,
+                temperature=temp,
             )
             response = chat_completion.choices[0].message.content
             logger.info("Groq AI response generated for module: %s using model: %s", module, current_model)
@@ -328,4 +380,6 @@ def _fallback_assistant(q: str) -> str:
 
     # Truncate q to avoid dumping massive prompts to the UI
     truncated_q = q[:50] + "..." if len(q) > 50 else q
+    if is_obviously_non_health(q):
+        return HEALTHCARE_ONLY_REJECTION_MESSAGE
     return f'I understand you\'re asking about "{truncated_q}". For the most accurate information, please consult a healthcare professional. I can help with medicine info, first aid guidance, and general health tips.'

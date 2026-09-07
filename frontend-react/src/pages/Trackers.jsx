@@ -20,7 +20,7 @@ const SectionHeader = ({ title, subtitle }) => (
 
 /* ─── Stat Mini Card (same style as Dashboard) ──────────── */
 const StatMiniCard = ({ icon: Icon, value, label, colorClass }) => (
-  <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1.5 relative overflow-hidden group cursor-pointer">
+  <div className="bg-white dark:bg-gray-800 rounded-2xl md:rounded-[2rem] p-4 md:p-6 shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1.5 relative overflow-hidden group cursor-pointer">
     <div className={`absolute top-0 right-0 w-32 h-32 ${colorClass} opacity-10 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110`}></div>
     <div className="flex items-start justify-between relative z-10">
       <div>
@@ -186,7 +186,7 @@ const Trackers = ({ voiceAction, onVoiceActionConsumed }) => {
             }
           },
           scales: {
-            x: { grid: { display: false } },
+            x: { grid: { display: false }, ticks: { maxTicksLimit: window.innerWidth < 768 ? 5 : 8, maxRotation: window.innerWidth < 768 ? 45 : 0 } },
             y: { beginAtZero: true, suggestedMax: 12, grid: { color: 'rgba(0,0,0,0.05)', borderDash: [5, 5] } }
           }
         }
@@ -242,24 +242,6 @@ const Trackers = ({ voiceAction, onVoiceActionConsumed }) => {
     if (name === 'Fitbit') {
       setShowFitbitModal(true);
       return;
-    }
-
-    if (!connectedDevices[name]) {
-      toast.loading(`⌚ Connecting to ${name} (Simulation fallback)...`);
-      try {
-        const res = await API.post('/trackers/wearable/connect', { device_name: name });
-        if (res.success) {
-          setConnectedDevices(prev => ({ ...prev, [name]: true }));
-          toast.dismiss();
-          toast.success(`✅ Successfully connected to ${name}!`);
-        }
-      } catch (e) {
-        console.error("Wearable connect error:", e);
-        toast.dismiss();
-        toast.error(`Failed to connect ${name}.`);
-      }
-    } else {
-      toast(`ℹ️ ${name} is already connected.`);
     }
   };
 
@@ -317,14 +299,14 @@ const Trackers = ({ voiceAction, onVoiceActionConsumed }) => {
     <div className="space-y-6">
 
       {/* ── Page Header ────────────────────────── */}
-      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl md:rounded-[2.5rem] p-4 md:p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
         <div className="flex flex-wrap justify-between items-center gap-4">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 bg-indigo-50 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center">
               <Activity className="w-7 h-7 text-indigo-600 dark:text-indigo-400" />
             </div>
             <div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-1">{t('smart_trackers')}</h1>
+              <h1 className="text-xl md:text-2xl lg:text-3xl font-bold md:font-extrabold text-gray-900 dark:text-white tracking-tight mb-1">{t('smart_trackers')}</h1>
               <p className="text-xs sm:text-sm lg:text-base text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]"></span>
                 {t('track_health_metrics')}
@@ -335,7 +317,7 @@ const Trackers = ({ voiceAction, onVoiceActionConsumed }) => {
       </div>
 
       {/* ── Tab Navigation (Dashboard pill style) ────────── */}
-      <div className="flex items-center bg-gray-50 dark:bg-gray-900/50 p-1.5 rounded-2xl border border-gray-100 dark:border-gray-700 w-fit">
+      <div className="flex items-center bg-gray-50 dark:bg-gray-900/50 p-1.5 rounded-2xl border border-gray-100 dark:border-gray-700 w-full md:w-fit overflow-x-auto hide-scrollbar">
         {[
           { id: 'sleep', icon: Moon, label: t('tab_sleep') || 'Sleep' },
           { id: 'bmi', icon: Scale, label: t('tab_bmi') || 'BMI / BMR' },
@@ -345,8 +327,8 @@ const Trackers = ({ voiceAction, onVoiceActionConsumed }) => {
           <button
             key={t.id}
             className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 ${activeTab === t.id
-                ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+              ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm'
+              : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
               }`}
             onClick={() => setActiveTab(t.id)}
           >
@@ -362,7 +344,7 @@ const Trackers = ({ voiceAction, onVoiceActionConsumed }) => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
             {/* Log Sleep Card */}
-            <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl md:rounded-[2rem] p-4 md:p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 w-full overflow-hidden">
               <SectionHeader title={t('log_sleep_title')} subtitle={t('log_sleep_subtitle')} />
               <div className="grid grid-cols-2 gap-4 mt-6">
                 <div>
@@ -392,8 +374,8 @@ const Trackers = ({ voiceAction, onVoiceActionConsumed }) => {
                       key={i}
                       onClick={() => setSelectedQuality(i + 1)}
                       className={`w-12 h-12 rounded-full text-xl flex items-center justify-center transition-all duration-200 ${i + 1 === selectedQuality
-                          ? 'bg-indigo-100 dark:bg-indigo-900/50 border-2 border-indigo-500 scale-110 shadow-md'
-                          : 'bg-gray-50 dark:bg-gray-900 border-2 border-transparent hover:border-gray-200 dark:hover:border-gray-600 hover:scale-105'
+                        ? 'bg-indigo-100 dark:bg-indigo-900/50 border-2 border-indigo-500 scale-110 shadow-md'
+                        : 'bg-gray-50 dark:bg-gray-900 border-2 border-transparent hover:border-gray-200 dark:hover:border-gray-600 hover:scale-105'
                         }`}
                     >
                       {emoji}
@@ -410,16 +392,16 @@ const Trackers = ({ voiceAction, onVoiceActionConsumed }) => {
             </div>
 
             {/* Sleep Trend Chart */}
-            <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl md:rounded-[2rem] p-4 md:p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 w-full overflow-hidden">
               <SectionHeader title={t('sleep_trend')} subtitle={t('sleep_trend_sub')} />
-              <div className="mt-6 h-[280px] relative">
+              <div className="mt-6 h-48 md:h-[280px] w-full relative">
                 <canvas ref={sleepChartRef}></canvas>
               </div>
             </div>
           </div>
 
           {/* Recent Sleep Log */}
-          <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl md:rounded-[2rem] p-4 md:p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 w-full overflow-hidden">
             <SectionHeader title={t('recent_sleep_log')} />
             <div className="space-y-3 mt-4">
               {sleepData.length > 0 ? sleepData.slice(0, 7).map((s, i) => (
@@ -434,8 +416,8 @@ const Trackers = ({ voiceAction, onVoiceActionConsumed }) => {
                     </div>
                   </div>
                   <span className={`px-3 py-1 rounded-full text-xs font-bold shrink-0 ${s.hours >= 7
-                      ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400'
-                      : 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400'
+                    ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400'
+                    : 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400'
                     }`}>
                     {s.hours >= 7 ? t('good') : t('low')}
                   </span>
@@ -454,7 +436,7 @@ const Trackers = ({ voiceAction, onVoiceActionConsumed }) => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
             {/* BMI Card */}
-            <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl md:rounded-[2rem] p-4 md:p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 w-full overflow-hidden">
               <SectionHeader title={t('current_bmi')} subtitle={t('bmi_subtitle')} />
               <div className="mt-6 bg-gray-50 dark:bg-gray-900/50 rounded-2xl p-8 text-center">
                 <div className="text-5xl font-extrabold tracking-tight" style={{ color: bmiData.category.color }}>
@@ -483,7 +465,7 @@ const Trackers = ({ voiceAction, onVoiceActionConsumed }) => {
             </div>
 
             {/* BMR Calculator Card */}
-            <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl md:rounded-[2rem] p-4 md:p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 w-full overflow-hidden">
               <SectionHeader title={t('bmr_calc_title')} subtitle={t('bmr_calc_subtitle')} />
               <div className="mt-6 bg-gray-50 dark:bg-gray-900/50 rounded-2xl p-8 text-center">
                 <p className="text-[10px] font-extrabold text-gray-400 dark:text-gray-500 uppercase tracking-[0.15em]">Basal Metabolic Rate</p>
@@ -542,22 +524,24 @@ const Trackers = ({ voiceAction, onVoiceActionConsumed }) => {
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-8 max-w-2xl mx-auto">
               {[
-                { name: 'Apple Watch', icon: '⌚' },
-                { name: 'Fitbit', icon: '📱' },
-                { name: 'Galaxy Watch', icon: '⌚' }
+                { name: 'Apple Health', icon: '⌚', comingSoon: true },
+                { name: 'Fitbit', icon: '📱', comingSoon: false },
+                { name: 'Google Fit', icon: '⌚', comingSoon: true }
               ].map(d => (
                 <div
                   key={d.name}
-                  onClick={() => handleConnectDevice(d.name)}
-                  className="bg-gray-50 dark:bg-gray-900/50 hover:bg-gray-100 dark:hover:bg-gray-700/50 rounded-2xl p-6 cursor-pointer transition-all duration-200 hover:shadow-md hover:-translate-y-1 border border-transparent hover:border-gray-200 dark:hover:border-gray-600"
+                  onClick={() => !d.comingSoon && handleConnectDevice(d.name)}
+                  className={`rounded-2xl p-6 transition-all duration-200 border ${d.comingSoon ? 'bg-gray-50 dark:bg-gray-900/30 opacity-70 cursor-not-allowed border-transparent' : 'bg-gray-50 dark:bg-gray-900/50 hover:bg-gray-100 dark:hover:bg-gray-700/50 cursor-pointer hover:shadow-md hover:-translate-y-1 border-transparent hover:border-gray-200 dark:hover:border-gray-600'}`}
                 >
                   <div className="text-4xl mb-3">{d.icon}</div>
                   <div className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-3">{d.name}</div>
-                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${connectedDevices[d.name]
-                      ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400'
-                      : 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400'
+                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${d.comingSoon 
+                      ? 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400' 
+                      : connectedDevices[d.name]
+                        ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400'
+                        : 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400'
                     }`}>
-                    {connectedDevices[d.name] ? `✓ ${t('connected')}` : t('connect')}
+                    {d.comingSoon ? 'Coming Soon' : connectedDevices[d.name] ? `✓ ${t('connected')}` : t('connect')}
                   </span>
                 </div>
               ))}

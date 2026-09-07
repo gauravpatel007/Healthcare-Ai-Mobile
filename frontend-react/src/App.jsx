@@ -9,25 +9,21 @@ import LandingPage from './pages/LandingPage'
 import AppDashboard from './pages/AppDashboard'
 import SharedProfile from './pages/SharedProfile'
 import MedicalIDCard from './components/MedicalIDCard'
+import { Capacitor } from '@capacitor/core'
+import { startReminderNavigation } from './utils/reminders'
 
 // Admin Pages
 import AdminLogin from './pages/admin/AdminLogin'
 import AdminLayout from './pages/admin/AdminLayout'
 import AdminOverview from './pages/admin/AdminOverview'
 import AdminUsers from './pages/admin/AdminUsers'
-import AdminAI from './pages/admin/AdminAI'
-import AdminHealth from './pages/admin/AdminHealth'
-import AdminSettings from './pages/admin/AdminSettings'
-import AdminFileManager from './pages/admin/AdminFileManager'
 import AdminMedicalRecords from './pages/admin/AdminMedicalRecords'
-import AdminSmartTrackers from './pages/admin/AdminSmartTrackers'
-import AdminFitness from './pages/admin/AdminFitness'
 import AdminMedicineDB from './pages/admin/AdminMedicineDB'
 import AdminDiseaseDB from './pages/admin/AdminDiseaseDB'
 import AdminSymptoms from './pages/admin/AdminSymptoms'
-import AdminNotifications from './pages/admin/AdminNotifications'
-import AdminFeedback from './pages/admin/AdminFeedback'
-import AdminDiet from './pages/admin/AdminDiet'
+import AdminHealth from './pages/admin/AdminHealth'
+import AdminFileManager from './pages/admin/AdminFileManager'
+import AdminSettings from './pages/admin/AdminSettings'
 import AdminSecurity from './pages/admin/AdminSecurity'
 import AdminAuditLogs from './pages/admin/AdminAuditLogs'
 import AdminAnalytics from './pages/admin/AdminAnalytics'
@@ -55,6 +51,7 @@ const AppRoutes = () => {
   const { settings, loading } = useSettings();
   const location = useLocation();
   const navigate = useNavigate();
+  useEffect(() => startReminderNavigation(navigate), [navigate]);
 
   const isMaintenance = settings?.maintenance_mode === 'true' || settings?.maintenance_mode === true;
   const isAdminRoute = location.pathname.startsWith('/admin');
@@ -87,6 +84,7 @@ const AppRoutes = () => {
   // OneSignal Push Notifications Setup
   useEffect(() => {
     const initOneSignal = async () => {
+      if (Capacitor.isNativePlatform()) return;
       try {
         const OneSignal = (await import('react-onesignal')).default;
         await OneSignal.init({
@@ -117,6 +115,8 @@ const AppRoutes = () => {
   }, []);
 
 
+
+
   // If maintenance mode is active, not on an admin route, and not on root
   if (isMaintenance && !isAdminRoute && !isRoot) {
     return <MaintenanceScreen showLogoutMsg={showLogoutMsg} />;
@@ -139,15 +139,9 @@ const AppRoutes = () => {
         <Route path="medicine-db" element={<AdminMedicineDB />} />
         <Route path="diseases" element={<AdminDiseaseDB />} />
         <Route path="symptoms" element={<AdminSymptoms />} />
-        <Route path="trackers" element={<AdminSmartTrackers />} />
-        <Route path="ai" element={<AdminAI />} />
-        <Route path="fitness" element={<AdminFitness />} />
-        <Route path="notifications" element={<AdminNotifications />} />
-        <Route path="feedback" element={<AdminFeedback />} />
         <Route path="health" element={<AdminHealth />} />
         <Route path="file-manager" element={<AdminFileManager />} />
         <Route path="settings" element={<AdminSettings />} />
-        <Route path="diet" element={<AdminDiet />} />
         <Route path="security" element={<AdminSecurity />} />
         <Route path="audit" element={<AdminAuditLogs />} />
       </Route>
@@ -167,7 +161,7 @@ function App() {
         </UnitProvider>
       </LangProvider>
     </SettingsProvider>
-  )
+  );
 }
 
-export default App
+export default App;

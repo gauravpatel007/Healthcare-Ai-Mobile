@@ -3,6 +3,7 @@ import useTheme from '../hooks/useTheme';
 import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import API from '../utils/api';
+import { startReminderSync } from '../utils/reminders';
 import { toast } from 'react-hot-toast';
 import { useLang } from '../contexts/LangContext';
 
@@ -28,6 +29,8 @@ import Emergency from './Emergency';
 import VoiceLogger from '../components/VoiceLogger';
 import ThemeToggle from '../components/ThemeToggle';
 import FeedbackModal from '../components/FeedbackModal';
+import MobileTopNav from '../components/mobile/MobileTopNav';
+import MobileBottomNav from '../components/mobile/MobileBottomNav';
 import UserNotificationsDropdown from '../components/UserNotificationsDropdown';
 
 // Icons
@@ -55,6 +58,7 @@ import {
 const AppDashboard = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  useEffect(() => startReminderSync(navigate), [navigate]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const { theme: userTheme, toggleTheme: toggleUserTheme } = useTheme('user_theme');
 
@@ -62,6 +66,24 @@ const AppDashboard = () => {
   const [savedAccounts, setSavedAccounts] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
+  const topNavRef = useRef(null);
+
+  const [isHeaderVisible, setIsHeaderVisible] = useState(true);
+
+  const handleContentScroll = (e) => {
+    if (!isHeaderVisible) setIsHeaderVisible(true);
+  };
+
+  useEffect(() => {
+    if (topNavRef.current) {
+      const activeEl = topNavRef.current.querySelector('.active-mobile-nav');
+      if (activeEl) {
+        const container = topNavRef.current;
+        const scrollLeft = activeEl.offsetLeft - container.offsetWidth / 2 + activeEl.offsetWidth / 2;
+        container.scrollTo({ left: scrollLeft, behavior: 'smooth' });
+      }
+    }
+  }, [location.pathname]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [voiceAction, setVoiceAction] = useState(null);
@@ -146,14 +168,10 @@ const AppDashboard = () => {
 
   const overviewItems = [
     { id: 'dashboard', label: t('dashboard'), path: '/app', icon: LayoutDashboard },
-    { id: 'analytics', label: t('analytics'), path: '/app/analytics', icon: BarChart3 },
-    { id: 'trackers', label: t('health'), path: '/app/trackers', icon: Activity },
   ];
 
   const aiCareItems = [
     { id: 'ai-chat', label: t('ai_chat'), path: '/app/ai-chat', icon: MessageSquare },
-    { id: 'ai-fitness', label: t('fitness'), path: '/app/ai-fitness', icon: Dumbbell },
-    { id: 'ai-nutrition', label: t('nutrition'), path: '/app/ai-nutrition', icon: UtensilsCrossed },
     { id: 'ai-symptom', label: t('symptom_checker'), path: '/app/ai-symptom', icon: Stethoscope },
     { id: 'ai-mental', label: t('mental'), path: '/app/ai-mental', icon: SmilePlus },
   ];
@@ -170,6 +188,13 @@ const AppDashboard = () => {
   const filteredFeatures = searchQuery
     ? allFeatures.filter(f => f.label.toLowerCase().includes(searchQuery.toLowerCase()))
     : [];
+
+  const checkIsActive = (itemPath) => {
+    if (itemPath === '/app') {
+      return location.pathname === '/app' || location.pathname === '/app/' || location.pathname === '/app/dashboard';
+    }
+    return location.pathname === itemPath || location.pathname.startsWith(itemPath + '/');
+  };
 
   const handleVoiceAction = (action) => {
     if (action.target_feature === 'auth') {
@@ -216,7 +241,7 @@ const AppDashboard = () => {
 
   const renderNavItems = (items) => (
     items.map(item => {
-      const isActive = location.pathname === item.path || (item.path === '/app' && location.pathname === '/app/');
+      const isActive = checkIsActive(item.path);
       const isEmergency = item.id === 'emergency';
       const Icon = item.icon;
 
@@ -282,8 +307,8 @@ const AppDashboard = () => {
 
         {/* Sidebar */}
         <aside
-          className={`${isSidebarOpen ? 'w-[260px]' : 'w-20'
-            } transition-all duration-300 ease-in-out bg-white dark:bg-black border-r border-gray-100 dark:border-gray-800 flex flex-col justify-between overflow-y-auto shrink-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]`}
+          className={`hidden md:flex ${isSidebarOpen ? 'w-[260px]' : 'w-20'
+            } transition-all duration-300 ease-in-out bg-white dark:bg-black border-r border-gray-100 dark:border-gray-800 flex-col justify-between overflow-y-auto shrink-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]`}
         >
           <div className="px-5">
             {/* Brand */}
@@ -331,163 +356,197 @@ const AppDashboard = () => {
         </aside>
 
         {/* Main Content Area */}
-        <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
+        <main className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
           {/* Top Header */}
-          <header className="h-16 bg-white/80 dark:bg-black/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-6 z-40 shadow-sm shrink-0">
-            <div className="flex items-center">
-              <button
-                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className="p-2 mr-4 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-              >
-                <Menu className="w-5 h-5 text-gray-500" />
-              </button>
-              <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 hidden sm:block">
-                {allFeatures.find(i => location.pathname === i.path || (i.path !== '/app' && location.pathname.startsWith(i.path)))?.label || 'Dashboard'}
-              </h2>
-            </div>
-
-            <div className="flex items-center space-x-4">
-
-              {/* Search Bar */}
-              <div className="relative hidden md:block">
-                <div className="flex items-center bg-gray-100 dark:bg-gray-700/50 rounded-full px-4 py-2 border border-transparent focus-within:border-blue-500 focus-within:bg-white dark:focus-within:bg-gray-800 transition-colors">
-                  <Search className="w-4 h-4 text-gray-400 mr-2" />
-                  <input
-                    type="text"
-                    placeholder="Search features..."
-                    className="bg-transparent border-none outline-none text-sm w-48 text-gray-700 dark:text-gray-200"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
+          <div className={`transition-all duration-300 ease-in-out shrink-0 relative z-50 overflow-visible ${!isHeaderVisible ? 'md:max-h-24 max-h-0 opacity-0 border-none' : 'max-h-24 opacity-100'}`}>
+            <header className="min-h-[56px] md:min-h-[64px] pt-[env(safe-area-inset-top)] bg-white/80 dark:bg-black/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-4 md:px-6 z-40 shadow-sm">
+              <div className="flex items-center">
+                {/* Mobile Brand */}
+                <div
+                  className="flex md:hidden items-center justify-start cursor-pointer gap-2 mr-2"
+                  onClick={() => navigate('/app')}
+                >
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#2F80ED] to-[#56CCF2] flex items-center justify-center shrink-0 shadow-sm">
+                    <HeartPulse className="w-4 h-4 text-white" strokeWidth={2.5} />
+                  </div>
+                  <h1 className="text-[18px] font-black text-[#0f172a] dark:text-white tracking-tight">
+                    LifeOS
+                  </h1>
                 </div>
 
-                {/* Search Results Dropdown */}
-                {searchQuery && (
-                  <div className="absolute top-full mt-2 left-0 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg max-h-64 overflow-y-auto z-50">
-                    {filteredFeatures.length > 0 ? (
-                      filteredFeatures.map(f => {
-                        const Icon = f.icon;
-                        return (
-                          <div
-                            key={f.id}
-                            onClick={() => {
-                              setSearchQuery('');
-                              navigate(f.path);
-                            }}
-                            className="flex items-center px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
-                          >
-                            <Icon className="w-4 h-4 text-blue-500 mr-3" />
-                            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{f.label}</span>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="p-4 text-center text-sm text-gray-500">No features found</div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <ThemeToggle theme={userTheme} toggleTheme={toggleUserTheme} />
-              <UserNotificationsDropdown />
-
-              {/* User Dropdown */}
-              <div className="relative" ref={dropdownRef}>
+                {/* Desktop Hamburger & Title */}
                 <button
-                  onClick={() => setDropdownOpen(!dropdownOpen)}
-                  className="flex items-center space-x-2 p-1 pr-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-transparent focus:outline-none"
+                  onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                  className="hidden md:block p-2 mr-4 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 >
-                  <div className="w-8 h-8 rounded-full overflow-hidden bg-gradient-to-r from-blue-500 to-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-sm">
-                    {currentUser.avatar_url ? (
-                      <img src={`http://localhost:8000${currentUser.avatar_url}`} alt="Avatar" className="w-full h-full object-cover" />
-                    ) : (
-                      currentUser.name?.charAt(0).toUpperCase() || 'U'
-                    )}
-                  </div>
-                  <span className="font-medium text-sm hidden md:block text-gray-700 dark:text-gray-200 max-w-[100px] truncate">
-                    {currentUser.name}
-                  </span>
-                  <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
+                  <Menu className="w-5 h-5 text-gray-500" />
                 </button>
-
-                {dropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
-                    <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-                      <p className="text-sm font-bold text-gray-900 dark:text-white truncate">{currentUser.name}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{currentUser.email}</p>
-                    </div>
-
-                    <div className="max-h-60 overflow-y-auto py-2">
-                      <div className="px-3 py-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">Switch Account</div>
-                      {savedAccounts.map(acc => (
-                        <button
-                          key={acc.email}
-                          onClick={(e) => acc.email !== currentUser.email ? handleAccountSwitch(acc.email, e) : null}
-                          className={`w-full text-left px-4 py-2 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${acc.email === currentUser.email ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}`}
-                        >
-                          <div className="flex items-center space-x-3 truncate pr-2">
-                            <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xs font-bold shrink-0">
-                              {acc.name.charAt(0).toUpperCase()}
-                            </div>
-                            <div className="truncate">
-                              <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{acc.name}</p>
-                              <p className="text-xs text-gray-500 truncate">{acc.email}</p>
-                            </div>
-                          </div>
-                          {acc.email === currentUser.email && <div className="w-2 h-2 rounded-full bg-blue-500 shrink-0"></div>}
-                        </button>
-                      ))}
-
-                      <button
-                        onClick={handleAddAccount}
-                        className="w-full text-left px-4 py-3 flex items-center space-x-3 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors border-t border-gray-100 dark:border-gray-700 mt-2"
-                      >
-                        <div className="w-6 h-6 rounded-full bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center font-bold text-lg leading-none">+</div>
-                        <span>Add another account</span>
-                      </button>
-                    </div>
-
-                    <div className="border-t border-gray-100 dark:border-gray-700 p-2">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setDropdownOpen(false); setShowFeedbackModal(true); }}
-                        className="w-full text-left px-3 py-2 flex items-center space-x-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                      >
-                        <MessageSquare className="w-4 h-4" />
-                        <span>Give Feedback</span>
-                      </button>
-                      <button
-                        onClick={(e) => handleLogout(e, currentUser.email)}
-                        className="w-full text-left px-3 py-2 flex items-center space-x-3 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors mt-1"
-                      >
-                        <LogOut className="w-4 h-4" />
-                        <span>Log out</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
+                <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 hidden md:block">
+                  {allFeatures.find(i => location.pathname === i.path || (i.path !== '/app' && location.pathname.startsWith(i.path)))?.label || 'Dashboard'}
+                </h2>
               </div>
 
-            </div>
-          </header>
+              <div className="flex items-center space-x-4">
+
+                {/* Search Bar */}
+                <div className="relative hidden md:block">
+                  <div className="flex items-center bg-gray-100 dark:bg-gray-700/50 rounded-full px-4 py-2 border border-transparent focus-within:border-blue-500 focus-within:bg-white dark:focus-within:bg-gray-800 transition-colors">
+                    <Search className="w-4 h-4 text-gray-400 mr-2" />
+                    <input
+                      type="text"
+                      placeholder="Search features..."
+                      className="bg-transparent border-none outline-none text-sm w-48 text-gray-700 dark:text-gray-200"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Search Results Dropdown */}
+                  {searchQuery && (
+                    <div className="absolute top-full mt-2 left-0 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg max-h-64 overflow-y-auto z-50">
+                      {filteredFeatures.length > 0 ? (
+                        filteredFeatures.map(f => {
+                          const Icon = f.icon;
+                          return (
+                            <div
+                              key={f.id}
+                              onClick={() => {
+                                setSearchQuery('');
+                                navigate(f.path);
+                              }}
+                              className="flex items-center px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+                            >
+                              <Icon className="w-4 h-4 text-blue-500 mr-3" />
+                              <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{f.label}</span>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="p-4 text-center text-sm text-gray-500">No features found</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <ThemeToggle theme={userTheme} toggleTheme={toggleUserTheme} />
+                <UserNotificationsDropdown />
+
+                {/* User Dropdown */}
+                <div className="relative" ref={dropdownRef}>
+                  <button
+                    onClick={() => setDropdownOpen(!dropdownOpen)}
+                    className="flex items-center space-x-2 p-1 pr-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-transparent focus:outline-none"
+                  >
+                    <div className="w-8 h-8 rounded-full overflow-hidden bg-gradient-to-r from-blue-500 to-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-sm">
+                      {currentUser.avatar_url ? (
+                        <img
+                          src={API.getImageUrl(currentUser.avatar_url)}
+                          alt="Avatar"
+                          className="w-full h-full object-cover"
+                          onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.name || 'User')}&background=random`; }}
+                        />
+                      ) : (
+                        currentUser.name?.charAt(0).toUpperCase() || 'U'
+                      )}
+                    </div>
+                    <span className="font-medium text-sm hidden md:block text-gray-700 dark:text-gray-200 max-w-[100px] truncate">
+                      {currentUser.name}
+                    </span>
+                    <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform hidden md:block ${dropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {dropdownOpen && (
+                    <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
+                      <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+                        <p className="text-sm font-bold text-gray-900 dark:text-white truncate">{currentUser.name}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{currentUser.email}</p>
+                      </div>
+
+                      <div className="max-h-60 overflow-y-auto py-2">
+                        <div className="px-3 py-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">Switch Account</div>
+                        {savedAccounts.map(acc => (
+                          <button
+                            key={acc.email}
+                            onClick={(e) => acc.email !== currentUser.email ? handleAccountSwitch(acc.email, e) : null}
+                            className={`w-full text-left px-4 py-2 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${acc.email === currentUser.email ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}`}
+                          >
+                            <div className="flex items-center space-x-3 truncate pr-2">
+                              <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xs font-bold shrink-0">
+                                {acc.name.charAt(0).toUpperCase()}
+                              </div>
+                              <div className="truncate">
+                                <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{acc.name}</p>
+                                <p className="text-xs text-gray-500 truncate">{acc.email}</p>
+                              </div>
+                            </div>
+                            {acc.email === currentUser.email && <div className="w-2 h-2 rounded-full bg-blue-500 shrink-0"></div>}
+                          </button>
+                        ))}
+
+                        <button
+                          onClick={handleAddAccount}
+                          className="w-full text-left px-4 py-3 flex items-center space-x-3 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors border-t border-gray-100 dark:border-gray-700 mt-2"
+                        >
+                          <div className="w-6 h-6 rounded-full bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center font-bold text-lg leading-none">+</div>
+                          <span>Add another account</span>
+                        </button>
+                      </div>
+
+                      <div className="border-t border-gray-100 dark:border-gray-700 p-2">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setDropdownOpen(false); setShowFeedbackModal(true); }}
+                          className="w-full text-left px-3 py-2 flex items-center space-x-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                        >
+                          <MessageSquare className="w-4 h-4" />
+                          <span>Give Feedback</span>
+                        </button>
+                        <button
+                          onClick={(e) => handleLogout(e, currentUser.email)}
+                          className="w-full text-left px-3 py-2 flex items-center space-x-3 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors mt-1"
+                        >
+                          <LogOut className="w-4 h-4" />
+                          <span>Log out</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+              </div>
+
+            </header>
+          </div>
+
+          {/* Mobile Top Navigation */}
+          <MobileTopNav
+            items={[...overviewItems, ...aiCareItems]}
+            checkIsActive={checkIsActive}
+            topNavRef={topNavRef}
+          />
 
           {/* Page Content */}
-          <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 scroll-smooth bg-gray-50 dark:bg-black relative">
+          <div
+            className="flex-1 overflow-y-auto px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] -mt-[56px] pt-[64px] md:mt-0 md:pt-6 md:px-6 md:pb-[calc(6rem+env(safe-area-inset-bottom))] lg:px-8 lg:pb-[calc(6rem+env(safe-area-inset-bottom))] scroll-smooth bg-gray-50 dark:bg-black relative"
+            onScroll={handleContentScroll}
+          >
             <Routes>
               <Route path="/" element={<DashboardOverview currentUser={currentUser} voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
               <Route path="/appointments" element={<Appointments voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
               <Route path="/records" element={<Records voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
               <Route path="/medicine" element={<Medicine voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
-              <Route path="/analytics" element={<Analytics voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
               <Route path="/ai-chat" element={<AIChat voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
               <Route path="/ai-symptom" element={<AISymptom voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
-              <Route path="/ai-nutrition" element={<AINutrition voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
-              <Route path="/ai-fitness" element={<AIFitness voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
               <Route path="/ai-mental" element={<AIMental voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
-              <Route path="/trackers" element={<Trackers voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
               <Route path="/settings" element={<Settings voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
               <Route path="/emergency" element={<Emergency voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
             </Routes>
           </div>
+
+          {/* Mobile Bottom Navigation */}
+          <MobileBottomNav
+            items={careItems}
+            checkIsActive={checkIsActive}
+          />
         </main>
 
         <FeedbackModal isOpen={showFeedbackModal} onClose={() => setShowFeedbackModal(false)} />

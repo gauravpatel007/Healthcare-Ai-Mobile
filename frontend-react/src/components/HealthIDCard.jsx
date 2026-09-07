@@ -120,7 +120,7 @@ const HealthIDCard = ({ profile, qrUrl, t }) => {
               <ShieldCheck size={18} color="#818cf8" />
             </div>
           </div>
-          <div className="hid-scan-sub">{t('Authorized Personnel Only')}</div>
+          <div className="hid-scan-sub">{t('Authorized Only')}</div>
         </div>
       </div>
     </div>

@@ -3,19 +3,22 @@ LifeOS Backend — Emergency Router
 Emergency contacts, SOS, QR health card, organ donor.
 """
 
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File
+import os
+import shutil
+from app.config import get_settings
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import CurrentUserId
 from app.exceptions import NotFoundException
-from app.models.emergency import EmergencyContact, SOSLog
+from app.models.emergency import EmergencyContact, SOSLog, SOSAudioClip
 from app.models.medicine import Medicine
 from app.models.user import UserProfile
 from app.schemas.emergency import (
     EmergencyContactCreate, EmergencyContactResponse, EmergencyContactUpdate,
-    QRHealthData, SOSAlertResponse, SOSAlertRequest, OrganPreferencesUpdate, OrganSuitabilityRequest, OrganMatchRequest
+    QRHealthData, SOSAlertResponse, SOSAlertRequest, OrganPreferencesUpdate, OrganSuitabilityRequest, OrganMatchRequest, SOSAudioClipResponse
 )
 from app.utils.email import send_sos_email, send_sos_sms_twilio, send_sos_call_twilio
 import asyncio
@@ -72,6 +75,9 @@ async def delete_contact(contact_id: str, user_id: CurrentUserId, db: AsyncSessi
 @router.post("/sos", response_model=SOSAlertResponse)
 async def trigger_sos(request: SOSAlertRequest, user_id: CurrentUserId, db: AsyncSession = Depends(get_db)):
     """Trigger SOS emergency alert."""
+    import logging
+    logger = logging.getLogger("lifeos.emergency")
+
     try:
         contacts_r = await db.execute(
             select(EmergencyContact).where(EmergencyContact.user_id == user_id)
@@ -82,48 +88,64 @@ async def trigger_sos(request: SOSAlertRequest, user_id: CurrentUserId, db: Asyn
         profile = profile_r.scalar_one_or_none()
         user_name = profile.name if profile else "LifeOS User"
         
-        emails = [c.email for c in contacts if getattr(c, 'email', None)]
+        # Log the SOS event FIRST — this is the critical action
+        sos_log = SOSLog(user_id=user_id, is_silent=request.is_silent)
+        db.add(sos_log)
+        await db.commit()
         
-        sms_emails = [c.phone for c in contacts if c.phone]
+        emails = [c.email for c in contacts if getattr(c, 'email', None)]
+        phone_numbers = [c.phone for c in contacts if c.phone]
         
         location_url = None
         if request.latitude is not None and request.longitude is not None:
             location_url = f"https://www.google.com/maps?q={request.latitude},{request.longitude}"
-            if request.accuracy:
-                pass
                 
-        actions = [
-            "Location shared with emergency contacts" if location_url else "Emergency contacts alerted",
-            f"Health QR card sent to {len(contacts)} contacts",
-            "Medical history prepared for sharing",
-            "Nearby hospitals notified",
-        ]
-        
+        # Attempt notifications as best-effort (don't block success on these)
+        actions_taken = []
+        tasks = []
         if emails:
-            # Run email sending in the background
-            asyncio.create_task(asyncio.to_thread(send_sos_email, emails, user_name, location_url))
-            actions.append(f"Emergency alert email dispatched to {len(emails)} contacts")
+            tasks.append(asyncio.to_thread(send_sos_email, emails, user_name, location_url))
+        if phone_numbers:
+            tasks.append(asyncio.to_thread(send_sos_sms_twilio, phone_numbers, user_name, location_url))
             
-        if sms_emails:
-            # Run SMS sending in the background
-            asyncio.create_task(asyncio.to_thread(send_sos_sms_twilio, sms_emails, user_name, location_url))
-            actions.append(f"Emergency SMS dispatched to {len(sms_emails)} contacts via Twilio")
-            
-            # Run Voice Calls in the background
-            asyncio.create_task(asyncio.to_thread(send_sos_call_twilio, sms_emails, user_name, location_url))
-            actions.append(f"Automated voice calls initiated to {len(sms_emails)} contacts via Twilio")
-            
-        # Log the SOS event
-        sos_log = SOSLog(user_id=user_id, is_silent=request.is_silent)
-        db.add(sos_log)
-        await db.commit()
+            # Fetch Custom Audio Clip URL
+            audio_url = None
+            clip_r = await db.execute(select(SOSAudioClip).where(SOSAudioClip.user_id == user_id))
+            clip = clip_r.scalar_one_or_none()
+            if clip:
+                settings = get_settings()
+                base_url = settings.PUBLIC_API_URL or "http://127.0.0.1:8000"
+                base_url = base_url.rstrip("/")
+                audio_url = f"{base_url}/uploads/{clip.file_path}"
                 
-        return SOSAlertResponse(actions=actions)
+            tasks.append(asyncio.to_thread(send_sos_call_twilio, phone_numbers, user_name, location_url, audio_url))
+        if tasks:
+            try:
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                for i, result in enumerate(results):
+                    if isinstance(result, Exception):
+                        err = f"SOS notification task {i} exception: {result}"
+                        logger.error(err)
+                        actions_taken.append(err)
+                    elif isinstance(result, tuple) and len(result) == 2:
+                        success, msg = result
+                        actions_taken.append(msg)
+                    elif result:
+                        actions_taken.append("Notification sent successfully")
+                    else:
+                        actions_taken.append("Notification failed silently")
+            except Exception as notify_err:
+                logger.error(f"SOS notification dispatch error: {notify_err}")
+        
+        if not actions_taken:
+            actions_taken.append("SOS logged. Notifications could not be delivered — please call your emergency contact directly.")
+        
+        return SOSAlertResponse(success=True, message="Emergency alert sent.", actions=actions_taken)
     except Exception as e:
-        import traceback
-        error_msg = f"Error in SOS: {str(e)}\n{traceback.format_exc()}"
-        print(error_msg)
-        return SOSAlertResponse(success=False, message=error_msg, actions=[error_msg])
+        import logging as _log
+        _log.getLogger("lifeos.emergency").error(f"SOS endpoint error: {e}", exc_info=True)
+        # Never expose traceback to frontend
+        return SOSAlertResponse(success=False, message="An internal error occurred. Please call emergency services directly.", actions=[])
 
 
 @router.get("/qr-data", response_model=QRHealthData)
@@ -152,207 +174,78 @@ async def get_qr_data(user_id: CurrentUserId, db: AsyncSession = Depends(get_db)
     )
 
 
-@router.put("/organ-preferences")
-async def update_organ_preferences(
-    data: OrganPreferencesUpdate, user_id: CurrentUserId, db: AsyncSession = Depends(get_db)
+@router.post("/sos-audio", response_model=SOSAudioClipResponse)
+async def upload_sos_audio(
+    user_id: CurrentUserId,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db)
 ):
-    """Update granular organ donor preferences."""
-    result = await db.execute(select(UserProfile).where(UserProfile.user_id == user_id))
-    profile = result.scalar_one_or_none()
-    if not profile:
-        raise NotFoundException("Profile")
+    """Upload a custom audio clip for SOS calls."""
+    settings = get_settings()
     
-    profile.organ_donor = data.organ_donor
-    profile.organ_preferences = data.organ_preferences
-    await db.flush()
+    # Ensure directory exists
+    audio_dir = os.path.join(settings.UPLOAD_DIR, "sos_audio")
+    os.makedirs(audio_dir, exist_ok=True)
     
-    return {
-        "organ_donor": profile.organ_donor, 
-        "organ_preferences": profile.organ_preferences,
-        "message": "Organ donor preferences saved successfully."
-    }
-
-
-@router.post("/organ-suitability")
-async def check_organ_suitability(
-    data: OrganSuitabilityRequest, user_id: CurrentUserId, db: AsyncSession = Depends(get_db)
-):
-    """Run AI Pre-Screening for Organ Suitability based on profile and questionnaire."""
-    from app.services.ai_service import generate_ai_response
+    # Validate extension
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in [".mp3", ".wav", ".ogg"]:
+        raise HTTPException(400, "Only MP3, WAV, and OGG files are supported.")
     
-    result = await db.execute(select(UserProfile).where(UserProfile.user_id == user_id))
-    profile = result.scalar_one_or_none()
+    # Save file
+    filename = f"{user_id}{ext}"
+    file_path = os.path.join(audio_dir, filename)
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
     
-    context = ""
-    if profile:
-        conditions = ", ".join(profile.conditions) if profile.conditions else "None"
-        allergies = ", ".join(profile.allergies) if profile.allergies else "None"
-        context = f"Age: {profile.age}\nBlood Type: {profile.blood_type}\nConditions: {conditions}\nAllergies: {allergies}"
-        
-    user_message = "Questionnaire Answers:\n"
-    for k, v in data.questionnaire_answers.items():
-        user_message += f"- {k.replace('_', ' ').title()}: {v}\n"
-        
-    report = await generate_ai_response(
-        module="organ_suitability",
-        user_message=user_message,
-        context=context
-    )
+    # DB Record
+    relative_path = f"sos_audio/{filename}"
+    result = await db.execute(select(SOSAudioClip).where(SOSAudioClip.user_id == user_id))
+    clip = result.scalar_one_or_none()
     
-    return {"report": report}
-
-from app.models.user import User
-from app.models.notification import SystemNotification
-from app.utils.email import send_organ_match_email
-
-@router.post("/organ-network/match")
-async def initiate_organ_match(
-    data: OrganMatchRequest, user_id: CurrentUserId, db: AsyncSession = Depends(get_db)
-):
-    """Initiate a match process, sending an email and notification to the donor."""
-    # Fetch requester profile
-    requester_res = await db.execute(
-        select(UserProfile, User).join(User, UserProfile.user_id == User.id).where(UserProfile.user_id == user_id)
-    )
-    requester_row = requester_res.first()
-    if not requester_row:
-        raise HTTPException(status_code=404, detail="Requester not found")
-    requester_profile, requester_user = requester_row
-
-    # Fetch donor profile
-    donor_res = await db.execute(
-        select(UserProfile, User).join(User, UserProfile.user_id == User.id).where(UserProfile.user_id == data.donor_id)
-    )
-    donor_row = donor_res.first()
-    if not donor_row:
-        raise HTTPException(status_code=404, detail="Donor not found")
-    donor_profile, donor_user = donor_row
-
-    # Fetch requester primary emergency contact
-    contact_res = await db.execute(
-        select(EmergencyContact)
-        .where(EmergencyContact.user_id == user_id)
-        .order_by(EmergencyContact.is_primary.desc())
-    )
-    primary_contact = contact_res.scalars().first()
-    
-    # Try all possible phone fields in order of preference
-    possible_numbers = [
-        primary_contact.phone if primary_contact else None,
-        requester_profile.phone,
-        requester_profile.emergency_contact
-    ]
-    emergency_contact_number = next((num for num in possible_numbers if num and str(num).strip()), "112")
-
-    # Send Email
-    email_sent = send_organ_match_email(
-        recipient_email=donor_user.email,
-        recipient_name=donor_profile.name,
-        requester_name=requester_user.email,
-        organ=data.organ,
-        emergency_contact=emergency_contact_number
-    )
-
-    # Send App Notification
-    notification = SystemNotification(
-        type="In-App",
-        target_audience=str(donor_profile.user_id),
-        title="New Organ Match Request",
-        message=f"{requester_user.email} has initiated a match process for your pledged {data.organ}.",
-        status="Sent"
-    )
-    db.add(notification)
-    await db.commit()
-
-    return {"success": True, "email_sent": email_sent, "message": "Match request initiated"}
-    result = await db.execute(select(UserProfile).where(UserProfile.user_id == user_id))
-    profile = result.scalar_one_or_none()
-    if not profile:
-        raise NotFoundException("Profile")
-        
-    try:
-        from app.services.ai_service import generate_ai_response
-        prompt = f"""
-        You are a medical AI assistant helping evaluate a patient's suitability for organ donation.
-        Analyze the following profile and questionnaire answers and provide a concise, encouraging 
-        2-paragraph summary on their suitability.
-
-        Age: {profile.age}
-        Blood Type: {profile.blood_type}
-        Allergies: {', '.join(profile.allergies) if profile.allergies else 'None'}
-        Conditions: {', '.join(profile.conditions) if profile.conditions else 'None'}
-        
-        Questionnaire Answers:
-        {data.questionnaire_answers}
-        
-        Keep it professional, empathetic, and note any potential red flags without making a definitive medical diagnosis.
-        """
-        report = await generate_ai_response("organ_prescreening", prompt, max_tokens=300)
-        return {"report": report}
-    except Exception as e:
-        return {"report": "Based on a basic profile check, you appear to be a potential candidate for most standard donations. However, AI generation failed so please consult a real physician for an accurate screening."}
-
-
-@router.get("/organ-network/search")
-async def search_organ_network(query: str = "", user_id: CurrentUserId = None, db: AsyncSession = Depends(get_db)):
-    """Fetch real registered organ donors from the network."""
-    from app.models.user import User
-    from sqlalchemy import or_
-    import random
-    
-    # Query all users who are registered organ donors
-    stmt = (
-        select(UserProfile, User.email)
-        .join(User, UserProfile.user_id == User.id)
-        .where(UserProfile.organ_donor == True)
-        .where(User.is_active == True)
-    )
-    
-    if query:
-        search_pattern = f"%{query}%"
-        stmt = stmt.where(
-            or_(
-                UserProfile.blood_type.ilike(search_pattern),
-                UserProfile.name.ilike(search_pattern),
-                User.email.ilike(search_pattern)
-            )
+    if clip:
+        clip.file_path = relative_path
+        clip.original_filename = file.filename
+    else:
+        clip = SOSAudioClip(
+            user_id=user_id,
+            file_path=relative_path,
+            original_filename=file.filename
         )
+        db.add(clip)
         
-    res = await db.execute(stmt)
-    donors = res.all()
-    
-    results = []
-    for profile, email in donors:
-        # Determine pledged organs from JSON preferences
-        prefs = getattr(profile, "organ_preferences", {}) or {}
-        pledged = [k for k, v in prefs.items() if v]
-        
-        # We will split it into multiple listings if they have pledged multiple organs, 
-        # or just show them as a single donor available.
-        # To match the UI which expects "organ" string, we'll create a listing per organ.
-        if not pledged:
-            pledged = ["Any"] # default if registered but no specific preferences
+    await db.commit()
+    await db.refresh(clip)
+    return clip
 
-        for org in pledged:
-            # Check if this specific organ matches the query if provided
-            if query and query.lower() not in org.lower() and query.lower() not in profile.blood_type.lower() and query.lower() not in profile.name.lower():
-                continue
-                
-            results.append({
-                "id": f"{profile.id}-{org}",
-                "type": "Available",
-                "organ": org.capitalize(),
-                "blood_type": profile.blood_type or "Unknown",
-                "urgency": "Normal",
-                "location": "Global Network",
-                "match_score": random.randint(70, 99), # still random for visual flair unless we compute it against user
-                "donor_name": profile.name,
-                "donor_email": email,
-                "donor_age": profile.age,
-                "user_id": profile.user_id
-            })
-            
-    return {"results": results}
+
+@router.get("/sos-audio", response_model=SOSAudioClipResponse)
+async def get_sos_audio(user_id: CurrentUserId, db: AsyncSession = Depends(get_db)):
+    """Get the user's custom SOS audio clip."""
+    result = await db.execute(select(SOSAudioClip).where(SOSAudioClip.user_id == user_id))
+    clip = result.scalar_one_or_none()
+    if not clip:
+        raise HTTPException(404, "No SOS audio clip found.")
+    return clip
+
+
+@router.delete("/sos-audio")
+async def delete_sos_audio(user_id: CurrentUserId, db: AsyncSession = Depends(get_db)):
+    """Delete the user's custom SOS audio clip."""
+    result = await db.execute(select(SOSAudioClip).where(SOSAudioClip.user_id == user_id))
+    clip = result.scalar_one_or_none()
+    if not clip:
+        raise HTTPException(404, "No SOS audio clip found.")
+    
+    settings = get_settings()
+    file_path = os.path.join(settings.UPLOAD_DIR, clip.file_path)
+    if os.path.exists(file_path):
+        os.remove(file_path)
+        
+    await db.delete(clip)
+    await db.commit()
+    return {"success": True, "message": "Audio clip deleted successfully"}
+
 
 # Active SOS sessions for live tracking
 active_sos_sessions = {}

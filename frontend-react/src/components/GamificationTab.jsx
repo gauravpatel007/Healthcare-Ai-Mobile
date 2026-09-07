@@ -311,7 +311,12 @@ export default function GamificationTab() {
                     }}
                   >
                     {user.avatar_url ? (
-                      <img src={`http://localhost:8000${user.avatar_url}`} alt="Avatar" className="w-full h-full object-cover" />
+                      <img 
+                        src={API.getImageUrl(user.avatar_url)} 
+                        alt="Avatar" 
+                        className="w-full h-full object-cover" 
+                        onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.nickname || 'User')}&background=random`; }}
+                      />
                     ) : (
                       user.nickname.charAt(0).toUpperCase()
                     )}
@@ -369,7 +374,12 @@ export default function GamificationTab() {
 
             <div className="w-24 h-24 mx-auto rounded-full bg-gradient-to-br from-indigo-100 to-blue-100 dark:from-indigo-900/40 dark:to-blue-900/40 flex items-center justify-center text-4xl mb-4 shadow-md overflow-hidden text-indigo-600 dark:text-indigo-300 font-bold">
               {selectedLeaderboardUser.avatar_url ? (
-                <img src={`http://localhost:8000${selectedLeaderboardUser.avatar_url}`} alt="Avatar" className="w-full h-full object-cover" />
+                <img 
+                  src={API.getImageUrl(selectedLeaderboardUser.avatar_url)} 
+                  alt="Avatar" 
+                  className="w-full h-full object-cover" 
+                  onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedLeaderboardUser.nickname || 'User')}&background=random`; }}
+                />
               ) : (
                 selectedLeaderboardUser.nickname.charAt(0).toUpperCase()
               )}

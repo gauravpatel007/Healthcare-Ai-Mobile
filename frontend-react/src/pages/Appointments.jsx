@@ -33,6 +33,7 @@ const Appointments = ({ voiceAction, onVoiceActionConsumed }) => {
   const [prepSymptoms, setPrepSymptoms] = useState('');
   const [isPrepping, setIsPrepping] = useState(false);
   const [calendarDate, setCalendarDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(null);
 
   const daysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
   const firstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
@@ -138,10 +139,25 @@ const Appointments = ({ voiceAction, onVoiceActionConsumed }) => {
     return false;
   };
 
-  const upcoming = appointments.filter(a => !isPast(a)).sort((a, b) => 
+  const upcoming = appointments.filter(a => {
+    if (isPast(a)) return false;
+    if (selectedDate) {
+      const d = parseLocalDate(a.date);
+      if (d.getFullYear() !== selectedDate.getFullYear() || d.getMonth() !== selectedDate.getMonth() || d.getDate() !== selectedDate.getDate()) return false;
+    }
+    return true;
+  }).sort((a, b) => 
     new Date(`${a.date}T${a.time || '00:00'}`) - new Date(`${b.date}T${b.time || '00:00'}`)
   );
-  const past = appointments.filter(a => isPast(a)).map(a => 
+  
+  const past = appointments.filter(a => {
+    if (!isPast(a)) return false;
+    if (selectedDate) {
+      const d = parseLocalDate(a.date);
+      if (d.getFullYear() !== selectedDate.getFullYear() || d.getMonth() !== selectedDate.getMonth() || d.getDate() !== selectedDate.getDate()) return false;
+    }
+    return true;
+  }).map(a => 
     (a.status === 'upcoming' && isPast(a)) ? { ...a, status: 'completed' } : a
   ).sort((a, b) => 
     new Date(`${b.date}T${b.time || '00:00'}`) - new Date(`${a.date}T${a.time || '00:00'}`)
@@ -244,30 +260,30 @@ const Appointments = ({ voiceAction, onVoiceActionConsumed }) => {
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-20">
       {/* Page Header */}
-      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-row flex-wrap md:flex-nowrap items-center justify-between gap-4 relative overflow-hidden w-full">
-        <div className="flex items-center gap-4 lg:gap-6 relative z-10 w-auto">
-          <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
-            <CalendarIcon className="w-8 h-8" />
+      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-5 sm:p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-row items-center justify-between w-full gap-4 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500 opacity-5 dark:opacity-10 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none"></div>
+        <div className="flex items-center gap-3 sm:gap-4 md:gap-5 relative z-10 min-w-0">
+          <div className="w-14 h-14 sm:w-16 sm:h-16 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
+            <CalendarIcon className="w-7 h-7 sm:w-8 sm:h-8" />
           </div>
-          <div className="text-left">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-1 text-left">
-              {t("Appointment Manager")}
+          <div className="min-w-0 text-left">
+            <h1 className="text-xl md:text-2xl lg:text-3xl font-bold md:font-extrabold text-gray-900 dark:text-white tracking-tight mb-1 truncate">
+              {t("Appointments")}
             </h1>
-            <p className="text-xs sm:text-sm lg:text-base text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2 text-left">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse shrink-0"></span>
-              {upcoming.length} {t("upcoming appointments")}
+            <p className="text-xs sm:text-sm lg:text-base text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2 truncate">
+              <span className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)] animate-pulse shrink-0"></span>
+              {upcoming.length > 0 ? `${upcoming.length} ${t("upcoming visits")}` : t("No upcoming visits")}
             </p>
           </div>
         </div>
-        <div className="flex items-center justify-end gap-3 relative z-10 shrink-0 ml-auto pr-2">
-          <button 
-            onClick={() => setShowForm(true)} 
-            className="flex items-center gap-2 px-6 py-3.5 rounded-xl font-bold text-base transition-all bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 shadow-sm hover:shadow-md"
-          >
-            <Plus className="w-5 h-5 shrink-0" />
-            <span className="whitespace-nowrap">{t("New Appointment")}</span>
-          </button>
-        </div>
+        <button 
+          onClick={() => setShowForm(true)} 
+          title={t("New Appointment")}
+          aria-label={t("New Appointment")}
+          className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center shrink-0 transition-all bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 shadow-sm hover:shadow-md active:scale-95 relative z-10"
+        >
+          <Plus className="w-6 h-6 sm:w-7 sm:h-7 shrink-0" />
+        </button>
       </div>
 
       {/* Stats Dashboard */}
@@ -327,6 +343,21 @@ const Appointments = ({ voiceAction, onVoiceActionConsumed }) => {
       <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
           
+          {/* Filter Banner */}
+          {selectedDate && (
+            <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/50 rounded-2xl p-4 flex justify-between items-center mb-6">
+              <p className="font-bold text-indigo-800 dark:text-indigo-300">
+                {t('Showing appointments for')} {selectedDate.toLocaleDateString(lang, { dateStyle: 'medium' })}
+              </p>
+              <button 
+                onClick={() => setSelectedDate(null)}
+                className="px-4 py-2 bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 font-bold text-sm rounded-xl border border-indigo-200 dark:border-indigo-800 shadow-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/50 transition-colors"
+              >
+                {t('Clear Filter')}
+              </button>
+            </div>
+          )}
+
           {/* Upcoming Appointments */}
           <div>
             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
@@ -338,7 +369,7 @@ const Appointments = ({ voiceAction, onVoiceActionConsumed }) => {
                 const d = parseLocalDate(a.date);
                 const daysUntil = getDaysUntil(a.date);
                 return (
-                  <div key={a.id} className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-row items-center justify-between gap-5 hover:shadow-md hover:-translate-y-0.5 transition-all w-full">
+                  <div key={a.id} className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 hover:shadow-md hover:-translate-y-0.5 transition-all w-full">
                     
                     {/* Date Flap & Details Container */}
                     <div className="flex flex-row items-center gap-5 flex-1 min-w-0">
@@ -368,7 +399,7 @@ const Appointments = ({ voiceAction, onVoiceActionConsumed }) => {
                     </div>
                     
                     {/* Actions */}
-                    <div className="flex flex-col items-center justify-center gap-3 shrink-0 w-48 border-gray-100 dark:border-gray-700">
+                    <div className="flex flex-col items-center justify-center gap-3 shrink-0 w-full sm:w-48 border-gray-100 dark:border-gray-700">
                       <span className={`px-3 py-1.5 rounded-lg text-xs font-bold w-full text-center ${
                         daysUntil <= 3 
                           ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' 
@@ -409,54 +440,15 @@ const Appointments = ({ voiceAction, onVoiceActionConsumed }) => {
               }) : (
                 <div className="bg-white dark:bg-gray-800 rounded-2xl p-10 shadow-sm border border-gray-100 dark:border-gray-700 text-center flex flex-col items-center justify-center">
                   <CalendarIcon className="w-12 h-12 text-gray-300 dark:text-gray-600 mb-3" />
-                  <p className="text-gray-500 dark:text-gray-400 font-medium">{t("No upcoming appointments. Schedule one now!")}</p>
+                  <p className="text-gray-500 dark:text-gray-400 font-medium">
+                    {selectedDate 
+                      ? t("No appointments on this date.") 
+                      : t("No upcoming appointments. Schedule one now!")}
+                  </p>
                 </div>
               )}
             </div>
           </div>
-
-          {/* Past Appointments */}
-          {past.length > 0 && (
-            <div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2 opacity-70">
-                <CheckCircle2 className="w-6 h-6 text-emerald-500" /> {t("Past")}
-              </h3>
-              <div className="space-y-4 opacity-70">
-                {past.map(a => {
-                  const d = parseLocalDate(a.date);
-                  return (
-                    <div key={a.id} className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-row items-center justify-between gap-5 grayscale-[30%] text-left w-full">
-                      <div className="flex flex-row items-center gap-5 flex-1 min-w-0">
-                        <div className="flex flex-col items-center justify-center w-16 h-16 bg-gray-50 dark:bg-gray-900/50 rounded-xl shrink-0">
-                          <span className="text-xl font-black text-gray-600 dark:text-gray-400 leading-none">{d.getDate()}</span>
-                          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mt-1">{d.toLocaleDateString(lang, { month: 'short' })}</span>
-                        </div>
-                        
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-wrap items-center gap-3 mb-1">
-                            <h4 className="text-lg font-bold text-gray-900 dark:text-white truncate max-w-[200px]">{t("Dr.")} {a.doctor}</h4>
-                            <span className="bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400 px-2 py-0.5 rounded text-[10px] font-bold shrink-0">{t("Completed")}</span>
-                          </div>
-                          <p className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2 truncate">{t(a.specialty)}</p>
-                          
-                          <div className="flex flex-wrap items-center gap-4 text-xs font-medium text-gray-400">
-                            <span className="flex items-center gap-1.5 truncate"><MapPin className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">{a.hospital}</span></span>
-                            <span className="flex items-center gap-1.5 shrink-0"><Clock className="w-3.5 h-3.5 shrink-0" /> {a.time}</span>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="shrink-0 w-32">
-                         <button onClick={() => deleteApt(a.id)} className="w-full flex items-center justify-center gap-1.5 bg-gray-50 hover:bg-red-50 text-gray-500 hover:text-red-600 dark:bg-gray-900 dark:hover:bg-red-900/20 border border-gray-200 dark:border-gray-700 px-4 py-2.5 rounded-lg text-sm font-bold transition-colors">
-                           <Trash2 className="w-4 h-4 shrink-0" /> {t("Delete")}
-                         </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
 
         </div>
 
@@ -507,15 +499,23 @@ const Appointments = ({ voiceAction, onVoiceActionConsumed }) => {
                                 calendarDate.getMonth() === today.getMonth() && 
                                 calendarDate.getFullYear() === today.getFullYear();
                                 
+                const isSelected = selectedDate && 
+                                   day === selectedDate.getDate() && 
+                                   calendarDate.getMonth() === selectedDate.getMonth() && 
+                                   calendarDate.getFullYear() === selectedDate.getFullYear();
+                                
                 return (
                   <div key={day} className="flex justify-center items-center h-8 sm:h-10">
-                    <div className={`relative flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full text-xs sm:text-sm font-semibold transition-all ${
+                    <div 
+                      onClick={() => setSelectedDate(isSelected ? null : d)}
+                      className={`relative flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+                      isSelected ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-2 ring-indigo-500 ring-offset-2 dark:ring-offset-gray-800' : 
                       isToday ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 
-                      hasApt ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-bold border border-blue-200 dark:border-blue-800' :
-                      'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer'
+                      hasApt ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-bold border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/50' :
+                      'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'
                     }`}>
                       {day}
-                      {hasApt && !isToday && (
+                      {hasApt && !isSelected && !isToday && (
                         <span className="absolute bottom-0.5 right-0.5 w-1.5 h-1.5 bg-blue-500 rounded-full border border-white dark:border-gray-800"></span>
                       )}
                     </div>
@@ -554,16 +554,59 @@ const Appointments = ({ voiceAction, onVoiceActionConsumed }) => {
             </div>
           </div>
         </div>
+
+        {/* Past Appointments - displayed after Calendar & AI Suggestions */}
+        {past.length > 0 && (
+          <div className="lg:col-span-2 space-y-4">
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2 opacity-70">
+              <CheckCircle2 className="w-6 h-6 text-emerald-500" /> {t("Past")}
+            </h3>
+            <div className="space-y-4 opacity-70">
+              {past.map(a => {
+                const d = parseLocalDate(a.date);
+                return (
+                  <div key={a.id} className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 grayscale-[30%] text-left w-full">
+                    <div className="flex flex-row items-center gap-5 flex-1 min-w-0">
+                      <div className="flex flex-col items-center justify-center w-16 h-16 bg-gray-50 dark:bg-gray-900/50 rounded-xl shrink-0">
+                        <span className="text-xl font-black text-gray-600 dark:text-gray-400 leading-none">{d.getDate()}</span>
+                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mt-1">{d.toLocaleDateString(lang, { month: 'short' })}</span>
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-3 mb-1">
+                          <h4 className="text-lg font-bold text-gray-900 dark:text-white truncate max-w-[200px]">{t("Dr.")} {a.doctor}</h4>
+                          <span className="bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400 px-2 py-0.5 rounded text-[10px] font-bold shrink-0">{t("Completed")}</span>
+                        </div>
+                        <p className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2 truncate">{t(a.specialty)}</p>
+                        
+                        <div className="flex flex-wrap items-center gap-4 text-xs font-medium text-gray-400">
+                          <span className="flex items-center gap-1.5 truncate"><MapPin className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">{a.hospital}</span></span>
+                          <span className="flex items-center gap-1.5 shrink-0"><Clock className="w-3.5 h-3.5 shrink-0" /> {a.time}</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="shrink-0 w-full sm:w-32">
+                       <button onClick={() => deleteApt(a.id)} className="w-full flex items-center justify-center gap-1.5 bg-gray-50 hover:bg-red-50 text-gray-500 hover:text-red-600 dark:bg-gray-900 dark:hover:bg-red-900/20 border border-gray-200 dark:border-gray-700 px-4 py-2.5 rounded-lg text-sm font-bold transition-colors">
+                         <Trash2 className="w-4 h-4 shrink-0" /> {t("Delete")}
+                       </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* New Appointment Modal */}
       {showForm && createPortal(
         <div 
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+          className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-gray-900/60 backdrop-blur-sm p-0 md:p-4 animate-in fade-in duration-200"
           onClick={() => setShowForm(false)}
         >
           <div 
-            className="bg-white dark:bg-gray-800 w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden border border-gray-100 dark:border-gray-700 animate-in zoom-in-95 duration-200"
+            className="bg-white dark:bg-gray-800 w-full md:max-w-xl rounded-t-3xl md:rounded-3xl shadow-2xl overflow-hidden border-t md:border border-gray-100 dark:border-gray-700 animate-in slide-in-from-bottom-full md:slide-in-from-bottom-0 md:zoom-in-95 duration-200 pb-[env(safe-area-inset-bottom)] md:pb-0"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
@@ -587,7 +630,7 @@ const Appointments = ({ voiceAction, onVoiceActionConsumed }) => {
                 />
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">{t("Specialty")}</label>
                   <CustomSelect
@@ -615,7 +658,7 @@ const Appointments = ({ voiceAction, onVoiceActionConsumed }) => {
                 </div>
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">{t("Date")}</label>
                   <input 
@@ -649,7 +692,7 @@ const Appointments = ({ voiceAction, onVoiceActionConsumed }) => {
               </div>
             </div>
             
-            <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3">
+            <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-700 flex flex-wrap justify-end gap-3">
               <button onClick={() => setShowForm(false)} className="px-5 py-2.5 rounded-xl font-bold text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">{t("Cancel")}</button>
               <button onClick={handleAdd} className="px-6 py-2.5 rounded-xl font-bold text-sm bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-600/20 transition-colors">{t("Save Appointment")}</button>
             </div>
@@ -661,11 +704,11 @@ const Appointments = ({ voiceAction, onVoiceActionConsumed }) => {
       {/* AI Prep Generation Modal */}
       {prepModal.isOpen && createPortal(
         <div 
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+          className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-gray-900/60 backdrop-blur-sm p-0 md:p-4 animate-in fade-in duration-200"
           onClick={() => !isPrepping && setPrepModal({ isOpen: false, aptId: null })}
         >
           <div 
-            className="bg-white dark:bg-gray-800 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-cyan-100 dark:border-cyan-900/30 animate-in zoom-in-95 duration-200"
+            className="bg-white dark:bg-gray-800 w-full md:max-w-md rounded-t-3xl md:rounded-3xl shadow-2xl overflow-hidden border-t md:border border-cyan-100 dark:border-cyan-900/30 animate-in slide-in-from-bottom-full md:slide-in-from-bottom-0 md:zoom-in-95 duration-200 pb-[env(safe-area-inset-bottom)] md:pb-0"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-700 bg-gradient-to-r from-cyan-50 to-blue-50 dark:from-cyan-900/20 dark:to-blue-900/20">
@@ -700,7 +743,7 @@ const Appointments = ({ voiceAction, onVoiceActionConsumed }) => {
               </div>
             </div>
             
-            <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3">
+            <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-700 flex flex-wrap justify-end gap-3">
               <button onClick={() => setPrepModal({ isOpen: false, aptId: null })} disabled={isPrepping} className="px-5 py-2.5 rounded-xl font-bold text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-50">{t("Cancel")}</button>
               <button onClick={handleGeneratePrep} disabled={isPrepping} className="px-6 py-2.5 rounded-xl font-bold text-sm bg-cyan-600 hover:bg-cyan-700 text-white shadow-md shadow-cyan-600/20 transition-all flex items-center gap-2 disabled:opacity-70">
                 {isPrepping ? (
@@ -718,11 +761,11 @@ const Appointments = ({ voiceAction, onVoiceActionConsumed }) => {
       {/* View AI Prep Modal */}
       {viewPrepModal.isOpen && createPortal(
         <div 
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+          className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-gray-900/60 backdrop-blur-sm p-0 md:p-4 animate-in fade-in duration-200"
           onClick={() => setViewPrepModal({ isOpen: false, text: '', aptId: null })}
         >
           <div 
-            className="bg-white dark:bg-gray-800 w-full max-w-2xl max-h-[85vh] rounded-3xl shadow-2xl overflow-hidden border border-gray-100 dark:border-gray-700 flex flex-col animate-in zoom-in-95 duration-200"
+            className="bg-white dark:bg-gray-800 w-full md:max-w-2xl max-h-[85vh] rounded-t-3xl md:rounded-3xl shadow-2xl overflow-hidden border-t md:border border-gray-100 dark:border-gray-700 flex flex-col animate-in slide-in-from-bottom-full md:slide-in-from-bottom-0 md:zoom-in-95 duration-200 pb-[env(safe-area-inset-bottom)] md:pb-0"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50 shrink-0">
@@ -738,7 +781,7 @@ const Appointments = ({ voiceAction, onVoiceActionConsumed }) => {
               {renderMarkdown(viewPrepModal.text)}
             </div>
             
-            <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-700 flex justify-between items-center shrink-0">
+            <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row flex-wrap justify-between items-stretch sm:items-center gap-3 shrink-0">
               <button onClick={() => {
                 const id = viewPrepModal.aptId;
                 setViewPrepModal({ isOpen: false, text: '', aptId: null });

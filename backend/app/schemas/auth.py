@@ -30,6 +30,23 @@ class FaceLoginRequest(BaseModel):
     descriptor: list[float] = Field(..., min_length=128, max_length=128)
 
 
+class WebAuthnRegisterBeginRequest(BaseModel):
+    pass
+
+
+class WebAuthnRegisterFinishRequest(BaseModel):
+    attestation_response: dict
+
+
+class WebAuthnLoginBeginRequest(BaseModel):
+    email: EmailStr
+
+
+class WebAuthnLoginFinishRequest(BaseModel):
+    email: EmailStr
+    assertion_response: dict
+
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 

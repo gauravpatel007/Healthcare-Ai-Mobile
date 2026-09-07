@@ -308,7 +308,7 @@ const AIMental = ({ voiceAction, onVoiceActionConsumed }) => {
             <SmilePlus className="w-8 h-8" />
           </div>
           <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-1">{t("AI Mental Health")}</h1>
+            <h1 className="text-xl md:text-2xl lg:text-3xl font-bold md:font-extrabold text-gray-900 dark:text-white tracking-tight mb-1">{t("AI Mental Health")}</h1>
             <p className="text-xs sm:text-sm lg:text-base text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
               {t("Track your mood, manage stress, and find peace")}
@@ -412,10 +412,13 @@ const AIMental = ({ voiceAction, onVoiceActionConsumed }) => {
 
         {/* Stress Level */}
         <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col justify-center h-full">
-            <h4 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-6">
+            <h4 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-2">
               <Wind className="w-5 h-5 text-teal-500" />
-              {t("Current Stress Level")}
+              {t("Self-Reported Stress Trend")}
             </h4>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-medium">
+              {t("Based on your recent mood and journal entries.")}
+            </p>
             
             {stress ? (
               <div className="flex flex-col items-center justify-center gap-3 h-full pb-0">
@@ -432,10 +435,10 @@ const AIMental = ({ voiceAction, onVoiceActionConsumed }) => {
                     />
                   </svg>
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className={`text-5xl font-extrabold tracking-tight ${stress.stress_level > 70 ? 'text-red-500' : stress.stress_level > 40 ? 'text-amber-500' : 'text-emerald-500'}`}>
-                      {stress.stress_level}
+                    <span className={`text-3xl font-extrabold tracking-tight ${stress.stress_level > 70 ? 'text-red-500' : stress.stress_level > 40 ? 'text-amber-500' : 'text-emerald-500'}`}>
+                      {stress.stress_level > 70 ? t("High") : stress.stress_level > 40 ? t("Moderate") : t("Low")}
                     </span>
-                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">{t("Score")}</span>
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">{t("Stress")}</span>
                   </div>
                 </div>
                 

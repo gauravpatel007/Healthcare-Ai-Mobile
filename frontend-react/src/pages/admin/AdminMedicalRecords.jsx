@@ -143,144 +143,144 @@ export default function AdminMedicalRecords() {
   }, [records, search, filterCategory, showDeleted, filterEmail, filterStartDate, filterEndDate, sortBy]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-32">
       
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-row flex-wrap md:flex-nowrap items-center justify-between gap-4 relative overflow-visible w-full">
-        <div className="flex items-center gap-4 lg:gap-6 relative z-10 w-auto">
-          <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
-            <FileText className="w-8 h-8" />
+      <div className="bg-white dark:bg-gray-800 rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col lg:flex-row lg:items-center justify-between gap-4 relative overflow-hidden w-full">
+        <div className="flex items-center gap-3.5 sm:gap-5 min-w-0">
+          <div className="w-12 h-12 sm:w-16 sm:h-16 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
+            <FileText className="w-6 h-6 sm:w-8 sm:h-8" />
           </div>
-          <div className="text-left">
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-1 text-left">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight leading-tight">
               Medical Records
             </h1>
-            <p className="text-xs sm:text-sm lg:text-base text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2 text-left">
+            <p className="text-xs sm:text-sm lg:text-base text-gray-500 dark:text-gray-400 font-medium mt-0.5 sm:mt-1 truncate sm:whitespace-normal">
               Manage and moderate user medical documents
             </p>
           </div>
         </div>
         
-        <div className="flex flex-wrap items-center justify-end gap-3 relative z-10 shrink-0 ml-auto pr-2">
-          <div className="relative">
+        <div className="flex flex-row items-center gap-2 sm:gap-2.5 shrink-0 self-stretch sm:self-auto justify-end flex-wrap sm:flex-nowrap">
+          <div className="relative flex-1 sm:flex-initial">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input 
               type="text" placeholder="Search records, users..." 
               value={search} onChange={e => setSearch(e.target.value)}
-              className="pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 w-64"
+              className="w-full sm:w-60 pl-9 pr-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-xl text-xs sm:text-sm outline-none focus:ring-2 focus:ring-indigo-500/20"
             />
           </div>
           <button 
             onClick={() => setShowFilterPopover(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-xl text-sm font-bold hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-700 dark:text-gray-300"
+            className="flex items-center gap-1.5 px-3.5 sm:px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-xl text-xs sm:text-sm font-bold hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-700 dark:text-gray-300 shrink-0"
           >
-            <Filter className="w-4 h-4" /> Filter
+            <Filter className="w-4 h-4" /> <span>Filter</span>
           </button>
-          
-          {showFilterPopover && createPortal(
-            <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setShowFilterPopover(false)}>
-              <div className="bg-white dark:bg-gray-800 rounded-3xl w-full max-w-lg shadow-2xl border border-gray-100 dark:border-gray-700 p-6 animate-in zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                    <Filter className="w-6 h-6 text-indigo-500" />
-                    Filter & Sort Records
-                  </h3>
-                  <button onClick={() => setShowFilterPopover(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-                    <XCircle className="w-6 h-6" />
-                  </button>
-                </div>
-                
-                <div className="space-y-4 pr-2">
-                  <div className="space-y-1">
-                    <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 block">Sort By</label>
-                    <CustomSelect
-                      value={sortBy}
-                      onChange={e => setSortBy(e.target.value)}
-                      options={[
-                        { value: 'date_desc', label: 'Newest First' },
-                        { value: 'date_asc', label: 'Oldest First' },
-                        { value: 'status', label: 'Status' }
-                      ]}
-                      className="!bg-gray-50 dark:!bg-gray-900 border border-gray-200 dark:border-gray-700 !font-normal !py-3 !shadow-none !text-gray-700 dark:!text-gray-200 !text-base"
-                    />
-                  </div>
-                  
-                  <div className="space-y-1">
-                    <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 block">Category</label>
-                    <CustomSelect
-                      value={filterCategory}
-                      onChange={e => setFilterCategory(e.target.value)}
-                      options={CATEGORIES.map(c => ({ value: c, label: c }))}
-                      className="!bg-gray-50 dark:!bg-gray-900 border border-gray-200 dark:border-gray-700 !font-normal !py-3 !shadow-none !text-gray-700 dark:!text-gray-200 !text-base"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 block">Specific Email</label>
-                    <input 
-                      type="text" placeholder="e.g. user@example.com"
-                      value={filterEmail} onChange={e => setFilterEmail(e.target.value)}
-                      className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 outline-none text-gray-700 dark:text-gray-200"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 block">Start Date</label>
-                      <input 
-                        type="date"
-                        value={filterStartDate} onChange={e => setFilterStartDate(e.target.value)}
-                        className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 outline-none text-gray-700 dark:text-gray-200"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 block">End Date</label>
-                      <input 
-                        type="date"
-                        value={filterEndDate} onChange={e => setFilterEndDate(e.target.value)}
-                        className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 outline-none text-gray-700 dark:text-gray-200"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-6 flex gap-3">
-                  <button 
-                    onClick={() => {
-                      setFilterCategory('All');
-                      setFilterEmail('');
-                      setFilterStartDate('');
-                      setFilterEndDate('');
-                      setSortBy('date_desc');
-                    }}
-                    className="flex-1 py-3 px-4 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white rounded-xl font-bold transition-colors"
-                  >
-                    Clear Filters
-                  </button>
-                  <button 
-                    onClick={() => setShowFilterPopover(false)}
-                    className="flex-1 py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-colors"
-                  >
-                    Apply Filters
-                  </button>
-                </div>
-              </div>
-            </div>,
-            document.body
-          )}
           <button 
             onClick={() => setShowDeleted(!showDeleted)}
-            className={`px-4 py-2 rounded-xl text-sm font-bold border transition-colors ${showDeleted ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/50' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+            className={`px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold border transition-colors shrink-0 ${showDeleted ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/50' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
           >
-            {showDeleted ? 'Show Active' : 'Show Deleted'}
+            {showDeleted ? 'Active Only' : 'Show Deleted'}
           </button>
         </div>
       </div>
+          
+      {showFilterPopover && createPortal(
+        <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setShowFilterPopover(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-3xl w-full max-w-lg shadow-2xl border border-gray-100 dark:border-gray-700 p-6 animate-in zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <Filter className="w-6 h-6 text-indigo-500" />
+                Filter & Sort Records
+              </h3>
+              <button onClick={() => setShowFilterPopover(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <div className="space-y-4 pr-2">
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 block">Sort By</label>
+                <CustomSelect
+                  value={sortBy}
+                  onChange={e => setSortBy(e.target.value)}
+                  options={[
+                    { value: 'date_desc', label: 'Newest First' },
+                    { value: 'date_asc', label: 'Oldest First' },
+                    { value: 'status', label: 'Status' }
+                  ]}
+                  className="!bg-gray-50 dark:!bg-gray-900 border border-gray-200 dark:border-gray-700 !font-normal !py-3 !shadow-none !text-gray-700 dark:!text-gray-200 !text-base"
+                />
+              </div>
+              
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 block">Category</label>
+                <CustomSelect
+                  value={filterCategory}
+                  onChange={e => setFilterCategory(e.target.value)}
+                  options={CATEGORIES.map(c => ({ value: c, label: c }))}
+                  className="!bg-gray-50 dark:!bg-gray-900 border border-gray-200 dark:border-gray-700 !font-normal !py-3 !shadow-none !text-gray-700 dark:!text-gray-200 !text-base"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 block">Specific Email</label>
+                <input 
+                  type="text" placeholder="e.g. user@example.com"
+                  value={filterEmail} onChange={e => setFilterEmail(e.target.value)}
+                  className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 outline-none text-gray-700 dark:text-gray-200"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 block">Start Date</label>
+                  <input 
+                    type="date"
+                    value={filterStartDate} onChange={e => setFilterStartDate(e.target.value)}
+                    className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 outline-none text-gray-700 dark:text-gray-200"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 block">End Date</label>
+                  <input 
+                    type="date"
+                    value={filterEndDate} onChange={e => setFilterEndDate(e.target.value)}
+                    className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 outline-none text-gray-700 dark:text-gray-200"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button 
+                onClick={() => {
+                  setFilterCategory('All');
+                  setFilterEmail('');
+                  setFilterStartDate('');
+                  setFilterEndDate('');
+                  setSortBy('date_desc');
+                }}
+                className="flex-1 py-3 px-4 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white rounded-xl font-bold transition-colors"
+              >
+                Clear Filters
+              </button>
+              <button 
+                onClick={() => setShowFilterPopover(false)}
+                className="flex-1 py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-colors"
+              >
+                Apply Filters
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Main Table */}
       <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-left border-collapse min-w-[650px]">
             <thead>
               <tr className="bg-gray-50/50 dark:bg-gray-700/30 border-b border-gray-100 dark:border-gray-700 text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400 font-bold">
                 <th className="p-4 pl-6">Record Info</th>

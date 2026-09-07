@@ -511,25 +511,15 @@ async def fitbit_callback(data: FitbitCallbackRequest, user_id: CurrentUserId, d
 
 @router.get("/wearable/sync", response_model=WearableSyncResponse)
 async def sync_wearable(user_id: CurrentUserId, db: AsyncSession = Depends(get_db)):
-    """Simulate or fetch REAL data from wearables and save to DB."""
-    import random
+    """Fetch REAL data from wearables and save to DB. Only Fitbit is supported."""
     import urllib.request
     import json
     
     result = await db.execute(select(UserProfile).where(UserProfile.user_id == user_id))
     profile = result.scalars().first()
     
-    weight = profile.weight if profile else 70
-    height = profile.height if profile else 170
-    age = profile.age if profile else 30
-    gender = profile.gender if profile else "Male"
-    bmr = calculate_bmr(weight, height, age, gender)
-    base_tdee = calculate_tdee(bmr, "moderate")
-    
-    simulated_hr = round(random.uniform(62, 85))
-    simulated_sleep = round(random.uniform(6.5, 8.5), 1)
-    simulated_steps = int(random.uniform(3000, 12000))
-    simulated_cals = int((simulated_steps / 10000) * (base_tdee * 0.2)) + int(base_tdee * 0.1)
+    fetched_steps = None
+    fetched_cals = None
 
     # Attempt REAL Fitbit sync if token exists
     if profile and profile.fitbit_access_token:
@@ -559,8 +549,6 @@ async def sync_wearable(user_id: CurrentUserId, db: AsyncSession = Depends(get_d
             )
             with urllib.request.urlopen(req) as response:
                 fitness_data = json.loads(response.read())
-                with open("fitness_debug.txt", "w") as f:
-                    f.write(f"SUCCESS DATA:\n{json.dumps(fitness_data)}")
                 
                 # Parse the Google Fitness response
                 if "bucket" in fitness_data and len(fitness_data["bucket"]) > 0:
@@ -569,15 +557,11 @@ async def sync_wearable(user_id: CurrentUserId, db: AsyncSession = Depends(get_d
                         pts = dataset.get("point", [])
                         if pts and len(pts[0].get("value", [])) > 0:
                             if "step_count" in ds_id:
-                                simulated_steps = pts[0]["value"][0].get("intVal", simulated_steps)
+                                fetched_steps = pts[0]["value"][0].get("intVal")
                             elif "calories.expended" in ds_id:
-                                simulated_cals = int(pts[0]["value"][0].get("fpVal", simulated_cals))
+                                fetched_cals = int(pts[0]["value"][0].get("fpVal"))
                     
         except Exception as e:
-            with open("fitness_debug.txt", "w") as f:
-                f.write(f"EXCEPTION: {str(e)}\n")
-                if hasattr(e, 'read'):
-                    f.write(f"BODY: {e.read().decode()}\n")
             import logging
             logging.getLogger("lifeos").error(f"Google Fitness API fetch failed: {e}")
             pass
@@ -585,16 +569,19 @@ async def sync_wearable(user_id: CurrentUserId, db: AsyncSession = Depends(get_d
     now = datetime.now(timezone.utc)
     date_str = now.strftime("%Y-%m-%d")
 
-    steps_entry = HealthEntry(user_id=user_id, category="steps", value=simulated_steps, label=date_str, recorded_at=now)
-    cals_entry = HealthEntry(user_id=user_id, category="calories", value=simulated_cals, label=date_str, recorded_at=now)
-    hr_entry = HealthEntry(user_id=user_id, category="heart_rate", value=simulated_hr, label=date_str, recorded_at=now)
+    entries_to_add = []
+    if fetched_steps is not None:
+        entries_to_add.append(HealthEntry(user_id=user_id, category="steps", value=fetched_steps, label=date_str, recorded_at=now))
+    if fetched_cals is not None:
+        entries_to_add.append(HealthEntry(user_id=user_id, category="calories", value=fetched_cals, label=date_str, recorded_at=now))
     
-    db.add_all([steps_entry, cals_entry, hr_entry])
-    await db.commit()
+    if entries_to_add:
+        db.add_all(entries_to_add)
+        await db.commit()
 
     return WearableSyncResponse(
-        heart_rate=simulated_hr,
-        sleep_hours=simulated_sleep,
-        steps=simulated_steps,
-        calories_burned=simulated_cals
+        heart_rate=0,
+        sleep_hours=0,
+        steps=fetched_steps or 0,
+        calories_burned=fetched_cals or 0
     )

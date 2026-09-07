@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bell } from 'lucide-react';
 import API from '../utils/api';
+import { useNavigate } from 'react-router-dom';
+import { reminderApiAvailable } from '../utils/reminders';
 
 const UserNotificationsDropdown = () => {
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -11,7 +14,8 @@ const UserNotificationsDropdown = () => {
   useEffect(() => {
     fetchNotifications();
     const interval = setInterval(fetchNotifications, 60000); // Poll every minute
-    return () => clearInterval(interval);
+    window.addEventListener('medicine-reminders-updated', fetchNotifications);
+    return () => { clearInterval(interval); window.removeEventListener('medicine-reminders-updated', fetchNotifications); };
   }, []);
 
   useEffect(() => {
@@ -26,10 +30,13 @@ const UserNotificationsDropdown = () => {
 
   const fetchNotifications = async () => {
     try {
-      const data = await API.getUserNotifications();
+      const results = await Promise.allSettled([API.getUserNotifications(),
+        reminderApiAvailable() ? API.get('/reminders/notifications') : Promise.resolve([])]);
+      const data = results.flatMap(r => r.status === 'fulfilled' ? (r.value || []) : [])
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
       if (data) {
         const readIds = JSON.parse(localStorage.getItem('read_notifications') || '[]');
-        const unreadData = data.filter(n => !readIds.includes(n.id));
+        const unreadData = data.filter(n => n.href ? !n.read : !readIds.includes(n.id));
         setNotifications(unreadData);
         setUnreadCount(unreadData.length); 
       }
@@ -38,7 +45,14 @@ const UserNotificationsDropdown = () => {
     }
   };
 
-  const markAsRead = (id) => {
+  const markAsRead = async (notif) => {
+    const id = notif.id;
+    if (notif.href) {
+      try { await API.post(`/reminders/notifications/${encodeURIComponent(id)}/read`, {}); }
+      catch { return; }
+      navigate(notif.href);
+      setIsOpen(false);
+    }
     setNotifications(prev => prev.filter(n => n.id !== id));
     setUnreadCount(prev => prev - 1);
     
@@ -93,7 +107,7 @@ const UserNotificationsDropdown = () => {
               </div>
             ) : (
               notifications.map((notif) => (
-                <div key={notif.id} onClick={() => markAsRead(notif.id)} style={{
+                <div key={notif.id} role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') markAsRead(notif); }} onClick={() => markAsRead(notif)} style={{
                   padding: '16px', borderBottom: '1px solid var(--border-light)',
                   background: 'var(--bg-secondary)', cursor: 'pointer', transition: 'background 0.2s'
                 }} onMouseOver={(e) => e.currentTarget.style.background = 'var(--bg-body)'} onMouseOut={(e) => e.currentTarget.style.background = 'var(--bg-secondary)'}>

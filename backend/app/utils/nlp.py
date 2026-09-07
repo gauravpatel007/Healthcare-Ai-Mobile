@@ -7,18 +7,7 @@ from dotenv import load_dotenv
 load_dotenv(override=True)
 logger = logging.getLogger(__name__)
 
-# Fetch available models on load
-try:
-    import urllib.request
-    _api_key = os.environ.get("GROQ_API_KEY")
-    if _api_key:
-        _req = urllib.request.Request("https://api.groq.com/openai/v1/models")
-        _req.add_header("Authorization", f"Bearer {_api_key}")
-        _res = urllib.request.urlopen(_req)
-        with open("g:/Languages/Projects/Healthcare AI/R1/backend/groq_models.json", "w") as f:
-            f.write(_res.read().decode("utf-8"))
-except Exception as e:
-    logger.error(f"Failed to fetch models: {e}")
+# Removed synchronous model fetch at startup to prevent 403 errors and blocking.
 
 logger = logging.getLogger(__name__)
 

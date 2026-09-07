@@ -132,27 +132,39 @@ export default function AdminSecurity() {
       {errorMsg && <div className="p-4 bg-red-100 text-red-700 rounded-xl">{errorMsg}</div>}
       {successMsg && <div className="p-4 bg-green-100 text-green-700 rounded-xl">{successMsg}</div>}
 
-      <div className="flex space-x-4 border-b border-gray-200 dark:border-gray-600 dark:border-gray-700">
+      <div className="flex flex-wrap gap-2.5 mb-6 bg-white dark:bg-gray-800 p-2 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 w-fit">
         <button 
           onClick={() => setActiveTab('logins')}
-          className={`pb-4 px-2 font-medium text-sm transition-colors relative ${activeTab === 'logins' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-700'}`}
+          className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all ${
+            activeTab === 'logins'
+              ? 'bg-blue-50 dark:!bg-gray-700 text-blue-700 dark:!text-blue-400 shadow-sm'
+              : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-gray-200'
+          }`}
         >
-          <div className="flex items-center gap-2"><Smartphone className="w-4 h-4" /> Login History</div>
-          {activeTab === 'logins' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 dark:bg-blue-400 rounded-t-full"></span>}
+          <Smartphone className={`w-4 h-4 ${activeTab === 'logins' ? 'text-blue-600 dark:!text-blue-400' : ''}`} />
+          Login History
         </button>
         <button 
           onClick={() => setActiveTab('blocked')}
-          className={`pb-4 px-2 font-medium text-sm transition-colors relative ${activeTab === 'blocked' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-700'}`}
+          className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all ${
+            activeTab === 'blocked'
+              ? 'bg-red-50 dark:!bg-gray-700 text-red-700 dark:!text-red-400 shadow-sm'
+              : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-gray-200'
+          }`}
         >
-          <div className="flex items-center gap-2"><ShieldAlert className="w-4 h-4" /> Access Control</div>
-          {activeTab === 'blocked' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 dark:bg-blue-400 rounded-t-full"></span>}
+          <ShieldAlert className={`w-4 h-4 ${activeTab === 'blocked' ? 'text-red-600 dark:!text-red-400' : ''}`} />
+          Access Control
         </button>
         <button 
           onClick={() => setActiveTab('policy')}
-          className={`pb-4 px-2 font-medium text-sm transition-colors relative ${activeTab === 'policy' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-700'}`}
+          className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all ${
+            activeTab === 'policy'
+              ? 'bg-purple-50 dark:!bg-gray-700 text-purple-700 dark:!text-purple-400 shadow-sm'
+              : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-gray-200'
+          }`}
         >
-          <div className="flex items-center gap-2"><Lock className="w-4 h-4" /> Password Policy</div>
-          {activeTab === 'policy' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 dark:bg-blue-400 rounded-t-full"></span>}
+          <Lock className={`w-4 h-4 ${activeTab === 'policy' ? 'text-purple-600 dark:!text-purple-400' : ''}`} />
+          Password Policy
         </button>
       </div>
 

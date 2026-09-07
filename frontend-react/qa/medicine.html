@@ -1,0 +1,27 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>LifeOS medicine UI test</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+    <script>tailwind.config = { darkMode: 'class', theme: { extend: { colors: { gray: { 700: '#262626', 800: '#121212', 900: '#000000' } } } } }</script>
+    <style>
+        body {
+            padding: 0 !important;
+            display: block !important
+        }
+
+        #root {
+            display: block !important;
+            width: 100%
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+    <script type="module" src="./medicine.jsx"></script>
+</body>
+
+</html>

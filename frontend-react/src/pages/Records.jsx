@@ -5,7 +5,7 @@ import { toast } from 'react-hot-toast';
 import editIcon from '../../../Icons/edit sign.png';
 import {
   FolderOpen, GitCompare, UploadCloud, Plus, Search, FileText, Edit, Trash2,
-  Sparkles, Stethoscope, Building2, Calendar, Droplet, Scan, Pill, Activity, Syringe, X
+  Sparkles, Stethoscope, Building2, Calendar, Droplet, Scan, Pill, Activity, Syringe, X, Copy
 } from 'lucide-react';
 import CustomSelect from '../components/ui/CustomSelect';
 import { useLang } from '../contexts/LangContext';
@@ -58,6 +58,7 @@ const Records = ({ voiceAction, onVoiceActionConsumed }) => {
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [viewFindingsModal, setViewFindingsModal] = useState(null);
 
   // Listen for voice actions
   useEffect(() => {
@@ -298,14 +299,14 @@ const Records = ({ voiceAction, onVoiceActionConsumed }) => {
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6 pb-20">
-      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
-        <div className="flex justify-between items-center w-full gap-6 flex-wrap md:flex-nowrap">
-          <div className="flex items-center gap-5">
-            <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
-              <FolderOpen className="w-8 h-8" />
+      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-4 sm:p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center w-full gap-4 md:gap-6">
+          <div className="flex items-center gap-3 sm:gap-4 md:gap-5 w-full md:w-auto">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
+              <FolderOpen className="w-7 h-7 sm:w-8 sm:h-8" />
             </div>
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-1 text-left">
+            <div className="min-w-0">
+              <h1 className="text-xl md:text-2xl lg:text-3xl font-bold md:font-extrabold text-gray-900 dark:text-white tracking-tight mb-1 text-left truncate">
                 {t("Medical Records Vault")}
               </h1>
               <p className="text-xs sm:text-sm lg:text-base text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2 text-left">
@@ -314,36 +315,49 @@ const Records = ({ voiceAction, onVoiceActionConsumed }) => {
               </p>
             </div>
           </div>
-          <div className="flex items-center justify-end gap-3 relative z-10 shrink-0 ml-auto pr-2 flex-wrap">
+          <div className={`grid ${compareMode ? 'grid-cols-2' : 'grid-cols-3'} gap-2 w-full md:flex md:w-auto md:gap-3 shrink-0`}>
             {compareMode && (
               <button
-                className="flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                className="flex items-center justify-center gap-1.5 px-3 sm:px-5 py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm transition-all bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 active:scale-95"
                 onClick={() => { setCompareMode(false); setSelectedForCompare([]); }}
               >
                 {t("Cancel")}
               </button>
             )}
             <button
-              className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all ${compareMode ? 'bg-indigo-600 text-white shadow-md hover:bg-indigo-700' : 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50'}`}
+              className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-5 py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm transition-all active:scale-95 ${compareMode ? 'bg-indigo-600 text-white shadow-md hover:bg-indigo-700' : 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50'}`}
               onClick={handleCompareReports}
             >
               <GitCompare className="w-4 h-4 shrink-0" />
-              <span className="whitespace-nowrap">{compareMode ? `${t("Compare")} (${selectedForCompare.length}/2)` : t("Compare Reports")}</span>
+              <span className="truncate">
+                {compareMode ? (
+                  `${t("Compare")} (${selectedForCompare.length}/2)`
+                ) : (
+                  <>
+                    <span className="sm:hidden">{t("Compare")}</span>
+                    <span className="hidden sm:inline">{t("Compare Reports")}</span>
+                  </>
+                )}
+              </span>
             </button>
-            <button
-              className="flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50"
-              onClick={() => setShowAIUpload(true)}
-            >
-              <Sparkles className="w-4 h-4 shrink-0" />
-              <span className="whitespace-nowrap">{t("AI Upload")}</span>
-            </button>
-            <button
-              className="flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all bg-blue-600 text-white shadow-md hover:bg-blue-700 hover:shadow-lg"
-              onClick={() => setShowAddForm(true)}
-            >
-              <Plus className="w-4 h-4 shrink-0" />
-              <span className="whitespace-nowrap">{t("Add Record")}</span>
-            </button>
+            {!compareMode && (
+              <>
+                <button
+                  className="flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-5 py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm transition-all active:scale-95 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50"
+                  onClick={() => setShowAIUpload(true)}
+                >
+                  <Sparkles className="w-4 h-4 shrink-0" />
+                  <span className="truncate">{t("AI Upload")}</span>
+                </button>
+                <button
+                  className="flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-5 py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm transition-all active:scale-95 bg-blue-600 text-white shadow-md hover:bg-blue-700 hover:shadow-lg"
+                  onClick={() => setShowAddForm(true)}
+                >
+                  <Plus className="w-4 h-4 shrink-0" />
+                  <span className="truncate">{t("Add Record")}</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -399,7 +413,7 @@ const Records = ({ voiceAction, onVoiceActionConsumed }) => {
                   </div>
                 )}
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <button onClick={() => openEditModal(r)} className="p-2.5 text-gray-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors" title="Edit Record">
                   <Edit className="w-5 h-5" />
                 </button>
@@ -428,8 +442,31 @@ const Records = ({ voiceAction, onVoiceActionConsumed }) => {
                 )}
               </div>
               {r.findings && (
-                <div className="bg-indigo-50/50 dark:bg-indigo-900/10 p-3.5 rounded-xl border-l-2 border-indigo-500 text-sm font-medium text-gray-700 dark:text-gray-300 italic shadow-sm">
-                  "{r.findings}"
+                <div
+                  onClick={() => setViewFindingsModal(r)}
+                  className="group/findings cursor-pointer bg-indigo-50/50 hover:bg-indigo-100/60 dark:bg-indigo-900/10 dark:hover:bg-indigo-900/30 p-3.5 rounded-xl border-l-2 border-indigo-500 text-sm font-medium text-gray-700 dark:text-gray-300 italic shadow-sm transition-all"
+                  title={t("Click to view full extracted details")}
+                >
+                  <p
+                    className="line-clamp-4 leading-relaxed"
+                    style={{
+                      display: '-webkit-box',
+                      WebkitLineClamp: 4,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    "{r.findings}"
+                  </p>
+                  <div className="mt-2 pt-1.5 border-t border-indigo-100/80 dark:border-indigo-800/30 flex items-center justify-between not-italic text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                    <span className="flex items-center gap-1 group-hover/findings:underline">
+                      <FileText className="w-3.5 h-3.5" />
+                      {t("View Full Extracted Details")}
+                    </span>
+                    <span className="text-[10px] text-gray-400 dark:text-gray-500 font-semibold uppercase tracking-wider">
+                      {t("Tap to expand")} ↗
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
@@ -477,11 +514,11 @@ const Records = ({ voiceAction, onVoiceActionConsumed }) => {
       {/* Add Record Modal */}
       {showAddForm && createPortal(
         <div 
-          className="fixed inset-0 z-[100000] flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+          className="fixed inset-0 z-[100000] flex items-end md:items-center justify-center bg-gray-900/60 backdrop-blur-sm p-0 md:p-4 animate-in fade-in duration-200"
           onClick={() => setShowAddForm(false)}
         >
           <div 
-            className="bg-white dark:bg-gray-800 w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden border border-gray-100 dark:border-gray-700 animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]"
+            className="bg-white dark:bg-gray-800 w-full md:max-w-xl rounded-t-3xl md:rounded-3xl shadow-2xl overflow-hidden border-t md:border border-gray-100 dark:border-gray-700 animate-in slide-in-from-bottom-full md:slide-in-from-bottom-0 md:zoom-in-95 duration-200 flex flex-col max-h-[90vh] pb-[env(safe-area-inset-bottom)] md:pb-0"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50 shrink-0">
@@ -499,7 +536,7 @@ const Records = ({ voiceAction, onVoiceActionConsumed }) => {
                 <input type="text" className="w-full bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all dark:text-white text-gray-900" value={newRecord.title} onChange={e => setNewRecord({ ...newRecord, title: e.target.value })} placeholder={t("e.g. Annual Blood Test")} />
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">{t("Category")}</label>
                   <CustomSelect
@@ -515,7 +552,7 @@ const Records = ({ voiceAction, onVoiceActionConsumed }) => {
                 </div>
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">{t("Doctor (Optional)")}</label>
                   <input type="text" className="w-full bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all dark:text-white text-gray-900" value={newRecord.doctor} onChange={e => setNewRecord({ ...newRecord, doctor: e.target.value })} placeholder={t("Dr. Smith")} />
@@ -537,7 +574,7 @@ const Records = ({ voiceAction, onVoiceActionConsumed }) => {
               </div>
             </div>
             
-            <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3 shrink-0">
+            <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-700 flex flex-wrap justify-end gap-3 shrink-0">
               <button onClick={() => setShowAddForm(false)} className="px-5 py-2.5 rounded-xl font-bold text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">{t("Cancel")}</button>
               <button onClick={handleSaveRecord} className="px-5 py-2.5 rounded-xl font-bold text-sm bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/30 transition-all active:scale-95 flex items-center gap-2">
                 {t("Save Record")}
@@ -549,8 +586,8 @@ const Records = ({ voiceAction, onVoiceActionConsumed }) => {
       )}
 
       {showEditForm && editRecord && createPortal(
-        <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => { if (e.target === e.currentTarget) setShowEditForm(false) }}>
-          <div className="bg-white dark:bg-gray-800 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-2xl border border-gray-100 dark:border-gray-700 flex flex-col">
+        <div className="fixed inset-0 z-[100000] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => { if (e.target === e.currentTarget) setShowEditForm(false) }}>
+          <div className="bg-white dark:bg-gray-800 rounded-t-3xl md:rounded-3xl w-full md:max-w-2xl max-h-[90vh] overflow-hidden shadow-2xl border-t md:border border-gray-100 dark:border-gray-700 flex flex-col animate-in slide-in-from-bottom-full md:slide-in-from-bottom-0 md:zoom-in-95 duration-200 pb-[env(safe-area-inset-bottom)] md:pb-0">
             <div className="flex justify-between items-center p-6 border-b border-gray-100 dark:border-gray-700 shrink-0">
               <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                 <img src={editIcon} alt="Edit" className="w-5 h-5" /> {t("Edit Medical Record")}
@@ -595,7 +632,7 @@ const Records = ({ voiceAction, onVoiceActionConsumed }) => {
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 p-6 border-t border-gray-100 dark:border-gray-700 shrink-0">
+            <div className="flex flex-wrap justify-end gap-3 p-6 border-t border-gray-100 dark:border-gray-700 shrink-0">
               <button className="px-6 py-3 rounded-xl font-bold text-gray-600 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 transition-colors" onClick={() => setShowEditForm(false)}>{t("Cancel")}</button>
               <button className="px-6 py-3 rounded-xl font-bold text-white shadow-sm transition-colors bg-blue-600 hover:bg-blue-700" onClick={handleUpdateRecord}>{t("Update Record")}</button>
             </div>
@@ -605,8 +642,8 @@ const Records = ({ voiceAction, onVoiceActionConsumed }) => {
       )}
 
       {showAIUpload && createPortal(
-        <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => { if (e.target === e.currentTarget && aiUploadStatus?.type !== 'loading') { setShowAIUpload(false); setAiUploadStatus(null); } }}>
-          <div className="bg-white dark:bg-gray-800 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-2xl border border-gray-100 dark:border-gray-700 flex flex-col">
+        <div className="fixed inset-0 z-[100000] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => { if (e.target === e.currentTarget && aiUploadStatus?.type !== 'loading') { setShowAIUpload(false); setAiUploadStatus(null); } }}>
+          <div className="bg-white dark:bg-gray-800 rounded-t-3xl md:rounded-3xl w-full md:max-w-2xl max-h-[90vh] overflow-hidden shadow-2xl border-t md:border border-gray-100 dark:border-gray-700 flex flex-col animate-in slide-in-from-bottom-full md:slide-in-from-bottom-0 md:zoom-in-95 duration-200 pb-[env(safe-area-inset-bottom)] md:pb-0">
             <div className="flex justify-between items-center p-6 border-b border-gray-100 dark:border-gray-700 shrink-0">
               <h3 className="text-xl font-bold text-gray-900 dark:text-white">🤖 {t("AI Report Parser")}</h3>
               <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors" onClick={() => setShowAIUpload(false)}>✕</button>
@@ -679,7 +716,7 @@ const Records = ({ voiceAction, onVoiceActionConsumed }) => {
                 </div>
               )}
             </div>
-            <div className="flex justify-end gap-3 p-6 border-t border-gray-100 dark:border-gray-700 shrink-0 bg-gray-50 dark:bg-gray-800/50">
+            <div className="flex flex-wrap justify-end gap-3 p-6 border-t border-gray-100 dark:border-gray-700 shrink-0 bg-gray-50 dark:bg-gray-800/50">
               <button
                 className={`px-6 py-3 rounded-full font-semibold border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-colors ${aiUploadStatus?.type === 'loading' ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100 dark:hover:bg-gray-600'}`}
                 onClick={() => { setShowAIUpload(false); setAiUploadStatus(null); }}
@@ -698,8 +735,8 @@ const Records = ({ voiceAction, onVoiceActionConsumed }) => {
       )}
 
       {showCompare && createPortal(
-        <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => { if (e.target === e.currentTarget) setShowCompare(false) }}>
-          <div className="bg-white dark:bg-gray-800 rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-hidden shadow-2xl border border-gray-100 dark:border-gray-700 flex flex-col">
+        <div className="fixed inset-0 z-[100000] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => { if (e.target === e.currentTarget) setShowCompare(false) }}>
+          <div className="bg-white dark:bg-gray-800 rounded-t-3xl md:rounded-3xl w-full md:max-w-3xl max-h-[90vh] overflow-hidden shadow-2xl border-t md:border border-gray-100 dark:border-gray-700 flex flex-col animate-in slide-in-from-bottom-full md:slide-in-from-bottom-0 md:zoom-in-95 duration-200 pb-[env(safe-area-inset-bottom)] md:pb-0">
             <div className="flex justify-between items-center p-6 border-b border-gray-100 dark:border-gray-700 shrink-0">
               <h3 className="text-xl font-bold text-gray-900 dark:text-white">📊 {t("AI Report Comparison")}</h3>
               <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors" onClick={() => setShowCompare(false)}>✕</button>
@@ -719,7 +756,7 @@ const Records = ({ voiceAction, onVoiceActionConsumed }) => {
               )}
               {compareResult?.type === 'success' && (
                 <div>
-                  <div className="grid grid-cols-2 gap-4 mb-5">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
                     <div className="text-center p-4 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
                       <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">📅 {new Date(compareResult.data.record_1.date).toLocaleDateString()}</p>
                       <h4 className="text-base font-semibold text-gray-900 dark:text-white mb-1">{compareResult.data.record_1.title}</h4>
@@ -749,8 +786,8 @@ const Records = ({ voiceAction, onVoiceActionConsumed }) => {
       )}
 
       {showSummary && createPortal(
-        <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => { if (e.target === e.currentTarget) setShowSummary(false) }}>
-          <div className="bg-white dark:bg-gray-800 rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-hidden shadow-2xl border border-gray-100 dark:border-gray-700 flex flex-col">
+        <div className="fixed inset-0 z-[100000] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => { if (e.target === e.currentTarget) setShowSummary(false) }}>
+          <div className="bg-white dark:bg-gray-800 rounded-t-3xl md:rounded-3xl w-full md:max-w-3xl max-h-[90vh] overflow-hidden shadow-2xl border-t md:border border-gray-100 dark:border-gray-700 flex flex-col animate-in slide-in-from-bottom-full md:slide-in-from-bottom-0 md:zoom-in-95 duration-200 pb-[env(safe-area-inset-bottom)] md:pb-0">
             <div className="flex justify-between items-center p-6 border-b border-gray-100 dark:border-gray-700 shrink-0">
               <h3 className="text-xl font-bold text-gray-900 dark:text-white">✨ {t("AI Summary")}: {summaryResult?.recordTitle}</h3>
               <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors" onClick={() => setShowSummary(false)}>✕</button>
@@ -783,8 +820,8 @@ const Records = ({ voiceAction, onVoiceActionConsumed }) => {
       )}
 
       {showAnalysis && createPortal(
-        <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => { if (e.target === e.currentTarget && !isAnalyzing) setShowAnalysis(false) }}>
-          <div className="bg-white dark:bg-gray-800 rounded-3xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl border border-gray-100 dark:border-gray-700 flex flex-col">
+        <div className="fixed inset-0 z-[100000] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => { if (e.target === e.currentTarget && !isAnalyzing) setShowAnalysis(false) }}>
+          <div className="bg-white dark:bg-gray-800 rounded-t-3xl md:rounded-3xl w-full md:max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl border-t md:border border-gray-100 dark:border-gray-700 flex flex-col animate-in slide-in-from-bottom-full md:slide-in-from-bottom-0 md:zoom-in-95 duration-200 pb-[env(safe-area-inset-bottom)] md:pb-0">
             <div className="flex justify-between items-center p-6 border-b border-gray-100 dark:border-gray-700 shrink-0">
               <h3 className="text-xl font-bold text-gray-900 dark:text-white">🤖 {t("AI Document Analysis")}</h3>
               <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors" onClick={() => !isAnalyzing && setShowAnalysis(false)}>✕</button>
@@ -846,6 +883,99 @@ const Records = ({ voiceAction, onVoiceActionConsumed }) => {
             </div>
             <div className="flex justify-end p-6 border-t border-gray-100 dark:border-gray-700 shrink-0">
               <button className={`px-6 py-3 rounded-xl font-bold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 transition-colors ${isAnalyzing ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`} disabled={isAnalyzing} onClick={() => setShowAnalysis(false)}>{t("Close")}</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* View Full Extracted Details Modal */}
+      {viewFindingsModal && createPortal(
+        <div 
+          className="fixed inset-0 z-[100000] flex items-end md:items-center justify-center bg-gray-900/60 backdrop-blur-sm p-0 md:p-4 animate-in fade-in duration-200"
+          onClick={() => setViewFindingsModal(null)}
+        >
+          <div 
+            className="bg-white dark:bg-gray-800 w-full md:max-w-2xl lg:max-w-3xl rounded-t-3xl md:rounded-3xl shadow-2xl overflow-hidden border-t md:border border-gray-100 dark:border-gray-700 animate-in slide-in-from-bottom-full md:slide-in-from-bottom-0 md:zoom-in-95 duration-200 flex flex-col max-h-[90vh] md:max-h-[82vh] pb-[env(safe-area-inset-bottom)] md:pb-0"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50 shrink-0">
+              <div className="min-w-0 pr-4 text-left">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 m-0 truncate">
+                  <FileText className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                  <span>{t("Extracted Details")}</span>
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5 font-medium">
+                  {viewFindingsModal.title}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText(viewFindingsModal.findings);
+                    toast.success(t("Extracted text copied to clipboard!"));
+                  }}
+                  className="p-2 text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors flex items-center gap-1.5 text-xs font-bold"
+                  title="Copy text"
+                >
+                  <Copy className="w-4 h-4" />
+                  <span className="hidden sm:inline">{t("Copy")}</span>
+                </button>
+                <button 
+                  onClick={() => setViewFindingsModal(null)} 
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full p-1.5 transition-colors"
+                  aria-label="Close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Metadata Badges */}
+            <div className="px-6 py-3 bg-gray-50/50 dark:bg-gray-900/20 border-b border-gray-100 dark:border-gray-700 flex flex-wrap items-center gap-2 shrink-0 text-left">
+              {viewFindingsModal.category && (
+                <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2.5 py-1 rounded-full text-[10px] font-black tracking-widest uppercase">
+                  {t(viewFindingsModal.category)}
+                </span>
+              )}
+              {viewFindingsModal.date && (
+                <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 flex items-center gap-1 bg-white dark:bg-gray-800 px-2.5 py-1 rounded-lg border border-gray-100 dark:border-gray-700">
+                  <Calendar className="w-3.5 h-3.5 text-blue-500" />
+                  {viewFindingsModal.date}
+                </span>
+              )}
+              {viewFindingsModal.doctor && (
+                <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 flex items-center gap-1 bg-white dark:bg-gray-800 px-2.5 py-1 rounded-lg border border-gray-100 dark:border-gray-700">
+                  <Stethoscope className="w-3.5 h-3.5 text-indigo-500" />
+                  {viewFindingsModal.doctor}
+                </span>
+              )}
+              {viewFindingsModal.hospital && (
+                <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 flex items-center gap-1 bg-white dark:bg-gray-800 px-2.5 py-1 rounded-lg border border-gray-100 dark:border-gray-700">
+                  <Building2 className="w-3.5 h-3.5 text-purple-500" />
+                  {viewFindingsModal.hospital}
+                </span>
+              )}
+            </div>
+
+            {/* Modal Body: Full Extracted Text */}
+            <div className="p-5 sm:p-6 overflow-y-auto custom-scrollbar flex-1 bg-slate-50/40 dark:bg-gray-900/40 text-left">
+              <div className="bg-white dark:bg-gray-800 p-5 sm:p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                <p className="text-sm md:text-base text-gray-800 dark:text-gray-200 leading-relaxed whitespace-pre-wrap select-text font-normal font-sans">
+                  {viewFindingsModal.findings}
+                </p>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end items-center bg-gray-50 dark:bg-gray-800/50 shrink-0">
+              <button 
+                onClick={() => setViewFindingsModal(null)} 
+                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm shadow-sm hover:shadow-md active:scale-95 transition-all"
+              >
+                {t("Close")}
+              </button>
             </div>
           </div>
         </div>,

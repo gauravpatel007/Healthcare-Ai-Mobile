@@ -67,7 +67,7 @@ const LandingChatbot = () => {
   return (
     <div ref={chatRef}>
       <div 
-        className={`fixed bottom-24 right-6 z-[60] w-[340px] max-w-[90vw] h-[460px] bg-white dark:bg-slate-900 rounded-[24px] shadow-2xl border border-slate-100 dark:border-slate-800 flex flex-col overflow-hidden origin-bottom-right transition-all duration-200 ${isOpen ? 'scale-100 opacity-100 pointer-events-auto' : 'scale-95 opacity-0 pointer-events-none'}`}
+        className={`fixed bottom-[150px] md:bottom-[90px] right-4 md:right-6 z-[60] w-[340px] md:w-[380px] h-[500px] max-h-[70vh] bg-slate-50 dark:bg-slate-950 rounded-[24px] shadow-2xl border border-slate-100 dark:border-slate-800 flex flex-col overflow-hidden transition-all duration-300 origin-bottom-right ${isOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}`}
       >
         <div className="bg-gradient-to-r from-blue-600 to-cyan-500 px-5 py-4 flex items-center justify-between text-white">
           <div className="flex items-center gap-2">
@@ -136,7 +136,7 @@ const LandingChatbot = () => {
       <button 
         onClick={() => setIsOpen(!isOpen)} 
         aria-label="Open AI chat demo"
-        className="fixed bottom-6 right-6 z-[60] w-14 h-14 rounded-full bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-500/30 flex items-center justify-center hover:-translate-y-1 hover:shadow-xl transition-all border-none cursor-pointer"
+        className="fixed bottom-[88px] md:bottom-6 right-4 md:right-6 z-[60] w-14 h-14 rounded-full bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-500/30 flex items-center justify-center hover:-translate-y-1 hover:shadow-xl transition-all border-none cursor-pointer"
       >
         <span className="material-symbols-outlined text-[26px]">
           {isOpen ? 'close' : 'chat'}

@@ -10,7 +10,7 @@ from app.models.gamification import UserGamification
 from app.models.disease import DiseaseLibrary, SymptomLibrary, SymptomCheckHistory
 from app.models.diet import Recipe, MealPlan, ScannedMeal
 from app.models.appointment import Appointment
-from app.models.emergency import EmergencyContact, SOSLog
+from app.models.emergency import EmergencyContact, SOSLog, SOSAudioClip
 from app.models.family import FamilyMember, Vaccination
 from app.models.health_tracker import HealthEntry, SleepEntry, WaterLog
 from app.models.expense import MedicalExpense
@@ -25,14 +25,15 @@ from app.models.article import HealthArticle
 from app.models.notification import SystemNotification
 from app.models.feedback import UserFeedback
 from app.models.file_asset import FileAsset
+from app.models.lab_metric import LabMetric
 
 __all__ = [
     "User", "UserProfile", "PasswordResetToken", "LoginHistory", "BlockedIP", "UserActivity",
-    "MedicalRecord",
+    "MedicalRecord", "LabMetric",
     "Medicine", "MedicineLibrary",
     "DiseaseLibrary", "SymptomLibrary", "SymptomCheckHistory",
     "Appointment",
-    "EmergencyContact", "SOSLog",
+    "EmergencyContact", "SOSLog", "SOSAudioClip",
     "FamilyMember", "Vaccination",
     "HealthEntry", "SleepEntry", "WaterLog",
     "MedicalExpense",
@@ -44,5 +45,6 @@ __all__ = [
     "AIPrompt", "AIPromptVersion",
     "Exercise", "WorkoutPlan",
     "HealthArticle", "SystemNotification", "UserFeedback",
-    "Recipe", "MealPlan", "FileAsset"
+    "FileAsset"
 ]
+from app.models.reminder import ReminderSettings, MedicineDose, ReminderAction, ReminderNotice

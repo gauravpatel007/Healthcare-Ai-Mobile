@@ -26,6 +26,7 @@ class User(Base, TimestampMixin):
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     face_login_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     face_descriptor: Mapped[str | None] = mapped_column(Text, nullable=True)
+    webauthn_credentials: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     two_factor_secret: Mapped[str | None] = mapped_column(String(32), nullable=True)
     two_factor_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     login_alerts_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

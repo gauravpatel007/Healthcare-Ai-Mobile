@@ -5,14 +5,22 @@ Reads from app config and imports all models for autogenerate.
 
 import asyncio
 from logging.config import fileConfig
+import sys
+import os
 
 from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+# Add the backend directory to the Python path so it can find the 'app' module
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')))
+
 # Import Base and all models
+# pyrefly: ignore [missing-import]
 from app.database import Base
+# pyrefly: ignore [missing-import]
 import app.models  # noqa: F401 — registers all models
+# pyrefly: ignore [missing-import]
 from app.config import get_settings
 
 config = context.config

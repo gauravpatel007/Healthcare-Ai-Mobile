@@ -6,8 +6,9 @@ Loads environment variables using Pydantic Settings.
 from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
+import os
 
-load_dotenv(override=True)
+load_dotenv()
 
 
 class Settings(BaseSettings):
@@ -27,20 +28,23 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
 
     # --- Database ---
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:xxxx@localhost:xxxx/lifeos_db"
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:xxxx@localhost:xxxx/lifeos_mobile_db"
 
     # --- JWT Authentication ---
     SECRET_KEY: str = "change-this-to-a-random-secret-key-in-production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
-    GROQ_MODEL: str = "llama-3.3-70b-versatile"
-    # --- Groq AI ---
+    # --- AI Settings ---
     GROQ_API_KEY: str = ""
-    GROQ_MODEL: str = "llama-3.2-11b-vision-preview"
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    OPENAI_API_KEY: str = ""
+    OPENAI_VISION_MODEL: str = "gpt-4o-mini"
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = ""  # Leave empty to auto-detect best available Flash model
 
     # --- Google Sign In ---
-    GOOGLE_CLIENT_ID: str = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com"
+    GOOGLE_CLIENT_ID: str = "749609290729-7p9u9ujo98odpldasobtvqascmvejumb.apps.googleusercontent.com"
 
     # --- Fitbit Integration ---
     FITBIT_CLIENT_ID: str = ""
@@ -56,7 +60,7 @@ class Settings(BaseSettings):
     TWILIO_FROM_NUMBER: str = ""
 
     # --- File Uploads ---
-    UPLOAD_DIR: str = "uploads"
+    UPLOAD_DIR: str = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "uploads")
     MAX_FILE_SIZE_MB: int = 10
 
     # --- OneSignal Push Notifications ---
@@ -65,6 +69,9 @@ class Settings(BaseSettings):
 
     # --- CORS ---
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5500,http://127.0.0.1:5500,http://localhost:5173,http://127.0.0.1:5173"
+
+    # --- External URLs ---
+    PUBLIC_API_URL: str = ""
 
     @property
     def cors_origins_list(self) -> list[str]:
@@ -78,4 +85,8 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     """Cached settings instance."""
-    return Settings()
+    s = Settings()
+    if not os.path.isabs(s.UPLOAD_DIR):
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        s.UPLOAD_DIR = os.path.normpath(os.path.join(base_dir, s.UPLOAD_DIR))
+    return s

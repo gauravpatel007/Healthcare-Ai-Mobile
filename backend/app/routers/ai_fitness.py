@@ -78,70 +78,40 @@ async def weekly_plan():
     return {"plan": WEEKLY_PLAN}
 
 @router.post("/regenerate-plan")
-async def regenerate_plan(user_id: CurrentUserId):
-    """Regenerate weekly workout schedule."""
-    import random
-    categories = list(WORKOUTS.keys())
-    new_plan = []
-    days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+async def regenerate_plan(user_id: CurrentUserId, db: AsyncSession = Depends(get_db)):
+    """Regenerate weekly workout schedule using AI personalization."""
+    from app.services.ai_service import generate_json_response
     
-    # Ensure variety
-    for i, day in enumerate(days):
-        if i == 6:  # Sunday rest
-            new_plan.append({"day": day, "workout": "Rest & Light Stretch", "duration": "20 min", "icon": "🛌", "rest": True})
-            continue
-            
-        cat = random.choice(categories)
-        if i == 0: cat = "gym" # Force gym at least once
-        elif i == 1: cat = "cardio"
-        elif i == 2: cat = "hiit"
-        elif i == 3: cat = "yoga"
-        elif i == 4: cat = "strength"
-        elif i == 5: cat = "gym"
-        
-        exercise = random.choice(WORKOUTS[cat])
-        new_plan.append({
-            "day": day,
-            "workout": f"{cat.title()} - {exercise['name']}",
-            "duration": exercise['duration'],
-            "icon": exercise['icon'],
-            "rest": False
-        })
-        
-    return {"plan": new_plan}
-
-
-@router.post("/steps")
-async def add_steps(
-    steps: int, user_id: CurrentUserId, db: AsyncSession = Depends(get_db)
-):
-    """Log steps for today."""
-    from datetime import datetime, timezone
+    result = await db.execute(select(UserProfile).where(UserProfile.user_id == user_id))
+    profile = result.scalars().first()
     
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    steps_r = await db.execute(
-        select(HealthEntry).where(
-            HealthEntry.user_id == user_id,
-            HealthEntry.category == "steps",
-            HealthEntry.recorded_at >= today_start,
-        )
+    if profile:
+        context = f"Age: {profile.age}, Weight: {profile.weight}kg, Height: {profile.height}cm, Gender: {profile.gender}"
+        if getattr(profile, 'goals', None):
+            context += f", Goals: {profile.goals}"
+        if getattr(profile, 'fitness_level', None):
+            context += f", Fitness Level: {profile.fitness_level}"
+        if getattr(profile, 'health_conditions', None):
+            context += f", Health Conditions: {profile.health_conditions}"
+    else:
+        context = "Average adult looking for general fitness."
+
+    user_message = (
+        "Generate a 7-day personalized workout plan based on my profile. "
+        "Return exactly a JSON object with a key 'plan' containing an array of 7 items (Monday to Sunday). "
+        "Each item should strictly have these keys: 'day' (e.g. Monday), 'workout' (e.g. Upper Body + Cardio), "
+        "'duration' (e.g. 45 min), 'icon' (a single emoji representing the workout), 'rest' (boolean). "
+        "If rest is true, duration should be short (e.g. 20 min) and workout should be something like 'Rest & Recovery'."
     )
-    current_steps = sum(int(e.value) for e in steps_r.scalars().all())
     
-    # If the user has a negative balance from past bugs, offset it first
-    if current_steps < 0:
-        db.add(HealthEntry(
-            user_id=user_id, category="steps", value=float(-current_steps),
-            label="System Offset", recorded_at=datetime.now(timezone.utc)
-        ))
+    ai_response = await generate_json_response("fitness", user_message, context=context)
+    
+    if ai_response and "plan" in ai_response and isinstance(ai_response["plan"], list) and len(ai_response["plan"]) == 7:
+        return {"plan": ai_response["plan"]}
+        
+    # Fallback to curated plan if AI generation fails
+    return {"plan": WEEKLY_PLAN}
 
-    entry = HealthEntry(
-        user_id=user_id, category="steps", value=float(steps),
-        label=date.today().strftime("%a"), recorded_at=datetime.now(timezone.utc),
-    )
-    db.add(entry)
-    await db.commit()
-    return {"success": True, "steps": steps}
 
 
 @router.get("/stats", response_model=FitnessStatsResponse)
@@ -161,6 +131,17 @@ async def fitness_stats(user_id: CurrentUserId, db: AsyncSession = Depends(get_d
     )
     steps = sum(int(e.value) for e in steps_r.scalars().all())
     steps = max(0, steps)
+
+    # Active Minutes
+    active_min_r = await db.execute(
+        select(HealthEntry).where(
+            HealthEntry.user_id == user_id,
+            HealthEntry.category == "active_minutes",
+            HealthEntry.recorded_at >= today_start,
+        )
+    )
+    active_minutes = sum(int(e.value) for e in active_min_r.scalars().all())
+    active_minutes = max(0, active_minutes)
 
     # Calories burned
     cals_r = await db.execute(
@@ -202,11 +183,11 @@ async def fitness_stats(user_id: CurrentUserId, db: AsyncSession = Depends(get_d
     return FitnessStatsResponse(
         steps=steps,
         calories_burned=calories,
-        active_minutes=round(steps / 100),
+        active_minutes=active_minutes,
         distance_km=round(steps * 0.000762, 2),
         step_goal=step_goal,
         calorie_goal=calorie_goal,
-        step_percentage=round((steps / step_goal) * 100, 1),
+        step_percentage=round((steps / step_goal) * 100, 1) if step_goal else 0,
         workouts_this_week=workouts_this_week
     )
 
@@ -222,7 +203,11 @@ async def log_exercise(
         user_id=user_id, category="calories", value=float(calories),
         label=exercise_name, recorded_at=datetime.now(timezone.utc),
     )
-    db.add(entry)
+    active_entry = HealthEntry(
+        user_id=user_id, category="active_minutes", value=float(duration_minutes),
+        label=exercise_name, recorded_at=datetime.now(timezone.utc),
+    )
+    db.add_all([entry, active_entry])
     await db.commit()
     return {"success": True, "exercise": exercise_name, "duration": duration_minutes, "calories": calories}
 

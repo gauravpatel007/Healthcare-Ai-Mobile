@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import API from '../utils/api';
 import { useSettings } from '../contexts/SettingsContext';
 
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID || '749609290729-7p9u9ujo98odpldasobtvqascmvejumb.apps.googleusercontent.com').replace(/['"]/g, '').trim();
 
 const LoginModal = ({ show, onClose }) => {
   const { settings } = useSettings();
@@ -35,10 +35,9 @@ const LoginModal = ({ show, onClose }) => {
   const [verificationCode, setVerificationCode] = useState('');
   const verifyEmailRef = useRef('');
 
-  // Face login
-  const [faceEmail, setFaceEmail] = useState('');
-  const [faceModelsLoaded, setFaceModelsLoaded] = useState(false);
-  const [faceLoading, setFaceLoading] = useState(true);
+  // Biometric login
+  const [biometricEmail, setBiometricEmail] = useState('');
+  const [faceCaptureStatus, setFaceCaptureStatus] = useState('');
   const videoRef = useRef(null);
   const streamRef = useRef(null);
 
@@ -51,8 +50,6 @@ const LoginModal = ({ show, onClose }) => {
       setMode('login');
       setError('');
       setLoading(false);
-    } else {
-      stopFaceVideo();
     }
   }, [show]);
 
@@ -61,33 +58,59 @@ const LoginModal = ({ show, onClose }) => {
     if (!show) return;
     if (mode !== 'login' && mode !== 'signup') return;
 
+    let pollInterval = null;
+    let attempts = 0;
+
     const initGoogle = () => {
       if (window.google?.accounts?.id && googleBtnRef.current) {
-        window.google.accounts.id.initialize({
-          client_id: GOOGLE_CLIENT_ID,
-          callback: handleGoogleResponse,
-          context: 'signin',
-          ux_mode: 'popup',
-          auto_prompt: false,
-        });
-        // Clear previous button render
-        googleBtnRef.current.innerHTML = '';
-        window.google.accounts.id.renderButton(googleBtnRef.current, {
-          type: 'standard',
-          shape: 'rectangular',
-          theme: 'outline',
-          text: 'signin_with',
-          size: 'large',
-          logo_alignment: 'left',
-          width: 300,
-        });
+        if (pollInterval) {
+          clearInterval(pollInterval);
+          pollInterval = null;
+        }
+        try {
+          window.google.accounts.id.initialize({
+            client_id: GOOGLE_CLIENT_ID,
+            callback: handleGoogleResponse,
+            context: 'signin',
+            ux_mode: 'popup',
+            auto_prompt: false,
+            error_callback: (err) => {
+              console.warn("Google Identity Services notice:", err);
+            },
+          });
+          // Clear previous button render
+          googleBtnRef.current.innerHTML = '';
+          window.google.accounts.id.renderButton(googleBtnRef.current, {
+            type: 'standard',
+            shape: 'rectangular',
+            theme: 'outline',
+            text: 'signin_with',
+            size: 'large',
+            logo_alignment: 'left',
+            width: 300,
+          });
+        } catch (e) {
+          console.error("Failed to render Google Sign-In button:", e);
+        }
+        return true;
       }
+      return false;
     };
 
-    // Try immediately, retry after a short delay if GIS not loaded yet
-    initGoogle();
-    const timer = setTimeout(initGoogle, 500);
-    return () => clearTimeout(timer);
+    // Try immediately; if GIS script hasn't finished loading yet, poll briefly
+    if (!initGoogle()) {
+      pollInterval = setInterval(() => {
+        attempts++;
+        if (initGoogle() || attempts > 25) {
+          clearInterval(pollInterval);
+          pollInterval = null;
+        }
+      }, 200);
+    }
+
+    return () => {
+      if (pollInterval) clearInterval(pollInterval);
+    };
   }, [show, mode]);
 
   // ─── Auth Handlers ───────────────────────────────
@@ -122,6 +145,9 @@ const LoginModal = ({ show, onClose }) => {
         setRequires2FA(true);
         setMode('2fa');
       } else {
+        // Store tokens for Bearer auth (essential for mobile app)
+        if (response.data?.access_token) API.setToken(response.data.access_token);
+        if (response.data?.refresh_token) API.setRefreshToken(response.data.refresh_token);
         API.setAuthenticated(true);
         const profile = await API.saveCurrentAccount(response.data?.refresh_token);
         if (profile?.role === 'admin') {
@@ -276,19 +302,28 @@ const LoginModal = ({ show, onClose }) => {
     }
 
     setLoading(true);
+    setError('');
     try {
       const res = await API.request('/auth/google', {
         method: 'POST',
         body: { credential: response.credential },
       });
-      
-      if (res.data?.requires_2fa || res.requires_2fa) {
-        setTempToken(res.data?.temp_token || res.temp_token);
+
+      const tokenData = res?.data || res;
+
+      if (tokenData?.requires_2fa || res.requires_2fa) {
+        setTempToken(tokenData?.temp_token || res.temp_token);
         setRequires2FA(true);
         setMode('2fa');
       } else {
+        const accessToken = tokenData?.access_token || res?.access_token;
+        const refreshToken = tokenData?.refresh_token || res?.refresh_token;
+
+        if (accessToken) API.setToken(accessToken);
+        if (refreshToken) API.setRefreshToken(refreshToken);
+
         API.setAuthenticated(true);
-        const profile = await API.saveCurrentAccount(res.data?.refresh_token);
+        const profile = await API.saveCurrentAccount(refreshToken);
         if (profile?.role === 'admin') {
           localStorage.setItem('admin_logged_in', 'true');
           window.location.href = '/admin';
@@ -297,6 +332,7 @@ const LoginModal = ({ show, onClose }) => {
         }
       }
     } catch (err) {
+      console.error("Google Authentication error:", err);
       setError(err.message === 'Failed to fetch'
         ? 'Cannot connect to the backend server. Is it running?'
         : err.message || 'Google Authentication failed.');
@@ -311,89 +347,116 @@ const LoginModal = ({ show, onClose }) => {
     return () => { delete window.__handleGoogleCredential; };
   }, [handleGoogleResponse]);
 
-  // ─── Face Login ──────────────────────────────────
+  // ─── Biometric Login ──────────────────────────────────
 
-  const loadFaceModels = async () => {
-    if (faceModelsLoaded) return;
-    try {
-      const faceapi = window.faceapi;
-      if (!faceapi) {
-        setFaceLoading(true);
-        return;
-      }
-      await faceapi.nets.tinyFaceDetector.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
-      await faceapi.nets.faceLandmark68Net.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
-      await faceapi.nets.faceRecognitionNet.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
-      setFaceModelsLoaded(true);
-      setFaceLoading(false);
-    } catch (e) {
-      setFaceLoading(false);
-      setError('Failed to load AI face models.');
-    }
-  };
-
-  const startFaceVideo = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
-    } catch (e) {
-      setError('Camera access denied.');
-    }
-  };
-
-  const stopFaceVideo = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop());
-      streamRef.current = null;
-    }
-  };
-
-  const switchToFace = () => {
+  const switchToBiometric = () => {
     setError('');
-    setMode('face');
-    loadFaceModels();
-    startFaceVideo();
+    setMode('biometric');
   };
 
-  const switchFromFace = () => {
-    stopFaceVideo();
+  const switchFromBiometric = () => {
     setError('');
     setMode('login');
   };
 
-  const handleFaceLogin = async (e) => {
+  const handleBiometricLogin = async (e) => {
     e.preventDefault();
-    const faceapi = window.faceapi;
-    if (!faceapi || !faceModelsLoaded) {
-      setError('Please wait for AI models to load.');
+    if (!biometricEmail) {
+      setError('Please enter your email first.');
       return;
     }
+    
     setError('');
+    
+    if (faceCaptureStatus !== 'scanning') {
+      // First click: Open camera and start scanning
+      setFaceCaptureStatus('loading');
+      try {
+        if (!window.faceapi) {
+          setError('Face API not loaded yet. Please wait a moment.');
+          setFaceCaptureStatus('error');
+          return;
+        }
+        const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
+        await Promise.all([
+          window.faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+          window.faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+          window.faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+        ]);
+        
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+        setFaceCaptureStatus('scanning');
+      } catch (err) {
+        setFaceCaptureStatus('error');
+        setError('Failed to access camera or load models.');
+      }
+      return;
+    }
+    
+    // Second click: Capture and verify
+    if (!videoRef.current) return;
     setLoading(true);
+    
     try {
-      const detection = await faceapi
-        .detectSingleFace(videoRef.current, new faceapi.TinyFaceDetectorOptions({ inputSize: 224 }))
+      const detection = await window.faceapi.detectSingleFace(videoRef.current, new window.faceapi.TinyFaceDetectorOptions())
         .withFaceLandmarks()
         .withFaceDescriptor();
+        
       if (!detection) {
-        throw new Error('No face detected. Please look straight at the camera.');
+        throw new Error('No face detected. Please ensure your face is clearly visible.');
       }
+      
       const descriptor = Array.from(detection.descriptor);
-      const res = await API.request('/auth/face-login', {
+      
+      const finishRes = await API.request('/auth/face/login', {
         method: 'POST',
-        body: { email: faceEmail, descriptor },
+        body: { email: biometricEmail, descriptor },
       });
-      API.setAuthenticated(true);
-      await API.saveCurrentAccount(res.data?.refresh_token);
-      window.location.href = '/app';
+      
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(trk => trk.stop());
+        streamRef.current = null;
+      }
+      
+      if (finishRes.data?.requires_2fa || finishRes.requires_2fa) {
+        setTempToken(finishRes.data?.temp_token || finishRes.temp_token);
+        setRequires2FA(true);
+        setMode('2fa');
+      } else {
+        const accessToken = finishRes.data?.access_token || finishRes.access_token;
+        const refreshToken = finishRes.data?.refresh_token || finishRes.refresh_token;
+
+        if (accessToken) API.setToken(accessToken);
+        if (refreshToken) API.setRefreshToken(refreshToken);
+
+        API.setAuthenticated(true);
+        await API.saveCurrentAccount(refreshToken);
+        window.location.href = '/app';
+      }
     } catch (err) {
-      setError(err.message || 'Face login failed.');
+      setError(err.message || 'Biometric login failed.');
+      setFaceCaptureStatus('error');
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(trk => trk.stop());
+        streamRef.current = null;
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const cancelBiometric = (e) => {
+    e.preventDefault();
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(trk => trk.stop());
+      streamRef.current = null;
+    }
+    setFaceCaptureStatus('');
+    switchFromBiometric();
   };
 
   // ─── Mode Switching Helpers ──────────────────────
@@ -431,7 +494,7 @@ const LoginModal = ({ show, onClose }) => {
     verify: { title: 'Verify Email', subtitle: `We sent a code to ${verifyEmailRef.current}` },
     forgot: { title: 'Reset Password', subtitle: 'Enter your email to receive a verification code' },
     reset: { title: 'Enter Code', subtitle: `We sent a code to ${resetEmailRef.current}` },
-    face: { title: 'Face Login', subtitle: 'Secure biometric access' },
+    biometric: { title: 'Biometric Login', subtitle: 'Secure local device access' },
     '2fa': { title: 'Two-Factor Auth', subtitle: 'Enter your 6-digit authenticator code' },
   };
 
@@ -442,7 +505,7 @@ const LoginModal = ({ show, onClose }) => {
   return (
     <div
       className="fixed inset-0 z-[9998] flex items-center justify-center"
-      onClick={(e) => { if (e.target === e.currentTarget) { stopFaceVideo(); onClose(); } }}
+      onClick={(e) => { if (e.target === e.currentTarget) { onClose(); } }}
       style={{
         background: 'rgba(0,0,0,0.5)',
         backdropFilter: 'blur(8px)',
@@ -462,7 +525,7 @@ const LoginModal = ({ show, onClose }) => {
         {/* Close button */}
         <button
           type="button"
-          onClick={() => { stopFaceVideo(); onClose(); }}
+          onClick={() => { onClose(); }}
           style={{
             position: 'absolute', top: '16px', right: '20px',
             background: 'none', border: 'none', fontSize: '22px',
@@ -532,8 +595,8 @@ const LoginModal = ({ show, onClose }) => {
             <button type="submit" disabled={loading} style={primaryBtnStyle}>
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
-            <button type="button" onClick={switchToFace} style={faceBtnStyle}>
-              Face Login
+            <button type="button" onClick={switchToBiometric} style={faceBtnStyle}>
+              Biometric Login 🔐
             </button>
 
             {/* OR divider */}
@@ -748,45 +811,46 @@ const LoginModal = ({ show, onClose }) => {
           </form>
         )}
 
-        {/* ═══ FACE LOGIN FORM ═══ */}
-        {mode === 'face' && (
-          <form onSubmit={handleFaceLogin}>
+        {/* ═══ BIOMETRIC LOGIN FORM ═══ */}
+        {mode === 'biometric' && (
+          <form onSubmit={handleBiometricLogin}>
             <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px', textAlign: 'center' }}>
-              Enter your email and look at the camera.
+              Enter your email, then click below to scan your face.
             </p>
-            <div style={{ marginBottom: '20px' }}>
+            <div style={{ marginBottom: '12px' }}>
               <label style={labelStyle}>Email Address</label>
               <input
-                type="email" required value={faceEmail}
-                onChange={(e) => setFaceEmail(e.target.value)}
+                type="email" required value={biometricEmail}
+                onChange={(e) => setBiometricEmail(e.target.value)}
                 placeholder="you@example.com"
                 style={inputStyle}
                 onFocus={handleInputFocus}
                 onBlur={handleInputBlur}
+                disabled={faceCaptureStatus === 'scanning' || faceCaptureStatus === 'loading'}
               />
             </div>
-            <div style={{
-              width: '100%', height: '200px', background: '#000',
-              borderRadius: '12px', overflow: 'hidden', marginBottom: '16px',
-              position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center',
-            }}>
-              <video ref={videoRef} autoPlay muted playsInline style={{ height: '100%' }} />
-              {faceLoading && !faceModelsLoaded && (
-                <div style={{ position: 'absolute', color: 'white', fontSize: '14px' }}>
-                  Loading models...
-                </div>
-              )}
-            </div>
+            
+            {faceCaptureStatus === 'scanning' || faceCaptureStatus === 'loading' ? (
+              <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: '#000', borderRadius: '12px', overflow: 'hidden', marginBottom: '12px', border: '3px solid #cbd5e1' }}>
+                {faceCaptureStatus === 'loading' && (
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', zIndex: 10 }}>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+                  </div>
+                )}
+                <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+            ) : null}
+
             <button
               type="submit"
-              disabled={loading || !faceModelsLoaded}
+              disabled={loading || (faceCaptureStatus === 'loading')}
               style={primaryBtnStyle}
             >
-              {loading ? 'Scanning...' : 'Verify Face & Login'}
+              {faceCaptureStatus === 'scanning' ? 'Scan Face & Verify' : faceCaptureStatus === 'loading' ? 'Loading Camera...' : 'Open Camera to Authenticate'}
             </button>
             <p style={toggleTextStyle}>
-              <a href="#" onClick={(e) => { e.preventDefault(); switchFromFace(); }} style={toggleLinkStyle}>
-                Back to Password Sign In
+              <a href="#" onClick={cancelBiometric} style={toggleLinkStyle}>
+                Cancel and go back
               </a>
             </p>
           </form>

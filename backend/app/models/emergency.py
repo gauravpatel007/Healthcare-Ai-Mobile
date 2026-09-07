@@ -49,3 +49,16 @@ class AITriageLog(Base, TimestampMixin):
     )
     symptom: Mapped[str] = mapped_column(Text, nullable=False)
     response: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+
+class SOSAudioClip(Base, TimestampMixin):
+    """Custom audio clip to play during an SOS call."""
+
+    __tablename__ = "sos_audio_clips"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True
+    )
+    file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)

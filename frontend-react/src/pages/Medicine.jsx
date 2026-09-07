@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useSearchParams } from 'react-router-dom';
+import MedicineReminders from '../components/MedicineReminders';
+import { refreshReminders } from '../utils/reminders';
 import API from '../utils/api';
 import { useLang } from '../contexts/LangContext';
 import { toast } from 'react-hot-toast';
@@ -25,9 +28,22 @@ import {
   FlaskConical,
   Circle,
   Pipette,
-  Disc
+  Disc,
+  Bell
 } from 'lucide-react';
 import CustomSelect from '../components/ui/CustomSelect';
+
+const normalizedTimes = medicine => {
+  if (medicine.frequency === 'as_needed') return [];
+  const count = medicine.frequency === 'twice_daily' ? 2 : medicine.frequency === 'thrice_daily' ? 3 : 1;
+  const times = [];
+  for (let i = 0; i < count; i++) {
+    const previous = times[i - 1] || '04:00';
+    const [hour, minute] = previous.split(':').map(Number);
+    times.push(medicine.times?.[i] || `${String((hour + 4) % 24).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
+  }
+  return times;
+};
 
 const ScoredTablet = ({ className }) => (
   <svg
@@ -115,6 +131,8 @@ const formatInteractionText = (text) => {
 };
 
 const Medicine = ({ voiceAction, onVoiceActionConsumed }) => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') === 'reminders' ? 'reminders' : 'medicines';
   const { t, lang } = useLang();
   useEffect(() => {
     const appContainer = document.querySelector('.app-container');
@@ -209,6 +227,8 @@ const Medicine = ({ voiceAction, onVoiceActionConsumed }) => {
 
   useEffect(() => {
     fetchData();
+    window.addEventListener('medicine-reminders-updated', fetchData);
+    return () => window.removeEventListener('medicine-reminders-updated', fetchData);
   }, []);
 
   const deleteMedicine = async (id) => {
@@ -216,6 +236,7 @@ const Medicine = ({ voiceAction, onVoiceActionConsumed }) => {
       try {
         await API.delete(`/medicines/${id}`);
         setMedicines(medicines.filter(m => m.id !== id));
+        await refreshReminders();
       } catch (e) {
         toast.error(t('Failed to delete medicine'));
       }
@@ -235,12 +256,13 @@ const Medicine = ({ voiceAction, onVoiceActionConsumed }) => {
     try {
       const updated = await API.request(`/medicines/${editMedicine.id}`, {
         method: 'PUT',
-        body: editMedicine
+        body: { ...editMedicine, times: normalizedTimes(editMedicine) }
       });
       setMedicines(medicines.map(m => m.id === updated.id ? updated : m));
       setShowEditForm(false);
       setEditMedicine(null);
       toast.success(t('Medicine updated'));
+      await refreshReminders();
     } catch (e) {
       toast.error(t('Failed to update medicine'));
     }
@@ -266,12 +288,13 @@ const Medicine = ({ voiceAction, onVoiceActionConsumed }) => {
       return;
     }
     try {
-      const added = await API.post('/medicines', newMedicine);
+      const added = await API.post('/medicines', { ...newMedicine, times: normalizedTimes(newMedicine) });
       setMedicines([added, ...medicines]);
       setShowAddForm(false);
       setShowAddForm(false);
       setNewMedicine({ name: '', dosage: '', type: 'tablet', frequency: 'once_daily', purpose: '', times: ['08:00'], total_pills: 30, remaining: 30, start_date: new Date().toISOString().split('T')[0] });
       toast.success(t('Medicine saved'));
+      await refreshReminders();
     } catch (e) {
       toast.error(t('Failed to save medicine'));
     }
@@ -363,6 +386,7 @@ const Medicine = ({ voiceAction, onVoiceActionConsumed }) => {
   };
 
   const renderTimeInputs = (medicine, setMedicine) => {
+    if (medicine.frequency === 'as_needed') return <p className="col-span-full text-sm text-gray-500">{t('As-needed medicines do not create recurring reminders.')}</p>;
     const num = getNumTimes(medicine.frequency);
     let times = Array.isArray(medicine.times) && medicine.times.length ? medicine.times : ['08:00'];
 
@@ -425,8 +449,8 @@ const Medicine = ({ voiceAction, onVoiceActionConsumed }) => {
 
       {/* Scan Result Modal */}
       {scanResult && createPortal(
-        <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-gray-800 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl border border-gray-100 dark:border-gray-700 animate-in zoom-in-95 duration-300">
+        <div className="fixed inset-0 z-[100000] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-gray-800 rounded-t-3xl md:rounded-3xl w-full md:max-w-md overflow-hidden shadow-2xl border-t md:border border-gray-100 dark:border-gray-700 animate-in slide-in-from-bottom-full md:slide-in-from-bottom-0 md:zoom-in-95 duration-300 pb-[env(safe-area-inset-bottom)] md:pb-0">
             <div className={`p-6 text-center ${scanResult.type === 'success' ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'bg-red-50 dark:bg-red-900/30'}`}>
               <div className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-4 ${scanResult.type === 'success' ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-800 dark:text-indigo-300' : 'bg-red-100 text-red-600 dark:bg-red-800 dark:text-red-300'}`}>
                 {scanResult.type === 'success' ? <CheckCircle2 className="w-8 h-8" /> : <Activity className="w-8 h-8" />}
@@ -473,13 +497,13 @@ const Medicine = ({ voiceAction, onVoiceActionConsumed }) => {
         document.body
       )}
 
-      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-row flex-wrap md:flex-nowrap items-center justify-between gap-4 relative overflow-hidden w-full">
-        <div className="flex items-center gap-4 lg:gap-6 relative z-10 w-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row justify-between items-start md:items-center w-full gap-4 md:gap-6 relative overflow-hidden w-full">
+        <div className="flex items-center gap-4 md:gap-5 relative z-10 w-full md:w-auto">
           <div className="w-16 h-16 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
             <Pill className="w-8 h-8" />
           </div>
-          <div className="text-left">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-1 text-left">
+          <div>
+            <h1 className="text-xl md:text-2xl lg:text-3xl font-bold md:font-extrabold text-gray-900 dark:text-white tracking-tight mb-1 text-left">
               {t('Medicine Management')}
             </h1>
             <p className="text-xs sm:text-sm lg:text-base text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2 text-left">
@@ -488,37 +512,52 @@ const Medicine = ({ voiceAction, onVoiceActionConsumed }) => {
             </p>
           </div>
         </div>
-        <div className="flex items-center justify-end gap-3 relative z-10 shrink-0 ml-auto pr-2 flex-wrap">
-          <label className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 shadow-md hover:bg-gray-800 dark:hover:bg-white hover:shadow-lg cursor-pointer ${isScanning ? 'opacity-80 cursor-wait' : ''}`}>
+        <div className="grid grid-cols-3 gap-2 w-full md:flex md:w-auto md:gap-3 shrink-0 relative z-10">
+          <label title={t('Scan Pill')} aria-label={t('Scan Pill')} tabIndex={0} role="button" onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.querySelector('input').click(); } }} className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-5 py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm transition-all bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 shadow-sm hover:bg-gray-800 dark:hover:bg-white cursor-pointer active:scale-95 ${isScanning ? 'opacity-80 cursor-wait' : ''}`}>
             <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleScanPill} disabled={isScanning} />
             {isScanning ? (
               <>
                 <Clock className="w-4 h-4 animate-spin shrink-0" />
-                <span className="whitespace-nowrap">{t('Scanning...')}</span>
+                <span className="truncate">{t('Scanning...')}</span>
               </>
             ) : (
               <>
                 <Camera className="w-4 h-4 shrink-0" />
-                <span className="whitespace-nowrap">{t('Scan Pill')}</span>
+                <span className="truncate">{t('Scan Pill')}</span>
               </>
             )}
           </label>
           <button
-            className="flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50"
+            title={t('Check Interactions')} aria-label={t('Check Interactions')}
+            className="flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-5 py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm transition-all active:scale-95 bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50"
             onClick={checkInteractions}
           >
             <ShieldAlert className="w-4 h-4 shrink-0" />
-            <span className="whitespace-nowrap">{t('Check Interactions')}</span>
+            <span className="truncate hidden sm:inline">{t('Check Interactions')}</span>
+            <span className="truncate sm:hidden">{t('Check')}</span>
           </button>
           <button
-            className="flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all bg-blue-600 text-white shadow-md hover:bg-blue-700 hover:shadow-lg"
+            title={t('Add Medicine')} aria-label={t('Add Medicine')}
+            className="flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-5 py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm transition-all active:scale-95 bg-blue-600 text-white shadow-md hover:bg-blue-700 hover:shadow-lg"
             onClick={() => setShowAddForm(true)}
           >
             <Plus className="w-4 h-4 shrink-0" />
-            <span className="whitespace-nowrap">{t('Add Medicine')}</span>
+            <span className="truncate hidden sm:inline">{t('Add Medicine')}</span>
+            <span className="truncate sm:hidden">{t('Add')}</span>
           </button>
         </div>
       </div>
+      <div role="tablist" aria-label={t('Medicine sections')} className="grid grid-cols-2 gap-1.5 p-1.5 bg-gray-100 dark:bg-gray-800 rounded-2xl border border-gray-200/50 dark:border-gray-700">
+        {[["medicines", Pill, "Medicines"], ["reminders", Bell, "Reminders"]].map(([id, Icon, label]) => (
+          <button key={id} id={`medicine-tab-${id}`} role="tab" aria-selected={activeTab === id} aria-controls={`medicine-panel-${id}`}
+            onClick={() => { const next = new URLSearchParams(searchParams); next.set('tab', id); setSearchParams(next, { replace: true }); }}
+            className={`min-h-[48px] rounded-xl flex items-center justify-center gap-2 text-sm font-bold transition-all ${activeTab === id ? 'bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-300 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'}`}>
+            <Icon className="w-[18px] h-[18px]" />{t(label)}
+          </button>
+        ))}
+      </div>
+      {activeTab === 'reminders' ? <div role="tabpanel" id="medicine-panel-reminders" aria-labelledby="medicine-tab-reminders"><MedicineReminders /></div> :
+      <div role="tabpanel" id="medicine-panel-medicines" aria-labelledby="medicine-tab-medicines" className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1.5 relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500 opacity-10 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
@@ -688,9 +727,11 @@ const Medicine = ({ voiceAction, onVoiceActionConsumed }) => {
         </div>
       )}
 
+      </div>}
+
       {showAddForm && createPortal(
-        <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => { if (e.target === e.currentTarget) setShowAddForm(false) }}>
-          <div className="bg-white dark:bg-gray-800 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl border border-gray-100 dark:border-gray-700 flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-[100000] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => { if (e.target === e.currentTarget) setShowAddForm(false) }}>
+          <div className="bg-white dark:bg-gray-800 rounded-t-3xl md:rounded-3xl w-full md:max-w-2xl overflow-hidden shadow-2xl border-t md:border border-gray-100 dark:border-gray-700 flex flex-col max-h-[90vh] animate-in slide-in-from-bottom-full md:slide-in-from-bottom-0 md:zoom-in-95 duration-200 pb-[env(safe-area-inset-bottom)] md:pb-0">
             <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between shrink-0">
               <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                 <Pill className="w-6 h-6 text-indigo-500" /> {t('Add Medicine')}
@@ -771,8 +812,8 @@ const Medicine = ({ voiceAction, onVoiceActionConsumed }) => {
       )}
 
       {showEditForm && editMedicine && createPortal(
-        <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => { if (e.target === e.currentTarget) setShowEditForm(false) }}>
-          <div className="bg-white dark:bg-gray-800 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl border border-gray-100 dark:border-gray-700 flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-[100000] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => { if (e.target === e.currentTarget) setShowEditForm(false) }}>
+          <div className="bg-white dark:bg-gray-800 rounded-t-3xl md:rounded-3xl w-full md:max-w-2xl overflow-hidden shadow-2xl border-t md:border border-gray-100 dark:border-gray-700 flex flex-col max-h-[90vh] animate-in slide-in-from-bottom-full md:slide-in-from-bottom-0 md:zoom-in-95 duration-200 pb-[env(safe-area-inset-bottom)] md:pb-0">
             <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between shrink-0">
               <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                 <Edit className="w-6 h-6 text-indigo-500" /> {t('Edit Medicine')}
@@ -852,8 +893,8 @@ const Medicine = ({ voiceAction, onVoiceActionConsumed }) => {
         document.body
       )}
       {showInteractionsModal && createPortal(
-        <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => { if (e.target === e.currentTarget) setShowInteractionsModal(false) }}>
-          <div className="bg-white dark:bg-gray-800 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl border border-gray-100 dark:border-gray-700 flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-[100000] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => { if (e.target === e.currentTarget) setShowInteractionsModal(false) }}>
+          <div className="bg-white dark:bg-gray-800 rounded-t-3xl md:rounded-3xl w-full md:max-w-2xl overflow-hidden shadow-2xl border-t md:border border-gray-100 dark:border-gray-700 flex flex-col max-h-[90vh] animate-in slide-in-from-bottom-full md:slide-in-from-bottom-0 md:zoom-in-95 duration-200 pb-[env(safe-area-inset-bottom)] md:pb-0">
             <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between shrink-0 bg-rose-50 dark:bg-rose-900/20">
               <h3 className="text-xl font-bold text-rose-700 dark:text-rose-400 flex items-center gap-2">
                 <AlertTriangle className="w-6 h-6" /> {t('Interactions Found')}

@@ -51,6 +51,16 @@ MANIFEST
 # Uploads / Data
 uploads/
 data/
+*.dump
+*.sql
+*.tar.gz
+*.zip
+
+# Scratch / Temporary build logs
+scratch/
+
+# Large binaries & media archives
+BIN FOLDER/
 
 # IDE / Editor
 .vscode/

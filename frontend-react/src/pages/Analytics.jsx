@@ -694,7 +694,7 @@ const Analytics = ({ voiceAction, onVoiceActionConsumed }) => {
             <BarChart3 className="w-8 h-8" />
           </div>
           <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-1">
+            <h1 className="text-xl md:text-2xl lg:text-3xl font-bold md:font-extrabold text-gray-900 dark:text-white tracking-tight mb-1">
               {t('smart_analytics') || 'Smart Analytics'}
             </h1>
             <p className="text-xs sm:text-sm lg:text-base text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2">
@@ -753,11 +753,11 @@ const Analytics = ({ voiceAction, onVoiceActionConsumed }) => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
               <SectionHeader title={t('vitals_trend') || 'Vitals Trend'} subtitle={t('weight_heart_rate') || 'Weight & Heart Rate'} className="mb-6" />
-              <div className="h-[280px] relative"><canvas ref={vitalsChartRef}></canvas></div>
+              <div className="h-56 md:h-[280px] w-full relative"><canvas ref={vitalsChartRef}></canvas></div>
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
               <SectionHeader title={t('blood_pressure') || 'Blood Pressure'} subtitle={t('sys_dia') || 'Systolic & Diastolic'} className="mb-6" />
-              <div className="h-[280px] relative"><canvas ref={bpChartRef}></canvas></div>
+              <div className="h-56 md:h-[280px] w-full relative"><canvas ref={bpChartRef}></canvas></div>
             </div>
           </div>
         </div>
@@ -1094,11 +1094,11 @@ const Analytics = ({ voiceAction, onVoiceActionConsumed }) => {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
                   <SectionHeader title={t('steps_trend') || 'Steps Trend'} subtitle={t('last_7_days') || 'Last 7 days'} className="mb-6" />
-                  <div className="h-[240px] relative"><canvas ref={stepsChartRef}></canvas></div>
+                  <div className="h-48 md:h-[240px] w-full relative"><canvas ref={stepsChartRef}></canvas></div>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
                   <SectionHeader title={t('calories_burned') || 'Calories Burned'} subtitle={t('last_7_days') || 'Last 7 days'} className="mb-6" />
-                  <div className="h-[240px] relative"><canvas ref={caloriesChartRef}></canvas></div>
+                  <div className="h-48 md:h-[240px] w-full relative"><canvas ref={caloriesChartRef}></canvas></div>
                 </div>
               </div>
             </div>
@@ -1134,7 +1134,7 @@ const Analytics = ({ voiceAction, onVoiceActionConsumed }) => {
                 {/* Donut chart */}
                 <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
                   <SectionHeader title={t('records_breakdown') || 'Records Breakdown'} subtitle={t('by_category') || 'By category'} className="mb-6" />
-                  <div className="h-[280px] relative"><canvas ref={recordsPieRef}></canvas></div>
+                  <div className="h-56 md:h-[280px] w-full relative"><canvas ref={recordsPieRef}></canvas></div>
                 </div>
 
                 {/* Recent records */}
@@ -1210,7 +1210,7 @@ const Analytics = ({ voiceAction, onVoiceActionConsumed }) => {
                 <p className="text-gray-500 dark:text-gray-400 font-medium">Select a metric from the dropdown to view its trend.</p>
               </div>
             ) : (
-              <div className="h-[400px] relative w-full">
+              <div className="h-64 md:h-[400px] w-full relative">
                 <canvas ref={labTrendChartRef}></canvas>
               </div>
             )}

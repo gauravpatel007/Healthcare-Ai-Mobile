@@ -77,6 +77,9 @@ async def init_db():
     """Create all tables (for development only; use Alembic in production)."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        from sqlalchemy import text
+        await conn.execute(text("ALTER TABLE medicine_reminder_notices ADD COLUMN IF NOT EXISTS push_sent BOOLEAN NOT NULL DEFAULT FALSE"))
+        await conn.execute(text("ALTER TABLE medicine_reminder_notices ADD COLUMN IF NOT EXISTS push_attempts INTEGER NOT NULL DEFAULT 0"))
         # Safely add email column to emergency_contacts if missing (pseudo-migration)
         try:
             from sqlalchemy import text

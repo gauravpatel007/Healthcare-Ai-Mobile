@@ -91,7 +91,7 @@ const SharedProfile = () => {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen w-full bg-slate-50 dark:bg-gray-900">
+      <div className="flex flex-col items-center justify-center min-h-[100dvh] w-full bg-slate-50 dark:bg-gray-900">
         <div className="w-10 h-10 border-4 border-sky-200 dark:border-sky-900/50 border-t-sky-500 rounded-full animate-spin"></div>
         <p className="mt-4 text-slate-500 dark:text-slate-400 font-semibold animate-pulse">Decrypting Secure Medical Profile...</p>
       </div>
@@ -100,7 +100,7 @@ const SharedProfile = () => {
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen w-full bg-slate-50 dark:bg-gray-900 p-6">
+      <div className="flex flex-col items-center justify-center min-h-[100dvh] w-full bg-slate-50 dark:bg-gray-900 p-6">
         <div className="bg-white dark:bg-gray-800 p-10 rounded-[2rem] shadow-xl text-center max-w-md border border-slate-100 dark:border-gray-700">
           <div className="w-20 h-20 bg-red-100 dark:bg-red-900/30 text-red-500 dark:text-red-400 rounded-full flex items-center justify-center mx-auto mb-6">
             <Lock className="w-10 h-10" />
@@ -144,7 +144,7 @@ const SharedProfile = () => {
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 pb-6 mb-6 border-b border-slate-100 dark:border-gray-700">
           <div className="w-24 h-24 bg-sky-50 dark:bg-sky-900/30 text-sky-500 dark:text-sky-400 rounded-3xl flex items-center justify-center shrink-0 shadow-inner overflow-hidden border border-sky-100 dark:border-sky-800/30">
             {profile.avatar ? (
-              <img src={profile.avatar.startsWith('http') ? profile.avatar : `http://localhost:8000${profile.avatar}`} alt="Profile" className="w-full h-full object-cover" />
+              <img src={API.getImageUrl(profile.avatar)} alt="Profile" className="w-full h-full object-cover" />
             ) : (
               <User className="w-10 h-10" />
             )}
@@ -267,19 +267,6 @@ const SharedProfile = () => {
             <p className="text-slate-500 dark:text-slate-400 font-medium italic bg-slate-50 dark:bg-gray-800/50 p-6 rounded-3xl">No emergency contacts listed.</p>
           )}
         </div>
-
-        {/* Organ Donor Status */}
-        {profile.organ_donor && (
-          <div className="mt-10 bg-emerald-50 dark:bg-emerald-900/20 p-6 rounded-3xl border border-emerald-200 dark:border-emerald-900/50 flex flex-col sm:flex-row items-center sm:items-start gap-6 text-center sm:text-left">
-            <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-500 dark:text-emerald-400 rounded-3xl flex items-center justify-center shrink-0 shadow-inner">
-              <Heart className="w-8 h-8 fill-current" />
-            </div>
-            <div className="flex-1">
-              <h4 className="font-extrabold text-emerald-800 dark:text-emerald-300 text-xl mb-2">Registered Organ Donor</h4>
-              <p className="text-emerald-700 dark:text-emerald-500 font-medium">This patient is officially registered as an organ donor. Their decision can help save lives.</p>
-            </div>
-          </div>
-        )}
 
       </div>
       

@@ -15,6 +15,7 @@ from app.models.admin import SystemSetting
 router = APIRouter(prefix="/admin/settings", tags=["Admin Settings"])
 
 
+@router.get("")
 @router.get("/")
 async def get_all_settings(db: AsyncSession = Depends(get_db)):
     """Fetch all system settings and format as key-value pair."""
@@ -26,6 +27,7 @@ async def get_all_settings(db: AsyncSession = Depends(get_db)):
     return {"status": "success", "data": settings_dict}
 
 
+@router.put("")
 @router.put("/")
 async def update_settings(settings: Dict[str, Any], db: AsyncSession = Depends(get_db)):
     """Update multiple settings at once from a dictionary of key-value pairs."""

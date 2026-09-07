@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy import select, func, distinct
+from sqlalchemy import select, func, distinct, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timedelta, timezone
 
@@ -93,6 +93,20 @@ async def get_detailed_analytics(db: AsyncSession = Depends(get_db)):
     blocked_ips = (await db.execute(select(func.count(BlockedIP.id)))).scalar() or 0
     api_error_rates = 0.2 # mock 0.2%
 
+    # ─── 6. CLOUD DATABASE STORAGE MONITORING ───
+    db_storage_bytes = 0
+    db_storage_mb = 0.0
+    db_storage_formatted = "0 MB"
+    try:
+        db_size_res = await db.execute(text("SELECT pg_database_size(current_database()), pg_size_pretty(pg_database_size(current_database()))"))
+        db_row = db_size_res.fetchone()
+        if db_row:
+            db_storage_bytes = int(db_row[0] or 0)
+            db_storage_formatted = str(db_row[1] or "0 MB")
+            db_storage_mb = round(db_storage_bytes / (1024 * 1024), 2)
+    except Exception:
+        pass
+
     return {
         "demographics": {
             "dau": dau,
@@ -126,5 +140,58 @@ async def get_detailed_analytics(db: AsyncSession = Depends(get_db)):
             "failed_logins": failed_logins,
             "blocked_ips": blocked_ips,
             "api_errors": api_error_rates
+        },
+        "database_storage": {
+            "size_mb": db_storage_mb,
+            "size_bytes": db_storage_bytes,
+            "formatted": db_storage_formatted,
+            "provider": "Supabase Cloud PostgreSQL"
         }
     }
+
+
+@router.get("/database-storage")
+async def get_database_storage_stats(db: AsyncSession = Depends(get_db)):
+    """Fetch real-time database storage and top tables breakdown from Supabase Cloud."""
+    db_storage_bytes = 0
+    db_storage_formatted = "0 MB"
+    db_storage_mb = 0.0
+    tables = []
+
+    try:
+        size_res = await db.execute(text("SELECT pg_database_size(current_database()), pg_size_pretty(pg_database_size(current_database()))"))
+        row = size_res.fetchone()
+        if row:
+            db_storage_bytes = int(row[0] or 0)
+            db_storage_formatted = str(row[1] or "0 MB")
+            db_storage_mb = round(db_storage_bytes / (1024 * 1024), 2)
+
+        table_query = text("""
+            SELECT 
+                relname AS table_name,
+                pg_size_pretty(pg_total_relation_size(relid)) AS total_size,
+                pg_total_relation_size(relid) AS total_bytes
+            FROM pg_catalog.pg_statio_user_tables
+            ORDER BY pg_total_relation_size(relid) DESC
+            LIMIT 15;
+        """)
+        t_res = await db.execute(table_query)
+        for t_row in t_res.fetchall():
+            tables.append({
+                "table_name": t_row[0],
+                "size_formatted": t_row[1],
+                "size_bytes": int(t_row[2] or 0),
+                "size_mb": round(int(t_row[2] or 0) / (1024 * 1024), 3)
+            })
+    except Exception as e:
+        return {"status": "error", "message": str(e), "size_mb": 0}
+
+    return {
+        "status": "success",
+        "database_size_mb": db_storage_mb,
+        "database_size_formatted": db_storage_formatted,
+        "database_size_bytes": db_storage_bytes,
+        "provider": "Supabase Cloud PostgreSQL",
+        "tables": tables
+    }
+

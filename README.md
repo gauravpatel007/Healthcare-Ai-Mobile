@@ -28,6 +28,8 @@ cd backend\chatbot
 python -m pip install -r requirements.txt
 python app.py
 ```
+FOR SOS Audio : ngrok http 8000
+
 ## 🏗️ Architecture
 
 ```

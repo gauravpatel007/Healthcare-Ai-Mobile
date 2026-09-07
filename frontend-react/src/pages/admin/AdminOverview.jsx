@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import API from '../../utils/api';
 import CustomSelect from '../../components/ui/CustomSelect';
+import toast from 'react-hot-toast';
 
 /* ─── Reusable Card (EXACT same design as original) ──────────── */
 const StatCard = ({ title, value, subtitle, icon: Icon, colorClass, onClick }) => (
@@ -65,8 +66,13 @@ const AdminOverview = () => {
   const handleDownloadReport = async () => {
     setIsDownloading(true);
     try {
-      // Fetch detailed analytics for the report
-      const analyticsData = await API.get('/admin/analytics/detailed');
+      // Fetch detailed analytics for the report (with graceful fallback)
+      let analyticsData = null;
+      try {
+        analyticsData = await API.get('/admin/analytics/detailed');
+      } catch (e) {
+        console.warn("Detailed analytics fetch failed, generating report from stats", e);
+      }
 
       let csv = `Report generated on ${new Date().toLocaleString()}\n\n=== DASHBOARD OVERVIEW ===\n`;
       csv += `Total Users,${stats?.total_users || 0}\n`;
@@ -75,33 +81,50 @@ const AdminOverview = () => {
       csv += `Appointments,${stats?.total_appointments || 0}\n`;
       csv += `Emergency Events,${stats?.emergency_events || 0}\n\n`;
 
-      csv += `=== DETAILED ANALYTICS ===\n`;
-      csv += `Daily Active Users (DAU),${analyticsData?.demographics?.dau || 0}\n`;
-      csv += `Monthly Active Users (MAU),${analyticsData?.demographics?.mau || 0}\n`;
-      csv += `User Retention Rate,${analyticsData?.demographics?.retention_rate || 0}%\n`;
-      csv += `AI Daily Queries,${analyticsData?.ai_performance?.daily_queries || 0}\n`;
-      csv += `AI Weekly Queries,${analyticsData?.ai_performance?.weekly_queries || 0}\n`;
-      csv += `AI Avg Response Time,${analyticsData?.ai_performance?.avg_response_time || 0}ms\n`;
-      csv += `API Error Rate,${analyticsData?.system?.error_rate || 0}%\n`;
-      csv += `System Uptime,${analyticsData?.system?.uptime || 0}%\n`;
-      csv += `Active Nodes,${analyticsData?.system?.active_nodes || 0}\n`;
+      if (analyticsData) {
+        csv += `=== DETAILED ANALYTICS ===\n`;
+        csv += `Daily Active Users (DAU),${analyticsData?.demographics?.dau || 0}\n`;
+        csv += `Monthly Active Users (MAU),${analyticsData?.demographics?.mau || 0}\n`;
+        csv += `User Retention Rate,${analyticsData?.demographics?.retention_rate || 0}%\n`;
+        csv += `AI Daily Queries,${analyticsData?.ai_performance?.daily_queries || 0}\n`;
+        csv += `AI Weekly Queries,${analyticsData?.ai_performance?.weekly_queries || 0}\n`;
+        csv += `AI Avg Response Time,${analyticsData?.ai_performance?.avg_response_time || 0}ms\n`;
+        csv += `API Error Rate,${analyticsData?.system?.error_rate || 0}%\n`;
+        csv += `System Uptime,${analyticsData?.system?.uptime || 0}%\n`;
+        csv += `Active Nodes,${analyticsData?.system?.active_nodes || 0}\n`;
+      }
 
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `lifeos_report_${new Date().toISOString().slice(0,10)}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      const filename = `lifeos_report_${new Date().toISOString().slice(0, 10)}.csv`;
 
-      await API.post('/admin/audit/logs', {
-        action: 'Downloaded Dashboard Report',
-        target_entity_type: 'Dashboard',
-        details: 'Admin exported the dashboard statistics to CSV'
-      });
+      if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+        window.navigator.msSaveOrOpenBlob(blob, filename);
+      } else {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', filename);
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        }, 300);
+      }
+
+      try {
+        await API.post('/admin/audit/logs', {
+          action: 'Downloaded Dashboard Report',
+          target_entity_type: 'Dashboard',
+          details: 'Admin exported the dashboard statistics to CSV'
+        });
+      } catch (e) {}
+
+      toast.success('Report downloaded successfully!');
     } catch(err) {
-      console.error(err);
+      console.error('Download report error:', err);
+      toast.error('Failed to download report');
     } finally {
       setIsDownloading(false);
     }
@@ -153,33 +176,29 @@ const AdminOverview = () => {
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
       
       {/* ── Header ─────────────────────────────────── */}
-      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-row flex-wrap md:flex-nowrap items-center justify-between gap-4 relative overflow-visible w-full">
-        <div className="flex items-center gap-4 lg:gap-6 relative z-10 w-auto">
-          <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
-            <LayoutDashboard className="w-8 h-8" />
+      <div className="bg-white dark:bg-gray-800 rounded-2xl sm:rounded-[2rem] p-4 sm:p-5 shadow-sm border border-gray-100 dark:border-gray-700 flex items-center justify-between gap-3 w-full">
+        <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+          <div className="w-12 h-12 sm:w-14 sm:h-14 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
+            <LayoutDashboard className="w-6 h-6 sm:w-7 sm:h-7" />
           </div>
-          <div className="text-left">
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-1 text-left">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight leading-tight truncate">
               Dashboard Overview
             </h1>
-            <p className="text-xs sm:text-sm lg:text-base text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2 text-left">
+            <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 font-medium mt-0.5 truncate">
               Real-time pulse of the LifeOS Healthcare network.
             </p>
           </div>
         </div>
-        <div className="flex items-center justify-end gap-3 relative z-10 shrink-0 ml-auto pr-2 flex-wrap">
-          <button onClick={fetchStats} className="p-3 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors shadow-sm">
-            <RefreshCcw className="w-5 h-5" />
-          </button>
-          <button 
-            onClick={handleDownloadReport}
-            disabled={isDownloading}
-            className="px-6 py-3 bg-gray-900 dark:bg-indigo-600 hover:bg-black dark:hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-lg transition-all hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 flex items-center gap-2"
-          >
-            {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-            {isDownloading ? 'Downloading...' : 'Download Report'}
-          </button>
-        </div>
+
+        <button 
+          onClick={handleDownloadReport}
+          disabled={isDownloading}
+          title="Download Report"
+          className="w-11 h-11 sm:w-12 sm:h-12 bg-gray-900 dark:bg-indigo-600 hover:bg-black dark:hover:bg-indigo-700 text-white rounded-2xl flex items-center justify-center shadow-md transition-all active:scale-95 disabled:opacity-50 shrink-0"
+        >
+          {isDownloading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
+        </button>
       </div>
 
       {/* ── Main Stats ────────── */}
@@ -218,30 +237,32 @@ const AdminOverview = () => {
           const maxBarVal = Math.max(...displayAI.map(d => d.count), ...displayLogins.map(d => d.count), 1);
           const barData = displayAI.length > 0 ? displayAI : displayLogins;
           return (
-            <div className="h-72 w-full flex items-end gap-2 px-4 relative">
-              <div className="absolute inset-0 flex flex-col justify-between py-4 pointer-events-none">
-                {[1,2,3,4,5].map(i => <div key={i} className="w-full border-t border-dashed border-gray-200 dark:border-gray-700/20"></div>)}
+            <div className="w-full overflow-x-auto pb-4 pt-2">
+              <div className={`h-72 flex items-end gap-2 px-4 relative ${rangeN === 30 ? 'min-w-[800px]' : 'w-full'}`}>
+                <div className="absolute inset-0 flex flex-col justify-between py-4 pointer-events-none">
+                  {[1,2,3,4,5].map(i => <div key={i} className="w-full border-t border-dashed border-gray-200 dark:border-gray-700/20"></div>)}
+                </div>
+                {barData.length > 0 ? barData.map((d, i) => {
+                  const pct = maxBarVal > 0 ? Math.max((d.count / maxBarVal) * 100, 3) : 3;
+                  const dayLabel = new Date(d.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                  return (
+                    <div key={i} className="flex-1 min-w-[20px] flex flex-col justify-end group relative z-10 h-full">
+                      <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-lg z-20">
+                        {d.count} — {dayLabel}
+                      </div>
+                      <div className="w-full bg-indigo-100 rounded-t-xl relative overflow-hidden transition-all duration-500 group-hover:bg-indigo-200" style={{ height: '100%' }}>
+                        <div 
+                          className="absolute bottom-0 w-full bg-gradient-to-t from-indigo-600 to-cyan-400 rounded-t-xl transition-all duration-700 shadow-[0_-5px_15px_rgba(79,70,229,0.3)]" 
+                          style={{ height: `${pct}%` }}
+                        ></div>
+                      </div>
+                      <div className="text-center mt-3 font-bold text-gray-400 text-xs uppercase tracking-wider">{new Date(d.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' })}</div>
+                    </div>
+                  );
+                }) : (
+                  <div className="flex-1 flex items-center justify-center text-gray-400 font-medium">No data available</div>
+                )}
               </div>
-              {barData.length > 0 ? barData.map((d, i) => {
-                const pct = maxBarVal > 0 ? Math.max((d.count / maxBarVal) * 100, 3) : 3;
-                const dayLabel = new Date(d.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-                return (
-                  <div key={i} className="flex-1 flex flex-col justify-end group relative z-10 h-full">
-                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-lg z-20">
-                      {d.count} — {dayLabel}
-                    </div>
-                    <div className="w-full bg-indigo-100 rounded-t-xl relative overflow-hidden transition-all duration-500 group-hover:bg-indigo-200" style={{ height: '100%' }}>
-                      <div 
-                        className="absolute bottom-0 w-full bg-gradient-to-t from-indigo-600 to-cyan-400 rounded-t-xl transition-all duration-700 shadow-[0_-5px_15px_rgba(79,70,229,0.3)]" 
-                        style={{ height: `${pct}%` }}
-                      ></div>
-                    </div>
-                    <div className="text-center mt-3 font-bold text-gray-400 text-xs uppercase tracking-wider">{new Date(d.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' })}</div>
-                  </div>
-                );
-              }) : (
-                <div className="flex-1 flex items-center justify-center text-gray-400 font-medium">No data available</div>
-              )}
             </div>
           );
         })()}
@@ -353,39 +374,41 @@ const AdminOverview = () => {
         </div>
 
         {/* Chart */}
-        <div className="h-72 w-full flex items-end gap-2 px-4 relative">
-          {/* Grid lines */}
-          <div className="absolute inset-0 flex flex-col justify-between py-4 pointer-events-none">
-            {[1,2,3,4,5].map(i => <div key={i} className="w-full border-t border-dashed border-gray-200 dark:border-gray-700/20"></div>)}
-          </div>
-          
-          {(() => {
-            const range2N = parseInt(chart2Range);
-            const displayData2 = range2N === 7 ? currentChartData.slice(-7) : currentChartData;
-            const currentMaxVal = Math.max(...displayData2.map(d => d.count), 1);
+        <div className="w-full overflow-x-auto pb-4 pt-2">
+          <div className={`h-72 flex items-end gap-2 px-4 relative ${parseInt(chart2Range) === 30 ? 'min-w-[800px]' : 'w-full'}`}>
+            {/* Grid lines */}
+            <div className="absolute inset-0 flex flex-col justify-between py-4 pointer-events-none">
+              {[1,2,3,4,5].map(i => <div key={i} className="w-full border-t border-dashed border-gray-200 dark:border-gray-700/20"></div>)}
+            </div>
             
-            return displayData2.length > 0 ? displayData2.map((d, i) => {
-              const pct = currentMaxVal > 0 ? Math.max((d.count / currentMaxVal) * 100, 3) : 3;
-              const dayLabel = new Date(d.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' });
-              return (
-              <div key={i} className="flex-1 flex flex-col justify-end group relative z-10 h-full">
-                {/* Tooltip */}
-                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-lg z-20">
-                  {d.count}
+            {(() => {
+              const range2N = parseInt(chart2Range);
+              const displayData2 = range2N === 7 ? currentChartData.slice(-7) : currentChartData;
+              const currentMaxVal = Math.max(...displayData2.map(d => d.count), 1);
+              
+              return displayData2.length > 0 ? displayData2.map((d, i) => {
+                const pct = currentMaxVal > 0 ? Math.max((d.count / currentMaxVal) * 100, 3) : 3;
+                const dayLabel = new Date(d.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' });
+                return (
+                <div key={i} className="flex-1 min-w-[20px] flex flex-col justify-end group relative z-10 h-full">
+                  {/* Tooltip */}
+                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-lg z-20">
+                    {d.count}
+                  </div>
+                  <div className="w-full bg-indigo-100 rounded-t-xl relative overflow-hidden transition-all duration-500 group-hover:bg-indigo-200" style={{ height: '100%' }}>
+                    <div 
+                      className="absolute bottom-0 w-full bg-gradient-to-t from-indigo-600 to-cyan-400 rounded-t-xl transition-all duration-700 shadow-[0_-5px_15px_rgba(79,70,229,0.3)]" 
+                      style={{ height: `${pct}%` }}
+                    ></div>
+                  </div>
+                  <div className="text-center mt-3 font-bold text-gray-400 text-xs uppercase tracking-wider">{dayLabel}</div>
                 </div>
-                <div className="w-full bg-indigo-100 rounded-t-xl relative overflow-hidden transition-all duration-500 group-hover:bg-indigo-200" style={{ height: '100%' }}>
-                  <div 
-                    className="absolute bottom-0 w-full bg-gradient-to-t from-indigo-600 to-cyan-400 rounded-t-xl transition-all duration-700 shadow-[0_-5px_15px_rgba(79,70,229,0.3)]" 
-                    style={{ height: `${pct}%` }}
-                  ></div>
-                </div>
-                <div className="text-center mt-3 font-bold text-gray-400 text-xs uppercase tracking-wider">{dayLabel}</div>
-              </div>
-            );
-            }) : (
-              <div className="flex-1 flex items-center justify-center text-gray-400 font-medium">No data available</div>
-            );
-          })()}
+              );
+              }) : (
+                <div className="flex-1 flex items-center justify-center text-gray-400 font-medium">No data available</div>
+              );
+            })()}
+          </div>
         </div>
       </div>
 

@@ -15,7 +15,7 @@ const MedicalIDCard = () => {
 
   if (!data) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 p-6 text-center">
+      <div className="flex flex-col items-center justify-center min-h-[100dvh] bg-slate-50 p-6 text-center">
         <div className="text-4xl mb-4">⚕️</div>
         <h2 className="text-2xl font-bold text-slate-800 mb-2">No Medical ID Found</h2>
         <p className="text-slate-500 mb-6">Log in to the app at least once to securely cache your emergency medical ID.</p>
@@ -27,7 +27,7 @@ const MedicalIDCard = () => {
   const { profile, contacts } = data;
 
   return (
-    <div className="min-h-screen bg-transparent p-4 sm:p-8 font-sans">
+    <div className="min-h-[100dvh] bg-transparent p-4 sm:p-8 font-sans">
       {/* Changed max-w-2xl to max-w-4xl to stretch the card wider */}
       <div className="max-w-4xl mx-auto w-full">
 
@@ -67,15 +67,11 @@ const MedicalIDCard = () => {
             </div>
           </div>
 
-          {/* Vitals Grid - Expanded to 4 columns on large screens to use the extra width well */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-8 border-b border-slate-100 bg-slate-50/50">
+          {/* Vitals Grid - Expanded to 3 columns on large screens to use the extra width well */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 p-8 border-b border-slate-100 bg-slate-50/50">
             <div className="bg-red-50 rounded-2xl p-4 border border-red-100">
               <div className="text-red-800 text-xs font-bold uppercase tracking-wider mb-1">Blood Type</div>
               <div className="text-2xl font-black text-red-600">{profile.blood_type || '--'}</div>
-            </div>
-            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-              <div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Organ Donor</div>
-              <div className="text-xl font-bold text-slate-800">{profile.organ_donor ? 'Yes 💚' : 'No'}</div>
             </div>
             <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
               <div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Height</div>

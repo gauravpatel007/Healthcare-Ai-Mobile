@@ -48,7 +48,7 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
   // Face login state
   const [faceLoginEnabled, setFaceLoginEnabled] = useState(false);
   const [faceSetupOpen, setFaceSetupOpen] = useState(false);
-  const [faceModelsLoaded, setFaceModelsLoaded] = useState(false);
+  const [faceModelsLoaded, setFaceModelsLoaded] = useState(true); // kept for compat
   const [faceLoading, setFaceLoading] = useState(false);
   const [faceCaptureStatus, setFaceCaptureStatus] = useState(''); // '' | 'loading' | 'scanning' | 'success' | 'error'
   const videoRef = useRef(null);
@@ -209,111 +209,92 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
       // Cleanup camera on unmount
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(trk => trk.stop());
-        streamRef.current = null;
       }
     };
   }, []);
 
-  // ─── Face Login Functions ────────────────────────
-  const loadFaceModels = async () => {
-    if (faceModelsLoaded) return true;
-    const faceapi = window.faceapi;
-    if (!faceapi) {
-      setFaceCaptureStatus('error');
-      return false;
-    }
+  // ─── Biometric Setup Functions ────────────────────────
+  
+  const handleOpenFaceSetup = async () => {
+    setFaceSetupOpen(true);
+    setFaceCaptureStatus('loading');
     try {
-      await faceapi.nets.tinyFaceDetector.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
-      await faceapi.nets.faceLandmark68Net.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
-      await faceapi.nets.faceRecognitionNet.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
-      setFaceModelsLoaded(true);
-      return true;
-    } catch (e) {
-      console.error('Failed to load face models', e);
-      setFaceCaptureStatus('error');
-      return false;
-    }
-  };
+      if (!window.faceapi) {
+        toast.error('Face API not loaded yet. Please wait a moment.');
+        setFaceCaptureStatus('error');
+        return;
+      }
+      const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
+      await Promise.all([
+        window.faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+        window.faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+        window.faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+      ]);
 
-  const startFaceVideo = async () => {
-    try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
-      return true;
-    } catch (e) {
-      console.error('Camera access denied', e);
+      setFaceCaptureStatus('scanning');
+    } catch (err) {
+      console.error(err);
       setFaceCaptureStatus('error');
-      return false;
+      toast.error(t('Failed to access camera or load models.'));
     }
   };
 
-  const stopFaceVideo = () => {
+  const handleCloseFaceSetup = () => {
+    setFaceSetupOpen(false);
+    setFaceCaptureStatus('');
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(trk => trk.stop());
       streamRef.current = null;
     }
   };
 
-  const handleOpenFaceSetup = async () => {
-    setFaceSetupOpen(true);
-    setFaceCaptureStatus('loading');
-    setFaceLoading(true);
-    const [modelsOk, camOk] = await Promise.all([loadFaceModels(), startFaceVideo()]);
-    setFaceLoading(false);
-    if (modelsOk && camOk) {
-      setFaceCaptureStatus('');
-    }
-  };
-
-  const handleCloseFaceSetup = () => {
-    stopFaceVideo();
-    setFaceSetupOpen(false);
-    setFaceCaptureStatus('');
-  };
-
   const handleCaptureFace = async () => {
-    const faceapi = window.faceapi;
-    if (!faceapi || !faceModelsLoaded || !videoRef.current) {
-      setFaceCaptureStatus('error');
-      return;
-    }
-    setFaceCaptureStatus('scanning');
+    if (!videoRef.current || faceCaptureStatus !== 'scanning') return;
+    
+    setFaceCaptureStatus('loading');
+    
     try {
-      const detection = await faceapi
-        .detectSingleFace(videoRef.current, new faceapi.TinyFaceDetectorOptions({ inputSize: 224 }))
+      const detection = await window.faceapi.detectSingleFace(videoRef.current, new window.faceapi.TinyFaceDetectorOptions())
         .withFaceLandmarks()
         .withFaceDescriptor();
+        
       if (!detection) {
-        setFaceCaptureStatus('error');
-        toast.error(t('No face detected. Please look straight at the camera and try again.'));
+        toast.error(t('No face detected. Please ensure your face is clearly visible.'));
+        setFaceCaptureStatus('scanning');
         return;
       }
+      
       const descriptor = Array.from(detection.descriptor);
-      await API.post('/auth/face-setup', { descriptor });
+      await API.post('/auth/face/setup', { descriptor });
+      
       setFaceCaptureStatus('success');
       setFaceLoginEnabled(true);
+      toast.success(t('Biometric login configured successfully!'));
+      
       setTimeout(() => {
         handleCloseFaceSetup();
-      }, 1500);
-    } catch (e) {
-      console.error('Face capture failed', e);
+      }, 2000);
+      
+    } catch (err) {
+      console.error(err);
       setFaceCaptureStatus('error');
-      toast.error(t('Failed to save face data. Please try again.'));
+      toast.error(err.message || t('Failed to configure biometric login.'));
     }
   };
 
-  const handleFaceDisable = async () => {
-    if (!confirm(t('Disable face login? You will need to set it up again to use it.'))) return;
+  const handleDisableFaceLogin = async () => {
+    if (!window.confirm(t('Are you sure you want to disable biometric login?'))) return;
     try {
-      await API.post('/auth/face-disable');
+      await API.post('/auth/face/disable');
       setFaceLoginEnabled(false);
-      toast.success(t('Face login disabled successfully.'));
-    } catch (e) {
-      console.error(e);
-      toast.error(t('Failed to disable face login.'));
+      toast.success(t('Biometric login disabled successfully.'));
+    } catch (err) {
+      toast.error(err.message || t('Failed to disable biometric login.'));
     }
   };
 
@@ -522,7 +503,7 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
 
   if (loading || !profile) {
     return (
-      <div className="flex-1 flex items-center justify-center min-h-screen">
+      <div className="flex-1 flex items-center justify-center min-h-[100dvh]">
         <div className="w-8 h-8 rounded-full border-4 border-blue-200 border-t-blue-600 animate-spin"></div>
       </div>
     );
@@ -531,8 +512,13 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6 pb-20 relative">
       {showZoom && profile.avatar_url && (
-        <div className="fixed inset-0 bg-black/85 z-[9999] flex items-center justify-center cursor-zoom-out backdrop-blur-sm transition-opacity" onClick={() => setShowZoom(false)}>
-          <img src={`http://localhost:8000${profile.avatar_url}`} alt="Avatar Zoom" className="max-w-[90vw] max-h-[90vh] rounded-3xl object-contain shadow-2xl" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setShowZoom(false)}>
+          <img 
+            src={API.getImageUrl(profile.avatar_url)} 
+            alt="Avatar Zoom" 
+            className="max-w-[90vw] max-h-[90vh] rounded-3xl object-contain shadow-2xl" 
+            onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name || 'User')}&background=random`; }}
+          />
           <div className="absolute top-6 right-8 text-white text-4xl font-light hover:text-gray-300 transition-colors">&times;</div>
         </div>
       )}
@@ -544,7 +530,7 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
             <SettingsIcon size={32} />
           </div>
           <div>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-1">{t('settings')}</h2>
+            <h2 className="text-xl md:text-2xl lg:text-3xl font-bold md:font-extrabold text-gray-900 dark:text-white tracking-tight mb-1">{t('settings')}</h2>
             <p className="text-xs sm:text-sm lg:text-base text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]"></span>
               {t('Manage your profile and preferences', 'Manage your profile and preferences')}
@@ -554,30 +540,37 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
       </div>
 
       {/* Tabs */}
-      <div className="flex flex-wrap items-center bg-gray-50 dark:bg-gray-900/50 p-1.5 rounded-2xl border border-gray-100 dark:border-gray-700 w-fit">
+      <div 
+        className="grid grid-cols-4 md:flex md:flex-wrap items-center bg-gray-50 dark:bg-gray-900/50 p-1 sm:p-1.5 rounded-2xl border border-gray-100 dark:border-gray-700 w-full overflow-hidden no-scrollbar gap-1"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+      >
         <button
           onClick={() => setActiveTab('profile')}
-          className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${activeTab === 'profile' ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+          className={`flex items-center justify-center gap-1 sm:gap-2 px-1 sm:px-3 md:px-6 py-2 sm:py-2.5 rounded-xl font-bold text-[11px] xs:text-xs sm:text-sm transition-all whitespace-nowrap active:scale-95 touch-manipulation ${activeTab === 'profile' ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
         >
-          <User size={18} /> {t('profile_tab')}
+          <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+          <span className="truncate">{t('profile_tab')}</span>
         </button>
         <button
           onClick={() => setActiveTab('security')}
-          className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${activeTab === 'security' ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+          className={`flex items-center justify-center gap-1 sm:gap-2 px-1 sm:px-3 md:px-6 py-2 sm:py-2.5 rounded-xl font-bold text-[11px] xs:text-xs sm:text-sm transition-all whitespace-nowrap active:scale-95 touch-manipulation ${activeTab === 'security' ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
         >
-          <Shield size={18} /> {t('security_tab')}
+          <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+          <span className="truncate">{t('security_tab')}</span>
         </button>
         <button
           onClick={() => setActiveTab('advanced')}
-          className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${activeTab === 'advanced' ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+          className={`flex items-center justify-center gap-1 sm:gap-2 px-1 sm:px-3 md:px-6 py-2 sm:py-2.5 rounded-xl font-bold text-[11px] xs:text-xs sm:text-sm transition-all whitespace-nowrap active:scale-95 touch-manipulation ${activeTab === 'advanced' ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
         >
-          <Target size={18} /> {t('advanced_tab')}
+          <Target className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+          <span className="truncate">{t('advanced_tab')}</span>
         </button>
         <button
           onClick={() => setActiveTab('notifications')}
-          className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${activeTab === 'notifications' ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+          className={`flex items-center justify-center gap-1 sm:gap-2 px-1 sm:px-3 md:px-6 py-2 sm:py-2.5 rounded-xl font-bold text-[11px] xs:text-xs sm:text-sm transition-all whitespace-nowrap active:scale-95 touch-manipulation ${activeTab === 'notifications' ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
         >
-          <Bell size={18} /> {t('Notifications')}
+          <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+          <span className="truncate">{t('Notifications')}</span>
         </button>
       </div>
 
@@ -592,13 +585,18 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
                 <User className="text-blue-500" /> {t('Personal Information')}
               </h3>
 
-              <div className="flex items-center gap-6 mb-8 p-6 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-700/50">
+              <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-6 mb-8 p-6 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-700/50">
                 <div
                   className="relative w-24 h-24 rounded-full overflow-hidden bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center text-3xl font-bold cursor-pointer border-4 border-white dark:border-gray-800 shadow-md"
                   onClick={() => profile.avatar_url && setShowZoom(true)}
                 >
                   {profile.avatar_url ? (
-                    <img src={`http://localhost:8000${profile.avatar_url}`} alt="Avatar" className="w-full h-full object-cover" />
+                    <img 
+                      src={API.getImageUrl(profile.avatar_url)} 
+                      alt="Avatar" 
+                      className="w-full h-full object-cover" 
+                      onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name || 'User')}&background=random`; }}
+                    />
                   ) : (
                     profile.name?.charAt(0).toUpperCase() || 'U'
                   )}
@@ -606,7 +604,7 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
                 <div className="flex flex-col gap-2">
                   <div className="font-bold text-gray-900 dark:text-white text-lg">{t('Profile Picture')}</div>
                   <div className="text-sm text-gray-500 dark:text-gray-400">{t('Click picture to zoom, or upload new')}</div>
-                  <div className="flex gap-3 mt-2">
+                  <div className="flex justify-center sm:justify-start gap-3 mt-2">
                     <label className="inline-flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-4 py-2 rounded-xl text-sm font-semibold text-gray-700 dark:text-gray-200 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm">
                       <ImageIcon size={16} /> {t('Upload')}
                       <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
@@ -627,7 +625,7 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
                 <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('Full Name')}</label>
                 <input type="text" name="name" value={profile.name} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
               </div>
-              <div className="grid grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
                   <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('Age')}</label>
                   <input type="number" name="age" value={profile.age} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
@@ -655,7 +653,7 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
                 <HeartPulse className="text-red-500" /> {t('Emergency Contacts (ICE)')}
               </h3>
 
-              <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
                   <input type="text" name="ice1_name" placeholder={t('Name')} value={profile.ice1_name} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
                 </div>
@@ -675,7 +673,7 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
                       <X size={14} /> {t('Remove')}
                     </button>
                   </div>
-                  <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div>
                       <input type="text" name="ice2_name" placeholder={t('Name')} value={profile.ice2_name} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
                     </div>
@@ -705,7 +703,7 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
               <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
                 <Activity className="text-rose-500" /> {t('Medical Profile')}
               </h3>
-              <div className="grid grid-cols-3 gap-4 mb-5">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
                 <div>
                   <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('weight')} ({weightUnit})</label>
                   <input type="number" name="weight" value={profile.weight ? (unit === 'imperial' ? (profile.weight * 2.20462).toFixed(1) : profile.weight) : ''} onChange={(e) => handleChange({ target: { name: 'weight', value: unit === 'imperial' && e.target.value ? parseFloat(e.target.value) / 2.20462 : e.target.value } })} className="w-full px-3 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
@@ -740,7 +738,7 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
               <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
                 <FileText className="text-indigo-500" /> {t('Data Management')}
               </h3>
-              <div className="flex gap-4 mb-4">
+              <div className="flex flex-col sm:flex-row gap-4 mb-4">
                 <button onClick={handleExportPDF} className="flex-1 flex items-center justify-center gap-2 py-3 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white rounded-xl font-semibold hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors border border-gray-200 dark:border-gray-600">
                   <Download size={18} /> {t('Export PDF')}
                 </button>
@@ -909,7 +907,7 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
                 <Globe className="text-blue-500" /> {t('app_language')}
               </h3>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">{t('app_language_desc')}</p>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {[
                   { code: 'en', flag: 'EN', name: 'English', native: 'English' },
                   { code: 'hi', flag: 'HI', name: 'Hindi', native: 'हिन्दी' },
@@ -1135,31 +1133,47 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
               <ShieldAlert className="text-emerald-500" /> {t('Security Settings')}
             </h3>
 
-            {/* Face Login Row */}
-            <div className="flex items-center justify-between py-5 border-b border-gray-100 dark:border-gray-700/50">
-              <div className="flex items-center gap-4">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${faceLoginEnabled ? 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400' : 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'}`}>
-                  <ScanFace size={24} />
+            {/* Biometric Login Row */}
+            <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-2">{t('Biometric Login')}</h2>
+            <p className="text-slate-500 dark:text-slate-400 mb-6">
+              {t('Use your device\'s built-in biometric sensor (fingerprint or face) to log in securely.')}
+            </p>
+
+            <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-6 border border-slate-200 dark:border-slate-700 flex flex-col md:flex-row items-center justify-between">
+              <div className="flex items-center gap-4 mb-4 md:mb-0">
+                <div className={`p-4 rounded-full ${faceLoginEnabled ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400' : 'bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>
+                  <ScanFace className="w-8 h-8" />
                 </div>
                 <div>
-                  <div className="font-bold text-gray-900 dark:text-white">{t('Face Login')}</div>
-                  <div className={`text-sm ${faceLoginEnabled ? 'text-green-600 dark:text-green-400 font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
-                    {faceLoginEnabled ? t('✅ Enabled — your face is enrolled') : t('Biometric auth · Not configured')}
-                  </div>
+                  <h3 className="font-bold text-slate-800 dark:text-white">
+                    {t('Biometric Login is')} {faceLoginEnabled ? <span className="text-emerald-600 dark:text-emerald-400">{t('Enabled')}</span> : <span className="text-slate-500">{t('Disabled')}</span>}
+                  </h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    {faceLoginEnabled ? t('You can use your device biometrics to sign in.') : t('Enable to sign in without a password.')}
+                  </p>
                 </div>
               </div>
-              {faceLoginEnabled ? (
-                <div className="flex gap-2">
-                  <button onClick={handleOpenFaceSetup} className="px-4 py-2 rounded-xl text-sm font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 transition-colors">{t('Re-scan')}</button>
-                  <button onClick={handleFaceDisable} className="px-4 py-2 rounded-xl text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 transition-colors">{t('Disable')}</button>
-                </div>
-              ) : (
-                <button onClick={handleOpenFaceSetup} className="px-5 py-2 rounded-xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-colors">{t('Setup')}</button>
-              )}
+              <div>
+                {faceLoginEnabled ? (
+                  <button
+                    onClick={handleDisableFaceLogin}
+                    className="px-4 py-2 border border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-500/10 font-medium transition-colors"
+                  >
+                    {t('Disable')}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleOpenFaceSetup}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                  >
+                    {t('Setup Biometric Login')}
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* 2FA Row */}
-            <div className="flex items-center justify-between py-5 border-b border-gray-100 dark:border-gray-700/50">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 py-5 border-b border-gray-100 dark:border-gray-700/50">
               <div className="flex items-center gap-4">
                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${twoFactorEnabled ? 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400' : 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'}`}>
                   <Shield size={24} />
@@ -1194,7 +1208,7 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
             </div>
 
             {/* Login Alerts Row */}
-            <div className="flex items-center justify-between py-5 border-b border-gray-100 dark:border-gray-700/50">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 py-5 border-b border-gray-100 dark:border-gray-700/50">
               <div className="flex items-center gap-4">
                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${loginAlertsEnabled ? 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'}`}>
                   <Bell size={24} />
@@ -1243,7 +1257,7 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
             </div>
 
             {/* Blockchain */}
-            <div className="flex items-center justify-between py-5 opacity-60">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 py-5 opacity-60">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-amber-50 text-amber-500 dark:bg-amber-900/20 dark:text-amber-400">
                   <Share2 size={24} />
@@ -1261,8 +1275,8 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
 
       {/* Login History Modal Overlay */}
       {showAllLoginsModal && createPortal(
-        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={(e) => { if (e.target === e.currentTarget) setShowAllLoginsModal(false); }}>
-          <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 md:p-8 w-full max-w-md shadow-2xl border border-gray-100 dark:border-gray-700">
+        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 animate-in fade-in duration-200" onClick={(e) => { if (e.target === e.currentTarget) setShowAllLoginsModal(false); }}>
+          <div className="bg-white dark:bg-gray-800 rounded-t-3xl md:rounded-3xl p-6 md:p-8 w-full md:max-w-md shadow-2xl border-t md:border border-gray-100 dark:border-gray-700 animate-in slide-in-from-bottom-full md:slide-in-from-bottom-0 md:zoom-in-95 duration-200 pb-[env(safe-area-inset-bottom)] md:pb-8">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">🕒 {t('Recent Logins')}</h3>
               <button onClick={() => setShowAllLoginsModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
@@ -1286,8 +1300,8 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
 
       {/* 2FA Setup Modal */}
       {twoFactorSetupOpen && createPortal(
-        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={(e) => { if (e.target === e.currentTarget) setTwoFactorSetupOpen(false); }}>
-          <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 md:p-8 w-full max-w-md shadow-2xl border border-gray-100 dark:border-gray-700">
+        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 animate-in fade-in duration-200" onClick={(e) => { if (e.target === e.currentTarget) setTwoFactorSetupOpen(false); }}>
+          <div className="bg-white dark:bg-gray-800 rounded-t-3xl md:rounded-3xl p-6 md:p-8 w-full md:max-w-md shadow-2xl border-t md:border border-gray-100 dark:border-gray-700 animate-in slide-in-from-bottom-full md:slide-in-from-bottom-0 md:zoom-in-95 duration-200 pb-[env(safe-area-inset-bottom)] md:pb-8">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">📱 {t('Setup 2FA')}</h3>
               <button onClick={() => setTwoFactorSetupOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
@@ -1326,76 +1340,31 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
       {/* Face Setup Modal */}
       {faceSetupOpen && createPortal(
         <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={(e) => { if (e.target === e.currentTarget) handleCloseFaceSetup(); }}>
-          <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 md:p-8 w-full max-w-lg shadow-2xl border border-gray-100 dark:border-gray-700">
-            <div className="flex justify-between items-center mb-6">
-              <div className="flex items-center gap-3">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${faceCaptureStatus === 'success' ? 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400' : 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'}`}>
-                  <ScanFace size={24} />
+          <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 md:p-8 w-full max-w-lg shadow-2xl flex flex-col items-center animate-in zoom-in-95 duration-200 relative overflow-hidden">
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">📷 {t('Face Setup')}</h3>
+            
+            <div className="relative w-full aspect-video bg-black rounded-2xl overflow-hidden mb-6 flex items-center justify-center border-4 border-gray-100 dark:border-gray-700">
+              {faceCaptureStatus === 'loading' && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
                 </div>
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                    {faceCaptureStatus === 'success' ? t('Face Enrolled!') : t('Set Up Face Login')}
-                  </h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">{t('Biometric authentication')}</p>
-                </div>
-              </div>
-              <button onClick={handleCloseFaceSetup} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
-                <X size={24} />
-              </button>
+              )}
+              <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
             </div>
 
-            {faceCaptureStatus !== 'success' && (
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-                {t('Position your face in the center of the frame with good lighting, then click ')} <strong>{t('"Capture & Enroll"')}</strong>.
-              </p>
-            )}
-
-            <div className={`w-full h-72 bg-gray-900 rounded-2xl overflow-hidden relative flex justify-center items-center mb-6 border-4 ${faceCaptureStatus === 'success' ? 'border-green-500' : faceCaptureStatus === 'error' ? 'border-red-500' : 'border-blue-500/30'}`}>
-              <video ref={videoRef} autoPlay muted playsInline className="h-full scale-x-[-1]" />
-
-              {faceCaptureStatus === 'scanning' && (
-                <div className="absolute inset-0 bg-blue-500/10 flex items-center justify-center">
-                  <span className="bg-black/60 text-white px-4 py-2 rounded-xl font-bold animate-pulse">🔍 {t('Detecting face…')}</span>
-                </div>
-              )}
-              {faceCaptureStatus === 'success' && (
-                <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center">
-                  <span className="bg-black/60 text-white px-6 py-3 rounded-xl font-bold text-lg shadow-lg">✅ {t('Face Saved Successfully!')}</span>
-                </div>
-              )}
-              {(faceLoading || faceCaptureStatus === 'loading') && (
-                <div className="absolute inset-0 bg-gray-900/90 flex flex-col items-center justify-center text-white text-sm gap-3 font-medium">
-                  <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                  {t('Loading AI models & camera…')}
-                </div>
-              )}
-            </div>
-
-            {faceCaptureStatus !== 'success' && (
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={handleCaptureFace}
-                  disabled={faceLoading || faceCaptureStatus === 'scanning' || faceCaptureStatus === 'loading'}
-                  className={`flex-1 py-4 rounded-xl font-bold text-white shadow-sm transition-colors ${faceLoading || faceCaptureStatus === 'scanning' ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
-                >
-                  {faceCaptureStatus === 'scanning' ? t('Scanning…') : t('📸 Capture & Enroll Face')}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCloseFaceSetup}
-                  className="px-6 py-4 rounded-xl font-bold text-gray-600 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 transition-colors"
-                >
-                  {t('Cancel')}
-                </button>
-              </div>
-            )}
-
-            {faceCaptureStatus === 'success' && (
+            {faceCaptureStatus === 'success' ? (
               <p className="text-center text-sm font-bold text-green-600 dark:text-green-400">
                 {t('You can now use Face Login on the sign-in screen! ✨')}
               </p>
+            ) : (
+              <button onClick={handleCaptureFace} disabled={faceCaptureStatus !== 'scanning'} className="w-full py-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-bold transition-colors shadow-sm">
+                {faceCaptureStatus === 'scanning' ? t('Capture Face') : t('Please Wait...')}
+              </button>
             )}
+            
+            <button onClick={handleCloseFaceSetup} className="mt-4 text-sm font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors">
+              {t('Cancel')}
+            </button>
           </div>
         </div>
         , document.body)}

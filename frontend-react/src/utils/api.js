@@ -1,12 +1,74 @@
 const BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
+const TOKEN_KEY = 'lifeos_access_token';
+const REFRESH_KEY = 'lifeos_refresh_token';
 
 const API = {
+  async supportsReminders() {
+    // Public schema check avoids requesting routes absent on an older deployment.
+    const url = new URL(BASE_URL, window.location.origin);
+    url.pathname = url.pathname.replace(/\/api\/v1\/?$/, '') + '/openapi.json';
+    url.search = ''; url.hash = '';
+    try {
+      const response = await fetch(url.toString());
+      if (!response.ok) return true; // Servers may intentionally disable API docs.
+      const schema = await response.json();
+      return Boolean(schema.paths?.['/api/v1/reminders']);
+    } catch { return true; }
+  },
+  // Token management
+  getToken() {
+    return localStorage.getItem(TOKEN_KEY);
+  },
+  setToken(token) {
+    if (token && token !== 'cookie') localStorage.setItem(TOKEN_KEY, token);
+  },
+  getRefreshToken() {
+    return localStorage.getItem(REFRESH_KEY);
+  },
+  setRefreshToken(token) {
+    if (token && token !== 'cookie') localStorage.setItem(REFRESH_KEY, token);
+  },
+  clearTokens() {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(REFRESH_KEY);
+  },
+
   getWebSocketUrl(path) {
     let base = BASE_URL;
     if (base.startsWith('/')) {
       base = window.location.origin + base;
     }
     return base.replace(/^http/, 'ws') + path;
+  },
+
+  getImageUrl(url) {
+    if (!url) return null;
+
+    // Strip hardcoded localhost if present (fixes bad DB records)
+    let cleanUrl = url;
+    if (cleanUrl.startsWith('http://localhost:8000')) {
+      cleanUrl = cleanUrl.replace('http://localhost:8000', '');
+    } else if (cleanUrl.startsWith('http://127.0.0.1:8000')) {
+      cleanUrl = cleanUrl.replace('http://127.0.0.1:8000', '');
+    }
+
+    // If it's a real external URL (like Google OAuth), return it
+    if (cleanUrl.startsWith('http')) return cleanUrl;
+
+    // Extract base URL without /api/v1
+    let base = BASE_URL;
+    if (base.endsWith('/api/v1')) {
+      base = base.substring(0, base.length - 7);
+    } else if (base.startsWith('/')) {
+      base = window.location.origin;
+    }
+
+    // Fallback if base is empty or just /
+    if (!base || base === '/') {
+      return url.startsWith('/') ? url : '/' + url;
+    }
+
+    return base + url;
   },
 
   getMediaUrl(path) {
@@ -26,16 +88,18 @@ const API = {
   },
 
   async logout(emailToRemove = null) {
+    await import('./reminders').then(m => m.clearReminderSession()).catch(console.error);
     if (emailToRemove) {
       let accounts = this.getSavedAccounts();
       accounts = accounts.filter(a => a.email !== emailToRemove);
       localStorage.setItem('lifeos_accounts', JSON.stringify(accounts));
-      
+
       if (accounts.length > 0) {
         // Logout current session first
         try {
-          await fetch(`${BASE_URL}/auth/logout`, { method: 'POST', credentials: 'include' });
+          await fetch(`${BASE_URL}/auth/logout`, { method: 'POST', credentials: 'include', headers: this._authHeaders() });
         } catch (e) { }
+        this.clearTokens();
         // Automatically switch to the next available account
         this.switchAccount(accounts[0].email);
         return;
@@ -51,8 +115,9 @@ const API = {
 
     this.setAuthenticated(false);
     try {
-      await fetch(`${BASE_URL}/auth/logout`, { method: 'POST', credentials: 'include' });
+      await fetch(`${BASE_URL}/auth/logout`, { method: 'POST', credentials: 'include', headers: this._authHeaders() });
     } catch (e) { }
+    this.clearTokens();
     sessionStorage.removeItem('aiChatVisited');
     window.location.href = '/';
   },
@@ -61,24 +126,24 @@ const API = {
     try {
       const acc = localStorage.getItem('lifeos_accounts');
       return acc ? JSON.parse(acc) : [];
-    } catch(e) { return []; }
+    } catch (e) { return []; }
   },
 
   async saveCurrentAccount(refreshToken = null) {
     try {
       const profile = await this.get('/auth/me');
       if (!profile) return;
-      
+
       const accountsStr = localStorage.getItem('lifeos_accounts');
       let accounts = [];
       if (accountsStr) accounts = JSON.parse(accountsStr);
-      
+
       const newAccount = {
         email: profile.email,
         name: profile.name || profile.email.split('@')[0]
       };
       if (refreshToken) newAccount.refresh_token = refreshToken;
-      
+
       const existingIdx = accounts.findIndex(a => a.email === newAccount.email);
       if (existingIdx >= 0) {
         if (refreshToken) accounts[existingIdx].refresh_token = refreshToken;
@@ -86,16 +151,17 @@ const API = {
       } else {
         accounts.push(newAccount);
       }
-      
+
       localStorage.setItem('lifeos_accounts', JSON.stringify(accounts));
       return profile;
-    } catch(e) {
+    } catch (e) {
       console.error("Failed to save account", e);
       return null;
     }
   },
 
   async switchAccount(email) {
+    await import('./reminders').then(m => m.clearReminderSession()).catch(console.error);
     const accounts = this.getSavedAccounts();
     const acc = accounts.find(a => a.email === email);
     if (!acc || !acc.refresh_token) {
@@ -109,17 +175,25 @@ const API = {
         body: { refresh_token: acc.refresh_token }
       });
       window.location.href = '/app';
-    } catch(e) {
+    } catch (e) {
       console.error("Failed to switch account", e);
       this.setAuthenticated(false);
       window.location.href = '/?login=true';
     }
   },
 
+  // Helper to build auth headers
+  _authHeaders() {
+    const token = this.getToken();
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+  },
+
   async request(endpoint, options = {}) {
     const url = `${BASE_URL}${endpoint}`;
-    
+
     const headers = {
+      'Bypass-Tunnel-Reminder': 'true',
+      ...this._authHeaders(),
       ...options.headers
     };
 
@@ -136,12 +210,12 @@ const API = {
 
     try {
       let response = await fetch(url, config);
-      
+
       if (response.status === 401 && !options._retry) {
         if (!url.includes('/auth/login') && !url.includes('/auth/register') && !url.includes('/auth/face-login') && !url.includes('/auth/google') && !url.includes('/auth/login/2fa')) {
           config._retry = true;
           let refreshed = await this.refreshToken();
-          
+
           if (refreshed) {
             response = await fetch(url, config);
           } else {
@@ -172,7 +246,9 @@ const API = {
             }
           }
         }
-        throw new Error(errorMsg);
+        const error = new Error(errorMsg);
+        error.status = response.status;
+        throw error;
       }
 
       return data;
@@ -184,11 +260,23 @@ const API = {
 
   async refreshToken() {
     try {
+      const refreshToken = this.getRefreshToken();
       const res = await fetch(`${BASE_URL}/auth/refresh`, {
         method: 'POST',
-        credentials: 'include'
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...this._authHeaders()
+        },
+        body: JSON.stringify({ refresh_token: refreshToken })
       });
-      return res.ok;
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.data?.access_token) this.setToken(data.data.access_token);
+        if (data?.data?.refresh_token) this.setRefreshToken(data.data.refresh_token);
+        return true;
+      }
+      return false;
     } catch (e) {
       return false;
     }
@@ -233,11 +321,11 @@ const API = {
   getAdminStats() {
     return this.get('/admin/stats');
   },
-  
+
   getAdminUsers() {
     return this.get('/admin/users');
   },
-  
+
   getAdminUserDetail(userId) {
     return this.get(`/admin/users/${userId}`);
   },
@@ -314,7 +402,7 @@ const API = {
   getAdminMedicalRecords() {
     return this.get('/admin/medical-records');
   },
-  
+
   updateMedicalRecordStatus(recordId, status) {
     return this.put(`/admin/medical-records/${recordId}/status`, { status });
   },
@@ -591,11 +679,11 @@ const API = {
   analyzeMedicalDocument(recordId) {
     return this.post(`/records/${recordId}/analyze`, {});
   },
-  
+
   getDocumentMetrics(recordId) {
     return this.get(`/records/${recordId}/metrics`);
   },
-  
+
   getUserLabMetrics() {
     return this.get('/records/user/lab-metrics');
   }

@@ -338,44 +338,43 @@ const AINutrition = ({ voiceAction, onVoiceActionConsumed }) => {
           />
         </div>
       )}
-
-      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
-        <div className="flex justify-between items-center w-full gap-6">
-          <div className="flex items-center gap-5">
-            <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
-              <Utensils className="w-8 h-8" />
-            </div>
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-1">
-                {t('nutr_title')}
-              </h1>
-              <p className="text-xs sm:text-sm lg:text-base text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)] animate-pulse shrink-0"></span>
-                {t('nutr_subtitle')}
-              </p>
-            </div>
+      {/* Header */}
+      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row justify-between items-start md:items-center w-full gap-4 md:gap-6 relative overflow-hidden">
+        <div className="flex items-center gap-4 md:gap-5 relative z-10 w-full md:w-auto">
+          <div className="w-16 h-16 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
+            <Utensils className="w-8 h-8" />
           </div>
-          <div className="flex items-center gap-4 shrink-0">
-            <label htmlFor="meal-scan-upload" className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 shadow-md hover:bg-gray-800 dark:hover:bg-white hover:shadow-lg cursor-pointer ${isScanning ? 'opacity-80 cursor-wait' : ''}`}>
-              <input id="meal-scan-upload" type="file" accept="image/*" capture="environment" className="hidden" onChange={handleScanMeal} disabled={isScanning} />
-              {isScanning ? (
-                <RefreshCcw className="w-5 h-5 animate-spin shrink-0" />
-              ) : (
-                <Camera className="w-5 h-5 shrink-0" />
-              )}
-              <span className="whitespace-nowrap">
-                {isScanning ? t('scanning_meal') : t('scan_meal')}
-              </span>
-            </label>
-
-            <button
-              onClick={regeneratePlan}
-              className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 font-bold text-sm transition-all border border-indigo-100 dark:border-indigo-800"
-            >
-              <RefreshCcw className="w-5 h-5 shrink-0" />
-              <span className="hidden sm:inline">{t('regenerate')}</span>
-            </button>
+          <div>
+            <h1 className="text-xl md:text-2xl lg:text-3xl font-bold md:font-extrabold text-gray-900 dark:text-white tracking-tight mb-1 text-left">
+              {t('nutr_title')}
+            </h1>
+            <p className="text-xs sm:text-sm lg:text-base text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2 text-left">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse shrink-0"></span>
+              {t('nutr_subtitle')}
+            </p>
           </div>
+        </div>
+
+        <div className="flex items-center justify-start md:justify-end gap-2 md:gap-4 w-full md:w-auto overflow-x-auto pb-2 md:pb-0 hide-scrollbar shrink-0 relative z-10">
+          <label htmlFor="meal-scan-upload" className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 shadow-md hover:bg-gray-800 dark:hover:bg-white hover:shadow-lg cursor-pointer ${isScanning ? 'opacity-80 cursor-wait' : ''}`}>
+            <input id="meal-scan-upload" type="file" accept="image/*" capture="environment" className="hidden" onChange={handleScanMeal} disabled={isScanning} />
+            {isScanning ? (
+              <RefreshCcw className="w-5 h-5 animate-spin shrink-0" />
+            ) : (
+              <Camera className="w-5 h-5 shrink-0" />
+            )}
+            <span className="whitespace-nowrap">
+              {isScanning ? t('scanning_meal') : t('scan_meal')}
+            </span>
+          </label>
+
+          <button
+            onClick={regeneratePlan}
+            className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 font-bold text-sm transition-all border border-indigo-100 dark:border-indigo-800"
+          >
+            <RefreshCcw className="w-5 h-5 shrink-0" />
+            <span className="hidden sm:inline whitespace-nowrap">{t('regenerate')}</span>
+          </button>
         </div>
       </div>
 

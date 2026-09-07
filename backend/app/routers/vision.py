@@ -1,20 +1,21 @@
 import os
 import json
 import logging
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
-from openai import AsyncOpenAI
-from app.dependencies import CurrentUserId
-from app.config import get_settings
-from app.database import AsyncSessionLocal
-from app.models.admin import AIUsageLog
-import time
-import logging
 import base64
 import uuid
+import time
+import re
 import aiofiles
+import httpx
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.database import get_db
+from openai import AsyncOpenAI
+
+from app.dependencies import CurrentUserId
+from app.config import get_settings
+from app.database import AsyncSessionLocal, get_db
+from app.models.admin import AIUsageLog
 from app.models.file_asset import FileAsset
 
 logger = logging.getLogger("lifeos.vision")
@@ -22,72 +23,257 @@ logger = logging.getLogger("lifeos.vision")
 router = APIRouter(prefix="/vision", tags=["Vision AI"])
 settings = get_settings()
 
-client = AsyncOpenAI(
-    api_key=settings.GROQ_API_KEY or os.environ.get("OPENAI_API_KEY", "dummy"),
-    base_url="https://api.groq.com/openai/v1"
-)
 
 class VisionRequest(BaseModel):
     image_data: str  # Base64 string starting with data:image/...
     scan_type: str   # 'food' or 'pill'
 
-@router.get("/models")
-async def list_models():
-    models = await client.models.list()
-    return {"models": [m.id for m in models.data]}
 
-@router.get("/test_groq/{model_name:path}")
-async def test_groq(model_name: str):
-    import httpx
-    groq_api_key = settings.GROQ_API_KEY or os.environ.get("GROQ_API_KEY", "")
-    base64_img = "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA="
-    image_url = f"data:image/jpeg;base64,{base64_img}"
-    payload = {
-        "model": model_name,
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": "What is this?"},
-                    {"type": "image_url", "image_url": {"url": image_url}}
-                ]
-            }
-        ]
-    }
+def extract_and_parse_json(text: str) -> dict:
+    """Safely extracts JSON from model response even if wrapped in markdown blocks."""
+    text = text.strip()
+    match = re.search(r'```(?:json)?\s*(.*?)\s*```', text, re.DOTALL | re.IGNORECASE)
+    if match:
+        text = match.group(1).strip()
+    else:
+        match2 = re.search(r'\{.*\}', text, re.DOTALL)
+        if match2:
+            text = match2.group(0).strip()
+    return json.loads(text)
+
+
+async def get_supported_gemini_models(api_key: str) -> list[str]:
+    """Query Google API to discover exact model names supported by this API key."""
     headers = {
-        "Authorization": f"Bearer {groq_api_key}",
+        "x-goog-api-key": api_key,
         "Content-Type": "application/json"
     }
+    endpoints = [
+        f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}",
+        f"https://generativelanguage.googleapis.com/v1/models?key={api_key}"
+    ]
+
+    found = []
     async with httpx.AsyncClient() as http_client:
-        response = await http_client.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers)
-        return {"status": response.status_code, "text": response.text}
+        for url in endpoints:
+            try:
+                res = await http_client.get(url, headers=headers, timeout=10.0)
+                if res.status_code == 200:
+                    data = res.json()
+                    for item in data.get("models", []):
+                        methods = item.get("supportedGenerationMethods", [])
+                        if "generateContent" in methods:
+                            m_name = item.get("name", "").replace("models/", "").strip()
+                            if m_name and m_name not in found:
+                                found.append(m_name)
+                    if found:
+                        break
+            except Exception as e:
+                logger.warning(f"Error querying Gemini models list at {url}: {e}")
+
+    # Prioritize: Flash models first (fastest for vision), then newest version numbers
+    def model_priority(name: str) -> int:
+        lower = name.lower()
+        score = 0
+        if "flash" in lower:
+            score += 100
+        if "2.5" in lower or "3." in lower:
+            score += 30
+        elif "2.0" in lower or "2-" in lower:
+            score += 20
+        elif "1.5" in lower:
+            score += 10
+        if "lite" in lower:
+            score -= 5
+        if "exp" in lower or "preview" in lower:
+            score -= 10
+        return score
+
+    found.sort(key=model_priority, reverse=True)
+    return found
+
+
+async def analyze_with_openai(prompt: str, mime_type: str, base64_img: str, api_key: str, model: str = "gpt-4o-mini") -> tuple[dict, int, int, int]:
+    """Analyze image using OpenAI Vision API (gpt-4o-mini / gpt-4o)."""
+    start_t = time.time()
+    client = AsyncOpenAI(api_key=api_key)
+    try:
+        response = await client.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt + "\n\nIMPORTANT: Return ONLY a valid JSON object matching the requested schema. No markdown fences, no conversational text."},
+                        {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{base64_img}"}}
+                    ]
+                }
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.1,
+            timeout=40.0
+        )
+        elapsed_ms = int((time.time() - start_t) * 1000)
+        content = response.choices[0].message.content or "{}"
+        p_tokens = response.usage.prompt_tokens if response.usage else 0
+        c_tokens = response.usage.completion_tokens if response.usage else 0
+        parsed = extract_and_parse_json(content)
+        return parsed, p_tokens, c_tokens, elapsed_ms
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"OpenAI Vision API error: {e}")
+        raise HTTPException(status_code=500, detail=f"OpenAI Vision Error: {str(e)}")
+
+
+async def analyze_with_gemini(prompt: str, mime_type: str, base64_img: str, api_key: str, model: str = "") -> tuple[dict, int, int, int, str]:
+    """Analyze image using Google Gemini Vision API (free tier)."""
+    start_t = time.time()
+
+    # 1. Dynamically discover models supported by this specific API key
+    discovered_models = await get_supported_gemini_models(api_key)
+
+    # 2. Build prioritized models list
+    models_to_try = []
+    if model and model in discovered_models:
+        models_to_try.append(model)
+    for m in discovered_models:
+        if m not in models_to_try:
+            models_to_try.append(m)
+
+    # 3. Fallback defaults if discovery could not reach models endpoint
+    if not models_to_try:
+        models_to_try = [
+            "gemini-2.5-flash",
+            "gemini-2.0-flash",
+            "gemini-1.5-flash-latest",
+            "gemini-2.0-flash-exp",
+            "gemini-1.5-flash",
+            "gemini-1.5-pro"
+        ]
+
+    headers = {
+        "x-goog-api-key": api_key,
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "contents": [{
+            "parts": [
+                {"text": prompt + "\n\nIMPORTANT: Respond with pure valid JSON only."},
+                {
+                    "inline_data": {
+                        "mime_type": mime_type,
+                        "data": base64_img
+                    }
+                }
+            ]
+        }],
+        "generationConfig": {
+            "temperature": 0.1,
+            "responseMimeType": "application/json"
+        }
+    }
+
+    last_err = "No response from Gemini"
+
+    async with httpx.AsyncClient() as http_client:
+        for m in models_to_try:
+            for api_version in ["v1beta", "v1"]:
+                gemini_url = f"https://generativelanguage.googleapis.com/{api_version}/models/{m}:generateContent?key={api_key}"
+                try:
+                    response = await http_client.post(gemini_url, json=payload, headers=headers, timeout=35.0)
+                    if response.status_code == 200:
+                        resp_data = response.json()
+                        text_content = resp_data["candidates"][0]["content"]["parts"][0]["text"]
+                        elapsed_ms = int((time.time() - start_t) * 1000)
+                        parsed = extract_and_parse_json(text_content)
+                        return parsed, 0, 0, elapsed_ms, m
+                    elif response.status_code == 404:
+                        last_err = f"{response.status_code} - {response.text}"
+                        continue
+                    else:
+                        last_err = f"{response.status_code} - {response.text}"
+                        continue
+                except Exception as e:
+                    last_err = str(e)
+                    continue
+
+    logger.error(f"Gemini Vision API error: {last_err}")
+    raise HTTPException(status_code=500, detail=f"Gemini Vision Error: {last_err}")
+
+
+@router.get("/test_gemini")
+async def test_gemini():
+    """Test Gemini API key and list available models."""
+    gemini_key = (settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY", "")).strip()
+    if not gemini_key:
+        return {"error": "GEMINI_API_KEY is not set in backend/.env"}
+    models = await get_supported_gemini_models(gemini_key)
+    return {
+        "status": "success" if models else "failed",
+        "key_prefix": gemini_key[:8] + "...",
+        "available_models_count": len(models),
+        "available_models": models
+    }
+
+
+@router.get("/providers")
+async def get_providers_status():
+    """Return status of configured Vision AI providers."""
+    openai_key = (settings.OPENAI_API_KEY or os.environ.get("OPENAI_API_KEY", "")).strip()
+    gemini_key = (settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY", "")).strip()
+
+    is_openai_gsk = openai_key.startswith("gsk_")
+    is_valid_openai = bool(openai_key and not is_openai_gsk and len(openai_key) > 20)
+    is_valid_gemini = bool(gemini_key and len(gemini_key) > 10)
+
+    return {
+        "openai": {
+            "configured": is_valid_openai,
+            "model": settings.OPENAI_VISION_MODEL or "gpt-4o-mini",
+            "warning": "Key starts with 'gsk_' (Groq key), please replace with OpenAI 'sk-' key." if is_openai_gsk else None
+        },
+        "gemini": {
+            "configured": is_valid_gemini,
+            "model": settings.GEMINI_MODEL or "gemini-1.5-flash",
+            "is_free": True
+        }
+    }
+
 
 @router.post("/analyze")
 async def analyze_image(request: VisionRequest, user_id: CurrentUserId, db: AsyncSession = Depends(get_db)):
-    """Analyze an image using Groq/Gemini Vision API and save it as FileAsset"""
+    """Analyze an image using OpenAI (gpt-4o-mini) or Google Gemini Flash Vision and save as FileAsset."""
     try:
-        # Extract base64 part if it contains the data:image/... prefix
+        # 1. Extract base64 part if it contains the data:image/... prefix
         base64_img = request.image_data
-        if base64_img.startswith("data:image"):
-            base64_img = base64_img.split(",")[1]
-            
-        # Save image to file system and FileAsset
-        img_bytes = base64.b64decode(base64_img)
+        mime_type = "image/jpeg"
         ext = "jpg"
-        if request.image_data.startswith("data:image/png"): ext = "png"
-        elif request.image_data.startswith("data:image/webp"): ext = "webp"
-        
+
+        if base64_img.startswith("data:image/png"):
+            mime_type = "image/png"
+            ext = "png"
+        elif base64_img.startswith("data:image/webp"):
+            mime_type = "image/webp"
+            ext = "webp"
+
+        if "," in base64_img:
+            base64_img = base64_img.split(",", 1)[1]
+
+        # 2. Save image to disk and create FileAsset
+        img_bytes = base64.b64decode(base64_img)
         os.makedirs("uploads/images", exist_ok=True)
         filename = f"vision_{uuid.uuid4().hex[:8]}.{ext}"
         filepath = f"uploads/images/{filename}"
-        
+
         async with aiofiles.open(filepath, "wb") as f:
             await f.write(img_bytes)
-            
+
         file_size = os.path.getsize(filepath)
         new_asset = FileAsset(
             name=f"Vision Scan - {request.scan_type.capitalize()}",
-            type=f"image/{ext}",
+            type=mime_type,
             category="Images",
             size_bytes=file_size,
             file_path=f"/{filepath}"
@@ -95,265 +281,118 @@ async def analyze_image(request: VisionRequest, user_id: CurrentUserId, db: Asyn
         db.add(new_asset)
         await db.commit()
 
-        prompt = ""
+        # 3. Formulate analysis prompt based on scan type
         if request.scan_type == "food":
             prompt = """
-            Analyze this image of food/meal. Estimate the nutritional content.
-            Return ONLY a valid JSON object in the following format:
-            {
-              "name": "Name of the dish/meal",
-              "calories": <integer>,
-              "protein": <integer (grams)>,
-              "carbs": <integer (grams)>,
-              "fats": <integer (grams)>,
-              "sodium": <integer (mg)>
-            }
-            Do not include markdown blocks or any other text.
-            """
+Analyze this image of food/meal. Estimate the nutritional content.
+Return ONLY a valid JSON object in the following format:
+{
+  "name": "Name of the dish/meal",
+  "calories": <integer>,
+  "protein": <integer (grams)>,
+  "carbs": <integer (grams)>,
+  "fats": <integer (grams)>,
+  "sodium": <integer (mg)>
+}
+Do not include markdown blocks or any other text.
+"""
         elif request.scan_type == "pill":
             prompt = """
-            Identify this pill/medication from the image.
-            Return ONLY a valid JSON object in the following format:
-            {
-              "name": "Name of medication",
-              "purpose": "Brief description of what it's used for",
-              "common_interactions": ["List", "of", "common", "interactions", "or", "warnings"]
-            }
-            Do not include markdown blocks or any other text.
-            """
+Identify this pill/medication from the image.
+Return ONLY a valid JSON object in the following format:
+{
+  "name": "Name of medication",
+  "purpose": "Brief description of what it's used for",
+  "common_interactions": ["List", "of", "common", "interactions", "or", "warnings"]
+}
+Do not include markdown blocks or any other text.
+"""
         else:
             raise HTTPException(status_code=400, detail="Invalid scan_type. Must be 'food' or 'pill'.")
 
-        import httpx
-        gemini_api_key = os.environ.get("GEMINI_API_KEY")
-        
-        if gemini_api_key:
-            # Use Google Gemini 1.5 Flash API
-            gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_api_key}"
-            
-            mime_type = "image/jpeg"
-            if request.image_data.startswith("data:image/png"):
-                mime_type = "image/png"
-            elif request.image_data.startswith("data:image/webp"):
-                mime_type = "image/webp"
+        # 4. Determine AI Provider (OpenAI prioritized, Gemini fallback / free tier)
+        openai_key = (settings.OPENAI_API_KEY or os.environ.get("OPENAI_API_KEY", "")).strip()
+        gemini_key = (settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY", "")).strip()
 
-            payload = {
-                "contents": [{
-                    "parts": [
-                        {"text": prompt},
-                        {
-                            "inline_data": {
-                                "mime_type": mime_type,
-                                "data": base64_img
-                            }
-                        }
-                    ]
-                }],
-                "generationConfig": {
-                    "response_mime_type": "application/json",
-                    "temperature": 0.1
-                }
-            }
+        is_openai_gsk = openai_key.startswith("gsk_")
+        is_valid_openai = bool(openai_key and not is_openai_gsk and len(openai_key) > 20)
+        is_valid_gemini = bool(gemini_key and len(gemini_key) > 10)
 
-            async with httpx.AsyncClient() as client:
-                start_t = time.time()
-                response = await client.post(gemini_url, json=payload, timeout=30.0)
-                
-                if response.status_code != 200:
-                    logger.error(f"Gemini API Error: {response.text}")
-                    raise HTTPException(status_code=400, detail="Failed to process image with Gemini")
+        if is_valid_openai:
+            model_name = settings.OPENAI_VISION_MODEL or "gpt-4o-mini"
+            parsed, p_tokens, c_tokens, elapsed_ms = await analyze_with_openai(
+                prompt=prompt,
+                mime_type=mime_type,
+                base64_img=base64_img,
+                api_key=openai_key,
+                model=model_name
+            )
+            provider_used = f"openai-{model_name}"
 
-                resp_data = response.json()
-                try:
-                    text_content = resp_data["candidates"][0]["content"]["parts"][0]["text"]
-                    # Clean markdown if present
-                    if text_content.startswith("```json"):
-                        text_content = text_content.strip("```json").strip("```").strip()
-                    elif text_content.startswith("```"):
-                        text_content = text_content.strip("```").strip()
-                    
-                    parsed_json = json.loads(text_content)
-                    
-                    # Log AI Usage
-                    try:
-                        async with AsyncSessionLocal() as db:
-                            elapsed_ms = int((time.time() - start_t) * 1000)
-                            db.add(AIUsageLog(
-                                feature=f"scan_{request.scan_type}", 
-                                model_used="gemini-1.5-flash", 
-                                prompt_tokens=0, 
-                                completion_tokens=0, 
-                                response_time_ms=elapsed_ms
-                            ))
-                            await db.commit()
-                    except Exception as log_e:
-                        logger.error("Failed to log vision AI usage: %s", log_e)
+        elif is_valid_gemini:
+            parsed, p_tokens, c_tokens, elapsed_ms, model_used = await analyze_with_gemini(
+                prompt=prompt,
+                mime_type=mime_type,
+                base64_img=base64_img,
+                api_key=gemini_key,
+                model=settings.GEMINI_MODEL or ""
+            )
+            provider_used = f"gemini-{model_used}"
 
-                    # Save ScannedMeal if food
-                    if request.scan_type == "food":
-                        from app.models.diet import ScannedMeal
-                        new_meal = ScannedMeal(
-                            user_id=user_id,
-                            name=parsed_json.get("name", "Unknown Meal"),
-                            calories=parsed_json.get("calories", 0),
-                            protein=parsed_json.get("protein", 0),
-                            carbs=parsed_json.get("carbs", 0),
-                            fats=parsed_json.get("fats", 0),
-                            image_url=f"/{filepath}"
-                        )
-                        db.add(new_meal)
-                        await db.commit()
-                        parsed_json["image_url"] = f"/{filepath}"
-                        
-                    return {"success": True, "data": parsed_json}
-                except (KeyError, IndexError, json.JSONDecodeError) as e:
-                    logger.error(f"Failed to parse Gemini response: {resp_data} - Error: {e}")
-                    raise HTTPException(status_code=500, detail="Invalid response format from Gemini API")
-        
         else:
-            # Use Groq Vision API (cloud-based, uses existing GROQ_API_KEY)
-            groq_api_key = settings.GROQ_API_KEY or os.environ.get("GROQ_API_KEY", "")
-            if not groq_api_key:
-                raise HTTPException(status_code=500, detail="No vision AI provider configured. Set GEMINI_API_KEY or GROQ_API_KEY.")
-
-            groq_url = "https://api.groq.com/openai/v1/chat/completions"
-            
-            mime_type = "image/jpeg"
-            if request.image_data.startswith("data:image/png"):
-                mime_type = "image/png"
-            elif request.image_data.startswith("data:image/webp"):
-                mime_type = "image/webp"
-
-            image_url = f"data:{mime_type};base64,{base64_img}"
-
-            payload = {
-                "model": "llama-3.2-11b-vision-preview",
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": prompt + "\n\nRespond ONLY with a valid JSON block containing the requested keys. Format as:\n```json\n{...}\n```\nDo not include any other text."},
-                            {"type": "image_url", "image_url": {"url": image_url}}
-                        ]
-                    }
-                ],
-                "temperature": 0.1
-            }
-            headers = {
-                "Authorization": f"Bearer {groq_api_key}",
-                "Content-Type": "application/json"
-            }
-            
-            models_to_try = ["llama-3.2-11b-vision-preview", "llama-3.2-90b-vision-preview", "qwen-2.5-vl-72b-instruct", "qwen/qwen3.6-27b"]
-            last_response = None
-            
-            async with httpx.AsyncClient() as http_client:
-                for model_name in models_to_try:
-                    payload["model"] = model_name
-                    try:
-                        response = await http_client.post(groq_url, json=payload, headers=headers, timeout=30.0)
-                        if response.status_code == 200:
-                            last_response = response
-                            break
-                        elif response.status_code in [429, 400, 404]:
-                            last_response = response
-                            continue # Try next model on rate limits or decommissioned/invalid models
-                        else:
-                            last_response = response
-                            break # Other critical errors, break and report
-                    except Exception as e:
-                        logger.error(f"Failed to connect to Groq Vision API with model {model_name}: {e}")
-                        continue
-                
-                if not last_response:
-                    raise HTTPException(status_code=500, detail="Could not connect to Groq Vision API. Check your GROQ_API_KEY.")
-                    
-                if last_response.status_code != 200:
-                    logger.error(f"Groq Vision API Error: {last_response.text}")
-                    error_msg = "Unknown error"
-                    try:
-                        error_msg = last_response.json().get("error", {}).get("message", last_response.text)
-                    except:
-                        error_msg = last_response.text
-                    raise HTTPException(status_code=500, detail=f"Groq Vision API Error: {last_response.status_code} - {error_msg}")
-                    
-                data = last_response.json()
-                result_text = data["choices"][0]["message"]["content"]
-        
-        import re
-        json_match = re.search(r'```(?:json)?\s*(.*?)\s*```', result_text, re.DOTALL | re.IGNORECASE)
-        if json_match:
-            result_text = json_match.group(1).strip()
-        else:
-            # Fallback: try to extract anything between the first { and last }
-            json_match2 = re.search(r'\{.*\}', result_text, re.DOTALL)
-            if json_match2:
-                result_text = json_match2.group(0)
-            
-        # Try strict parsing first
-        try:
-            parsed = json.loads(result_text)
-            if request.scan_type == "food":
-                from app.models.diet import ScannedMeal
-                new_meal = ScannedMeal(
-                    user_id=user_id,
-                    name=parsed.get("name", "Unknown Meal"),
-                    calories=parsed.get("calories", 0),
-                    protein=parsed.get("protein", 0),
-                    carbs=parsed.get("carbs", 0),
-                    fats=parsed.get("fats", 0),
-                    image_url=f"/{filepath}"
+            if is_openai_gsk:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "OpenAI Vision requires a valid OpenAI API key (starting with 'sk-'). "
+                        "The key currently in backend/.env is a Groq key (starts with 'gsk_'). "
+                        "Please set OPENAI_API_KEY=sk-... in backend/.env, or get a 100% FREE Gemini key "
+                        "from https://aistudio.google.com and set GEMINI_API_KEY=... in backend/.env."
+                    )
                 )
-                db.add(new_meal)
-                await db.commit()
-                parsed["image_url"] = f"/{filepath}"
-            return {"success": True, "data": parsed}
-        except json.JSONDecodeError:
-            # Fallback: try to extract just the first { to the last }
-            match = re.search(r'\{.*\}', result_text, re.DOTALL)
-            if match:
-                try:
-                    # Sometimes models forget commas between keys. We can't perfectly fix all,
-                    # but extracting the block usually fixes trailing/leading garbage.
-                    parsed = json.loads(match.group(0))
-                    if request.scan_type == "food":
-                        from app.models.diet import ScannedMeal
-                        new_meal = ScannedMeal(
-                            user_id=user_id,
-                            name=parsed.get("name", "Unknown Meal"),
-                            calories=parsed.get("calories", 0),
-                            protein=parsed.get("protein", 0),
-                            carbs=parsed.get("carbs", 0),
-                            fats=parsed.get("fats", 0),
-                            image_url=f"/{filepath}"
-                        )
-                        db.add(new_meal)
-                        await db.commit()
-                        parsed["image_url"] = f"/{filepath}"
-                    return {"success": True, "data": parsed}
-                except json.JSONDecodeError as e:
-                    logger.error(f"Failed to parse extracted JSON: {match.group(0)} - Error: {e}")
-                    # If it STILL fails, the model generated truly broken JSON (e.g. missing quotes/commas)
-                    # Let's provide a fallback object so the app doesn't crash
-                    if request.scan_type == "pill":
-                        return {"success": True, "data": {"name": "Unknown Pill", "purpose": "Analysis failed due to model output formatting.", "common_interactions": []}}
-                    else:
-                        from app.models.diet import ScannedMeal
-                        new_meal = ScannedMeal(
-                            user_id=user_id,
-                            name="Unknown Meal",
-                            calories=0, protein=0, carbs=0, fats=0,
-                            image_url=f"/{filepath}"
-                        )
-                        db.add(new_meal)
-                        await db.commit()
-                        return {"success": True, "data": {"name": "Unknown Meal", "calories": 0, "protein": 0, "carbs": 0, "fats": 0, "sodium": 0, "image_url": f"/{filepath}"}}
             else:
-                # No JSON block found
-                raise HTTPException(status_code=500, detail="Model did not return a JSON object.")
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "No Vision AI provider configured. "
+                        "Please add OPENAI_API_KEY=sk-... or a free GEMINI_API_KEY=... to your backend/.env file."
+                    )
+                )
 
-    except HTTPException as e:
-        raise e
+        # 5. Log AI Usage
+        try:
+            async with AsyncSessionLocal() as db_session:
+                db_session.add(AIUsageLog(
+                    feature=f"scan_{request.scan_type}",
+                    model_used=provider_used,
+                    prompt_tokens=p_tokens,
+                    completion_tokens=c_tokens,
+                    response_time_ms=elapsed_ms
+                ))
+                await db_session.commit()
+        except Exception as log_e:
+            logger.error("Failed to log vision AI usage: %s", log_e)
+
+        # 6. Post-process ScannedMeal if food scan
+        if request.scan_type == "food":
+            from app.models.diet import ScannedMeal
+            new_meal = ScannedMeal(
+                user_id=user_id,
+                name=parsed.get("name", "Unknown Meal"),
+                calories=parsed.get("calories", 0),
+                protein=parsed.get("protein", 0),
+                carbs=parsed.get("carbs", 0),
+                fats=parsed.get("fats", 0),
+                image_url=f"/{filepath}"
+            )
+            db.add(new_meal)
+            await db.commit()
+            parsed["image_url"] = f"/{filepath}"
+
+        return {"success": True, "data": parsed}
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error in Vision API: {e}")
         raise HTTPException(status_code=500, detail=str(e))

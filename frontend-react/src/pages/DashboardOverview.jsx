@@ -10,6 +10,8 @@ import {
 import { useLang } from '../contexts/LangContext';
 import { useUnit } from '../contexts/UnitContext';
 import CustomSelect from '../components/ui/CustomSelect';
+import { useReminders, recordDose, refreshReminders } from '../utils/reminders';
+import { MedicineDoseCard, MedicineActionDialog } from '../components/MedicineShared';
 
 /* ─── Reusable Card (Matches AdminUI) ──────────── */
 const StatCard = ({ title, value, subtitle, icon: Icon, colorClass, onClick }) => (
@@ -17,13 +19,13 @@ const StatCard = ({ title, value, subtitle, icon: Icon, colorClass, onClick }) =
     onClick={onClick}
     tabIndex={0}
     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick?.(e); } }}
-    className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1.5 relative overflow-hidden group cursor-pointer focus:outline-none"
+    className="bg-white dark:bg-gray-800 rounded-2xl md:rounded-[2rem] p-4 md:p-6 shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1.5 relative overflow-hidden group cursor-pointer focus:outline-none"
   >
     <div className={`absolute top-0 right-0 w-32 h-32 ${colorClass} opacity-10 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110`}></div>
     <div className="flex items-start justify-between relative z-10">
       <div>
-        <p className="text-sm font-bold text-gray-500 dark:text-gray-400 mb-1 tracking-wide uppercase">{title}</p>
-        <h3 className="text-4xl font-extrabold text-gray-900 dark:text-gray-100 tracking-tight">{value}</h3>
+        <p className="text-xs md:text-sm font-bold text-gray-500 dark:text-gray-400 mb-1 tracking-wide uppercase">{title}</p>
+        <h3 className="text-3xl md:text-4xl font-extrabold text-gray-900 dark:text-gray-100 tracking-tight">{value}</h3>
       </div>
       <div className={`p-4 ${colorClass} bg-opacity-10 dark:bg-opacity-20 rounded-2xl shadow-sm transition-transform duration-300 ease-out group-hover:scale-125`}>
         <Icon className="w-7 h-7" style={{ color: 'currentColor' }} />
@@ -40,10 +42,10 @@ const StatCard = ({ title, value, subtitle, icon: Icon, colorClass, onClick }) =
 /* ─── Section Header ─────────────────────────────────────────── */
 const SectionHeader = ({ title, subtitle, className = "mb-4" }) => (
   <div className={`flex items-center gap-3 ${className}`}>
-    <div className="w-1.5 h-8 bg-gradient-to-b from-blue-500 to-indigo-400 rounded-full"></div>
+    <div className="w-1.5 h-6 md:h-8 bg-gradient-to-b from-blue-500 to-indigo-400 rounded-full"></div>
     <div>
-      <h2 className="text-xl font-extrabold text-gray-900 dark:text-gray-100 tracking-tight">{title}</h2>
-      {subtitle && <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">{subtitle}</p>}
+      <h2 className="text-lg md:text-xl font-extrabold text-gray-900 dark:text-gray-100 tracking-tight">{title}</h2>
+      {subtitle && <p className="text-gray-500 dark:text-gray-400 text-xs md:text-sm font-medium">{subtitle}</p>}
     </div>
   </div>
 );
@@ -76,6 +78,38 @@ const DashboardOverview = ({ currentUser, voiceAction, onVoiceActionConsumed }) 
   const [showParamModal, setShowParamModal] = useState(false);
   const [newParam, setNewParam] = useState({ category: 'weight', value: '', secondary_value: '' });
   const [savingParam, setSavingParam] = useState(false);
+
+  // Medicine reminder states
+  const { data: reminderData } = useReminders();
+  const [dialog, setDialog] = useState(null);
+  const [reason, setReason] = useState('');
+  const [quantity, setQuantity] = useState(30);
+  const [busy, setBusy] = useState(false);
+
+  const action = async (d, status, opts) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await recordDose(d, status, opts);
+      setDialog(null);
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const runDialogAction = async (fn) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await fn();
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (voiceAction && voiceAction.target_feature === 'dashboard') {
@@ -157,20 +191,17 @@ const DashboardOverview = ({ currentUser, voiceAction, onVoiceActionConsumed }) 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const [d, hData, fStats, nPlan, records, meds, apts, medLogs] = await Promise.all([
+        const [d, records, meds, apts, medLogs] = await Promise.all([
           API.get('/dashboard/summary').catch(() => null),
-          API.get('/trackers/health-data').catch(() => ({})),
-          API.get('/ai/fitness/stats').catch(() => ({})),
-          API.get('/ai/nutrition/plan').catch(() => null),
           API.get('/records').catch(() => []),
           API.get('/medicines').catch(() => []),
           API.get('/appointments').catch(() => []),
           API.get('/medicines/today-logs').catch(() => [])
         ]);
         setDashboardSummary(d);
-        setHealthData(hData || {});
-        setFitnessStats(fStats || { steps: 0, calories_burned: 0, step_goal: 10000 });
-        setNutritionPlan(nPlan || { tdee: 2200, protein_goal_grams: 84, carbs_goal_grams: 200, fat_goal_grams: 60 });
+        setHealthData({});
+        setFitnessStats({ steps: 0, calories_burned: 0, step_goal: 10000 });
+        setNutritionPlan({ tdee: 2200, protein_goal_grams: 84, carbs_goal_grams: 200, fat_goal_grams: 60 });
         setRecentRecords(records ? records.slice(0, 3) : []);
         setMyMeds(meds ? meds.filter(m => m.is_active) : []);
         setAppointments(apts || []);
@@ -325,8 +356,8 @@ const DashboardOverview = ({ currentUser, voiceAction, onVoiceActionConsumed }) 
               legend: {
                 position: 'top', align: 'end',
                 labels: {
-                  usePointStyle: true, pointStyle: 'circle', padding: 20,
-                  font: { family: "'Inter', sans-serif", weight: '600', size: 12 }, color: '#64748b'
+                  usePointStyle: true, pointStyle: 'circle', padding: window.innerWidth < 768 ? 10 : 20, boxWidth: window.innerWidth < 768 ? 8 : 12,
+                  font: { family: "'Inter', sans-serif", weight: '600', size: window.innerWidth < 768 ? 10 : 12 }, color: '#64748b'
                 }
               },
               tooltip: {
@@ -360,7 +391,7 @@ const DashboardOverview = ({ currentUser, voiceAction, onVoiceActionConsumed }) 
             scales: {
               x: {
                 grid: { display: false, drawBorder: false },
-                ticks: { font: { family: "'Inter', sans-serif", weight: '500' }, color: '#94a3b8' }
+                ticks: { font: { family: "'Inter', sans-serif", weight: '500' }, color: '#94a3b8', maxTicksLimit: window.innerWidth < 768 ? 5 : 10, maxRotation: window.innerWidth < 768 ? 45 : 0 }
               },
               y: {
                 grid: { color: 'rgba(0,0,0,0.04)', drawBorder: false, borderDash: [5, 5] },
@@ -406,7 +437,7 @@ const DashboardOverview = ({ currentUser, voiceAction, onVoiceActionConsumed }) 
         }
         return [...prev, updatedLog];
       });
-      toast.success(newStatus === 'taken' ? 'Medicine logged as taken' : 'Medicine log removed');
+      toast.success('Medicine logged as taken');
     } catch (e) {
       console.error('Failed to log medicine', e);
       toast.error('Failed to log medicine');
@@ -437,49 +468,33 @@ const DashboardOverview = ({ currentUser, voiceAction, onVoiceActionConsumed }) 
   const healthScore = dashboardSummary?.health_score || 85;
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10 max-w-7xl mx-auto">
+    <div className="space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10 max-w-7xl mx-auto w-full">
 
       {/* ── Header / Hero Section ─────────────────────────────────── */}
-      <div className="bg-white dark:bg-gray-800 rounded-[2rem] shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden p-5 sm:p-6 flex flex-wrap justify-between items-center gap-6 group">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl md:rounded-[2rem] shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden p-4 sm:p-6 flex flex-row items-center justify-between gap-4 group">
 
         {/* Abstract Background Pattern */}
         <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#4f46e5 2px, transparent 2px)', backgroundSize: '30px 30px' }}></div>
         <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500 opacity-5 rounded-full blur-3xl -mr-20 -mt-20 transition-transform duration-1000 group-hover:scale-110 pointer-events-none"></div>
 
         {/* Greeting block */}
-        <div className="relative z-10 flex-1 min-w-[280px]">
-          <div className="inline-block px-3 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[10px] font-black uppercase tracking-widest rounded-full mb-1.5">
-            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+        <div className="relative z-10 flex-1 min-w-0">
+          <div className="hidden md:flex items-center gap-2 mb-2">
+            <div className="px-3 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[10px] font-black uppercase tracking-widest rounded-full">
+              {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+            </div>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-gray-100 tracking-tight leading-tight">
+          <h1 className="text-xl md:text-2xl lg:text-3xl font-bold md:font-extrabold text-gray-900 dark:text-gray-100 tracking-tight leading-tight">
             {getGreeting()}, <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">{userName}</span>
           </h1>
-          <p className="text-gray-500 dark:text-gray-400 font-medium text-sm mt-1">
+          <p className="text-gray-500 dark:text-gray-400 font-medium text-xs sm:text-sm mt-1">
             {t('greeting_msg') || 'Keep up the great work with your personalized health goals!'}
           </p>
         </div>
 
-        {/* Insights & Health Score block */}
-        <div className="relative z-10 flex items-center gap-3 shrink-0">
-
-          <div className="flex flex-col gap-2">
-            <div className="bg-gray-50 dark:bg-gray-700/50 px-3 py-2 rounded-2xl border border-gray-100 dark:border-gray-600 flex items-center gap-2.5">
-              <Flame className="w-4 h-4 text-orange-500" />
-              <div>
-                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-tight">Calories Burned</p>
-                <p className="text-xs font-extrabold text-gray-800 dark:text-white leading-tight">{fitnessStats?.calories_burned || 0} kcal</p>
-              </div>
-            </div>
-            <div className="bg-gray-50 dark:bg-gray-700/50 px-3 py-2 rounded-2xl border border-gray-100 dark:border-gray-600 flex items-center gap-2.5">
-              <Activity className="w-4 h-4 text-emerald-500" />
-              <div>
-                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-tight">Steps Goal</p>
-                <p className="text-xs font-extrabold text-gray-800 dark:text-white leading-tight">{fitnessStats?.step_goal ? Math.min((fitnessStats.steps / fitnessStats.step_goal * 100), 100).toFixed(0) : 0}%</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4 bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-gray-700 dark:to-gray-600 p-3 sm:p-4 rounded-[1.5rem] border border-indigo-100 dark:border-gray-500 shadow-inner">
+        {/* Health Score / Circle Icon block */}
+        <div className="relative z-10 shrink-0">
+          <div className="flex items-center gap-3 sm:gap-4 bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-gray-700 dark:to-gray-600 p-2.5 sm:p-4 rounded-2xl md:rounded-[1.5rem] border border-indigo-100 dark:border-gray-500 shadow-inner">
             <div className="text-right hidden sm:block">
               <span className="text-[10px] font-black text-indigo-400 dark:text-gray-300 uppercase tracking-widest block mb-0.5">Health Score</span>
               <div className="flex items-baseline gap-1 justify-end">
@@ -487,90 +502,59 @@ const DashboardOverview = ({ currentUser, voiceAction, onVoiceActionConsumed }) 
                 <span className="text-xs text-indigo-400 font-bold">/100</span>
               </div>
             </div>
-            <div className="relative w-16 h-16 sm:w-20 sm:h-20">
+            <div className="relative w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 shrink-0">
               <svg width="100%" height="100%" viewBox="0 0 96 96" className="rotate-[-90deg]">
                 <circle cx="48" cy="48" r="40" fill="none" className="stroke-indigo-100 dark:stroke-gray-500" strokeWidth="8" />
                 <circle cx="48" cy="48" r="40" fill="none" className="stroke-indigo-500" strokeWidth="8" strokeDasharray="251" strokeDashoffset={251 - (251 * healthScore) / 100} strokeLinecap="round" style={{ transition: 'stroke-dashoffset 1.5s ease-out' }} />
               </svg>
               <div className="absolute inset-0 flex items-center justify-center">
-                <Activity className="w-6 h-6 text-indigo-500" />
+                <Activity className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-500" />
               </div>
             </div>
           </div>
-
         </div>
       </div>
 
 
 
-      {/* ── Main Quick Stats (Vitals & Activity) ────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard
-          title={t('steps_today') || 'Steps Today'}
-          value={(fitnessStats?.steps || 0).toLocaleString()}
-          subtitle={`${t('goal') || 'Goal'}: ${(fitnessStats?.step_goal || 10000).toLocaleString()}`}
-          icon={Activity}
-          colorClass="bg-emerald-500 text-emerald-500"
-        />
-        <StatCard
-          title={t('calories_burned') || 'Calories Burned'}
-          value={fitnessStats?.calories_burned || 0}
-          subtitle={t('kcal_active') || 'Kcal active'}
-          icon={Flame}
-          colorClass="bg-orange-500 text-orange-500"
-        />
-        <StatCard
-          title={t('heart_rate_caps') || 'Heart Rate'}
-          value={healthData?.heart_rate?.[(healthData?.heart_rate?.length || 1) - 1]?.value || '--'}
-          subtitle={t('bpm_last') || 'bpm (Last reading)'}
-          icon={HeartPulse}
-          colorClass="bg-rose-500 text-rose-500"
-        />
-        <StatCard
-          title={t('sleep_caps') || 'Sleep'}
-          value={healthData?.sleep?.[(healthData?.sleep?.length || 1) - 1]?.value ? `${healthData?.sleep?.[(healthData?.sleep?.length || 1) - 1]?.value}h` : '--'}
-          subtitle={t('last_night') || 'Last night'}
-          icon={Moon}
-          colorClass="bg-indigo-500 text-indigo-500"
-        />
-      </div>
 
 
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8 w-full">
 
         {/* Left Column: Charts and Parameters */}
         <div className="lg:col-span-2 space-y-6">
 
           {/* Health Parameters Chart */}
-          <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
-            <div className="flex flex-wrap justify-between items-center mb-6 gap-4 w-full">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl md:rounded-[2rem] p-4 md:p-8 shadow-sm border border-gray-100 dark:border-gray-700 w-full overflow-hidden">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 w-full">
               <SectionHeader title={t('my_parameters') || 'My Parameters'} subtitle={t('track_metrics') || 'Track key health metrics over time'} className="mb-0" />
               <button
                 onClick={() => setShowParamModal(true)}
-                className="flex items-center justify-center gap-2 px-5 py-2.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors shrink-0"
+                className="flex items-center justify-center gap-2 px-5 py-2.5 min-h-[44px] bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl font-bold active:bg-indigo-100 dark:active:bg-indigo-900/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 active:scale-95 transition-all shrink-0 touch-manipulation"
               >
                 <Plus className="w-4 h-4" /> {t('log_data') || 'Log Data'}
               </button>
             </div>
 
             {/* Tabs */}
-            <div className="flex flex-wrap justify-between items-center gap-4 mb-6 w-full">
-              <div className="flex flex-wrap items-center bg-gray-50 dark:bg-gray-900/50 p-1.5 rounded-2xl border border-gray-100 dark:border-gray-700">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 w-full">
+              <div className="flex flex-row flex-nowrap items-center bg-gray-50 dark:bg-gray-900/50 p-1 rounded-2xl border border-gray-100 dark:border-gray-700 w-fit max-w-full overflow-x-auto hide-scrollbar">
                 <button
-                  className={`px-4 py-2 rounded-xl text-sm font-bold transition-all duration-200 ${activeParam === 'weight' ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                  className={`px-4 py-2 min-h-[44px] rounded-xl text-sm font-bold transition-all duration-200 touch-manipulation active:scale-95 ${activeParam === 'weight' ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 active:bg-gray-200 dark:active:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-300'}`}
                   onClick={() => setActiveParam('weight')}
                 >
                   {t('weight') || 'Weight'}
                 </button>
                 <button
-                  className={`px-4 py-2 rounded-xl text-sm font-bold transition-all duration-200 ${activeParam === 'bp' ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                  className={`px-4 py-2 min-h-[44px] rounded-xl text-sm font-bold transition-all duration-200 touch-manipulation active:scale-95 ${activeParam === 'bp' ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 active:bg-gray-200 dark:active:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-300'}`}
                   onClick={() => setActiveParam('bp')}
                 >
                   {t('blood_pressure') || 'Blood Pressure'}
                 </button>
                 <button
-                  className={`px-4 py-2 rounded-xl text-sm font-bold transition-all duration-200 ${activeParam === 'pulse' ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                  className={`px-4 py-2 min-h-[44px] rounded-xl text-sm font-bold transition-all duration-200 touch-manipulation active:scale-95 ${activeParam === 'pulse' ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 active:bg-gray-200 dark:active:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-300'}`}
                   onClick={() => setActiveParam('pulse')}
                 >
                   {t('pulse') || 'Pulse'}
@@ -591,30 +575,14 @@ const DashboardOverview = ({ currentUser, voiceAction, onVoiceActionConsumed }) 
               </div>
             </div>
 
-            <div className="h-80 w-full relative">
+            <div className="h-56 md:h-80 w-full relative">
               <canvas id="params-chart"></canvas>
             </div>
           </div>
 
           {/* Quick Actions & Sharing */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div
-              onClick={() => navigate('/app/ai-fitness')}
-              className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-[2rem] p-6 text-gray-900 dark:text-gray-100 shadow-sm hover:shadow-md hover:bg-cyan-50 dark:hover:bg-cyan-900/20 hover:border-cyan-200 dark:hover:border-cyan-800 transition-all duration-300 cursor-pointer group flex justify-between items-center"
-            >
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 bg-cyan-50 dark:bg-cyan-900/30 group-hover:bg-cyan-100 dark:group-hover:bg-cyan-800/50 rounded-2xl flex items-center justify-center text-cyan-600 dark:text-cyan-400 transition-colors">
-                  <Dumbbell className="w-7 h-7" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-xl group-hover:text-cyan-900 dark:group-hover:text-cyan-100 transition-colors">{t('start_workout') || 'Start Workout'}</h3>
-                  <p className="text-gray-500 dark:text-gray-400 group-hover:text-cyan-600 dark:group-hover:text-cyan-300 font-medium text-sm transition-colors">{t('ai_plan') || 'AI personalized plan'}</p>
-                </div>
-              </div>
-              <ArrowRight className="w-6 h-6 text-gray-400 group-hover:text-cyan-500 opacity-50 group-hover:opacity-100 transition-all group-hover:translate-x-1" />
-            </div>
-
-            <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-[2rem] p-6 text-gray-900 dark:text-gray-100 shadow-sm flex flex-col justify-center hover:shadow-md hover:bg-pink-50 dark:hover:bg-pink-900/20 hover:border-pink-200 dark:hover:border-pink-800 transition-all duration-300 relative group overflow-hidden cursor-pointer" onClick={!sharedLink ? handleShareSummary : undefined}>
+          <div className="grid grid-cols-1 gap-4 w-full">
+            <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl md:rounded-[2rem] p-4 md:p-6 text-gray-900 dark:text-gray-100 shadow-sm flex flex-col justify-center hover:shadow-md hover:bg-pink-50 dark:hover:bg-pink-900/20 hover:border-pink-200 dark:hover:border-pink-800 transition-all duration-300 relative group overflow-hidden cursor-pointer" onClick={!sharedLink ? handleShareSummary : undefined}>
               {!sharedLink ? (
                 <div className="flex justify-between items-center w-full">
                   <div className="flex items-center gap-4">
@@ -658,91 +626,118 @@ const DashboardOverview = ({ currentUser, voiceAction, onVoiceActionConsumed }) 
           </div>
 
           {/* Recent Records & Medications (Split into 2 columns for better layout balance) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 w-full">
 
-            {/* Recent Activity Card */}
-            <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-              <div className="flex justify-between items-center mb-4">
-                <SectionHeader title={t('recent_activity') || 'Recent Activity'} />
+            {/* My Appointments Card */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl md:rounded-[2rem] p-4 md:p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+              <div className="flex flex-wrap justify-between items-center mb-6 gap-3">
+                <SectionHeader title={t('appointments') || 'Appointments'} className="mb-0" />
+                <div className="flex shrink-0 bg-gray-50 dark:bg-gray-900/50 p-1 rounded-xl border border-gray-100 dark:border-gray-700">
+                  <button
+                    onClick={() => setAptTimeframe('today')}
+                    className={`px-3 py-1 text-xs font-bold whitespace-nowrap rounded-lg transition-all ${aptTimeframe === 'today'
+                      ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                      }`}
+                  >
+                    {t('today') || 'Today'}
+                  </button>
+                  <button
+                    onClick={() => setAptTimeframe('week')}
+                    className={`px-3 py-1 text-xs font-bold whitespace-nowrap rounded-lg transition-all ${aptTimeframe === 'week'
+                      ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                      }`}
+                  >
+                    {t('this_week') || 'This Week'}
+                  </button>
+                </div>
               </div>
+
               <div className="space-y-3">
-                {recentRecords.length > 0 ? recentRecords.map(r => (
-                  <div key={r.id} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-900/50 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors">
-                    <div className="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-                      <FileText className="w-5 h-5" />
-                    </div>
-                    <div className="overflow-hidden">
-                      <div className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{r.title}</div>
-                      <div className="text-xs font-medium text-gray-500">{r.date}</div>
-                    </div>
-                  </div>
-                )) : (
-                  <p className="text-xs font-medium text-gray-400 py-2">No recent records.</p>
-                )}
+                {(() => {
+                  let apts = appointments || [];
+                  const now = new Date();
+                  const todayStr = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+                  const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+                  const nextWeekStr = new Date(nextWeek.getTime() - nextWeek.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+
+                  apts = apts.filter(a => {
+                    if (a.status !== 'upcoming') return false;
+                    const aptTime = new Date(`${a.date}T${a.time || '00:00'}`);
+                    return aptTime >= now;
+                  });
+
+                  if (aptTimeframe === 'today') {
+                    apts = apts.filter(a => a.date === todayStr);
+                  } else if (aptTimeframe === 'week') {
+                    apts = apts.filter(a => a.date >= todayStr && a.date <= nextWeekStr);
+                  }
+
+                  apts.sort((a, b) => new Date(`${a.date}T${a.time || '00:00'}`) - new Date(`${b.date}T${b.time || '00:00'}`));
+
+                  if (apts.length > 0) {
+                    return apts.slice(0, 3).map((apt, i) => (
+                      <div key={i} className="flex items-center gap-4 p-3 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer group">
+                        <div className="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex flex-col items-center justify-center shrink-0">
+                          <span className="text-xs font-bold uppercase">{new Date(`1970-01-01T${apt.time}`).toLocaleTimeString([], { hour: 'numeric' })}</span>
+                        </div>
+                        <div className="flex-1 overflow-hidden">
+                          <h4 className="font-bold text-gray-900 dark:text-gray-100 truncate text-sm">Dr. {apt.doctor}</h4>
+                          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 truncate">{apt.specialty}</p>
+                        </div>
+                      </div>
+                    ));
+                  } else {
+                    return (
+                      <div className="py-6 text-center text-sm font-medium text-gray-400 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-dashed border-gray-200 dark:border-gray-700">
+                        No appointments {aptTimeframe}
+                      </div>
+                    );
+                  }
+                })()}
               </div>
+              <button
+                onClick={() => navigate('/app/appointments')}
+                className="w-full mt-4 py-3 rounded-xl bg-gray-900 dark:bg-gray-700 text-white text-sm font-bold hover:bg-black dark:hover:bg-gray-600 transition-colors shadow-md"
+              >
+                {t('book_appointment') || 'Book Appointment'}
+              </button>
             </div>
 
             {/* Today's Medications Card */}
-            <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl md:rounded-[2rem] p-4 md:p-6 shadow-sm border border-gray-100 dark:border-gray-700">
               <div className="flex justify-between items-center mb-6">
                 <SectionHeader title={t('medications') || 'Medications'} />
               </div>
-              <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+              <div className="space-y-4 pr-2">
                 {(() => {
-                  if (!myMeds.length) return <p className="text-xs font-medium text-gray-400 py-2">No active medications.</p>;
-
-                  const todayDoses = [];
-                  const todayStr = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0];
-
-                  myMeds.forEach(med => {
-                    let slots = [];
-                    if (med.frequency === 'once_daily') slots = ['Morning'];
-                    else if (med.frequency === 'twice_daily') slots = ['Morning', 'Evening'];
-                    else if (med.frequency === 'thrice_daily') slots = ['Morning', 'Afternoon', 'Evening'];
-                    else slots = ['Anytime'];
-
-                    slots.forEach(slot => {
-                      const log = todayMedLogs.find(l => l.medicine_id === med.id && l.scheduled_time === slot);
-                      todayDoses.push({
-                        med,
-                        slot,
-                        status: log ? log.status : 'pending'
-                      });
-                    });
+                  if (!reminderData || !reminderData.doses) return <p className="text-xs font-medium text-gray-400 py-2">Loading...</p>;
+                  const s = reminderData.settings;
+                  const today = new Intl.DateTimeFormat('en-CA', { timeZone: s.timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+                  const now = Date.now();
+                  const doses = reminderData.doses.map(d => {
+                    if (!['upcoming', 'due', 'pending', 'snoozed', 'missed'].includes(d.status)) return d;
+                    const due = new Date(d.snoozed_until || d.scheduled_at).getTime();
+                    return { ...d, status: now > due + s.grace_minutes * 60000 ? 'missed' : due <= now ? 'due' : d.snoozed_until ? 'snoozed' : 'upcoming' };
                   });
+                  const todayDoses = doses.filter(d => d.date === today).sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at));
 
-                  const currentSlot = (() => {
-                    const hour = new Date().getHours();
-                    if (hour < 12) return 'Morning';
-                    if (hour < 18) return 'Afternoon';
-                    return 'Evening';
-                  })();
-                  const filteredDoses = todayDoses.filter(d => d.slot === currentSlot || d.slot === 'Anytime');
+                  if (!todayDoses.length) return <p className="text-xs font-medium text-gray-400 py-2">No active medications for today.</p>;
 
-                  if (!filteredDoses.length) return <p className="text-xs font-medium text-gray-400 py-2">No medications scheduled for this {currentSlot.toLowerCase()}.</p>;
-
-                  const getSlotTime = (times, slot) => {
-                    if (!times || !times.length) return 'Flexible';
-                    if (slot === 'Morning') return times[0];
-                    if (slot === 'Afternoon') return times.length > 1 ? times[1] : times[0];
-                    if (slot === 'Evening') return times[times.length - 1];
-                    return times[0];
-                  };
-
-                  return filteredDoses.map((dose, idx) => {
-                    const isTaken = dose.status === 'taken';
-                    return (
-                      <div key={idx} className="flex items-start gap-4 group cursor-pointer" onClick={() => handleLogMedicine(dose.med.id, todayStr, dose.slot, dose.status)}>
-                        <div className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 shadow-inner transition-colors ${isTaken ? 'bg-indigo-500 border-indigo-500 text-white' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 group-hover:border-indigo-400'}`}>
-                          {isTaken && <Check className="w-3 h-3" />}
-                        </div>
-                        <div className={isTaken ? 'opacity-50' : ''}>
-                          <p className={`text-sm font-bold transition-colors ${isTaken ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400'}`}>{dose.med.name} {dose.med.dosage}</p>
-                          <p className="text-[11px] font-black text-indigo-500 uppercase tracking-wider mt-0.5">{dose.slot} • {getSlotTime(dose.med.times, dose.slot)}</p>
-                        </div>
-                      </div>
-                    );
-                  });
+                  return todayDoses.map(d => (
+                    <MedicineDoseCard 
+                      key={d.id} 
+                      d={d} 
+                      view="today" 
+                      busy={busy} 
+                      readOnly={Boolean(reminderData.compatibility)} 
+                      s={s} 
+                      action={action} 
+                      setDialog={setDialog} 
+                      setReason={setReason} 
+                    />
+                  ));
                 })()}
               </div>
             </div>
@@ -751,197 +746,32 @@ const DashboardOverview = ({ currentUser, voiceAction, onVoiceActionConsumed }) 
 
         </div>
 
-        {/* Right Column: Nutrition, Appointments, Records */}
+        {/* Right Column: Recent Activity */}
         <div className="space-y-6">
 
-          {/* Nutrition Tracker */}
+          {/* Recent Activity Card */}
           <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-            <div className="flex justify-between items-center mb-6">
-              <SectionHeader title={t('nutrition_caps') || 'Nutrition'} />
-              <button onClick={() => navigate('/app/ai-nutrition')} className="w-10 h-10 rounded-full bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center justify-center text-gray-500 transition-colors">
-                <UtensilsCrossed className="w-5 h-5" />
-              </button>
+            <div className="flex justify-between items-center mb-4">
+              <SectionHeader title={t('recent_activity') || 'Recent Activity'} />
             </div>
-
-            {(() => {
-              let consumedProtein = 0, consumedCarbs = 0, consumedFats = 0, consumedCalories = 0;
-              if (nutritionPlan && nutritionPlan.consumed_macros) {
-                consumedProtein = nutritionPlan.consumed_macros.protein || 0;
-                consumedCarbs = nutritionPlan.consumed_macros.carbs || 0;
-                consumedFats = nutritionPlan.consumed_macros.fats || 0;
-                consumedCalories = nutritionPlan.consumed_macros.calories || 0;
-              }
-              const goalProtein = nutritionPlan?.protein_goal_grams || 84;
-              const goalCarbs = nutritionPlan?.carbs_goal_grams || 200;
-              const goalFats = nutritionPlan?.fat_goal_grams || 60;
-              const goalCalories = nutritionPlan?.tdee || 2200;
-
-              return (
-                <>
-                  <div className="space-y-5">
-                    <div>
-                      <div className="flex justify-between text-sm font-bold mb-2">
-                        <span className="flex items-center gap-2 text-rose-500"><Flame className="w-4 h-4" /> {t('protein') || 'Protein'}</span>
-                        <span className="text-gray-900 dark:text-gray-100">{consumedProtein} / {goalProtein}g</span>
-                      </div>
-                      <div className="h-2.5 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-rose-400 to-rose-500 rounded-full transition-all duration-1000" style={{ width: `${Math.min((consumedProtein / goalProtein) * 100, 100)}%` }}></div>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-sm font-bold mb-2">
-                        <span className="flex items-center gap-2 text-amber-500"><Activity className="w-4 h-4" /> {t('carbs') || 'Carbs'}</span>
-                        <span className="text-gray-900 dark:text-gray-100">{consumedCarbs} / {goalCarbs}g</span>
-                      </div>
-                      <div className="h-2.5 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-amber-400 to-amber-500 rounded-full transition-all duration-1000" style={{ width: `${Math.min((consumedCarbs / goalCarbs) * 100, 100)}%` }}></div>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-sm font-bold mb-2">
-                        <span className="flex items-center gap-2 text-indigo-500"><Droplet className="w-4 h-4" /> {t('fats') || 'Fats'}</span>
-                        <span className="text-gray-900 dark:text-gray-100">{consumedFats} / {goalFats}g</span>
-                      </div>
-                      <div className="h-2.5 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-indigo-400 to-indigo-500 rounded-full transition-all duration-1000" style={{ width: `${Math.min((consumedFats / goalFats) * 100, 100)}%` }}></div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-6 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-4 flex justify-between items-center border border-emerald-100 dark:border-emerald-800/50">
-                    <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-2"><Target className="w-4 h-4" /> {t('calories') || 'Calories'}</span>
-                    <span className="font-extrabold text-gray-900 dark:text-gray-100">{consumedCalories} / {goalCalories} <span className="text-xs text-gray-500 font-medium">kcal/day</span></span>
-                  </div>
-                </>
-              );
-            })()}
-          </div>
-
-          {/* My Appointments */}
-          <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-            <div className="flex flex-wrap justify-between items-center mb-6 gap-3">
-              <SectionHeader title={t('appointments') || 'Appointments'} className="mb-0" />
-              <div className="flex shrink-0 bg-gray-50 dark:bg-gray-900/50 p-1 rounded-xl border border-gray-100 dark:border-gray-700">
-                <button
-                  onClick={() => setAptTimeframe('today')}
-                  className={`px-3 py-1 text-xs font-bold whitespace-nowrap rounded-lg transition-all ${aptTimeframe === 'today'
-                    ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-                    }`}
-                >
-                  {t('today') || 'Today'}
-                </button>
-                <button
-                  onClick={() => setAptTimeframe('week')}
-                  className={`px-3 py-1 text-xs font-bold whitespace-nowrap rounded-lg transition-all ${aptTimeframe === 'week'
-                    ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-                    }`}
-                >
-                  {t('this_week') || 'This Week'}
-                </button>
-              </div>
-            </div>
-
             <div className="space-y-3">
-              {(() => {
-                let apts = appointments || [];
-                const now = new Date();
-                const todayStr = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().split('T')[0];
-                const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-                const nextWeekStr = new Date(nextWeek.getTime() - nextWeek.getTimezoneOffset() * 60000).toISOString().split('T')[0];
-
-                apts = apts.filter(a => {
-                  if (a.status !== 'upcoming') return false;
-                  const aptTime = new Date(`${a.date}T${a.time || '00:00'}`);
-                  return aptTime >= now;
-                });
-
-                if (aptTimeframe === 'today') {
-                  apts = apts.filter(a => a.date === todayStr);
-                } else if (aptTimeframe === 'week') {
-                  apts = apts.filter(a => a.date >= todayStr && a.date <= nextWeekStr);
-                }
-
-                apts.sort((a, b) => new Date(`${a.date}T${a.time || '00:00'}`) - new Date(`${b.date}T${b.time || '00:00'}`));
-
-                if (apts.length > 0) {
-                  return apts.slice(0, 3).map((apt, i) => (
-                    <div key={i} className="flex items-center gap-4 p-3 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer group">
-                      <div className="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex flex-col items-center justify-center shrink-0">
-                        <span className="text-xs font-bold uppercase">{new Date(`1970-01-01T${apt.time}`).toLocaleTimeString([], { hour: 'numeric' })}</span>
-                      </div>
-                      <div className="flex-1 overflow-hidden">
-                        <h4 className="font-bold text-gray-900 dark:text-gray-100 truncate text-sm">Dr. {apt.doctor}</h4>
-                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 truncate">{apt.specialty}</p>
-                      </div>
-                    </div>
-                  ));
-                } else {
-                  return (
-                    <div className="py-6 text-center text-sm font-medium text-gray-400 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-dashed border-gray-200 dark:border-gray-700">
-                      No appointments {aptTimeframe}
-                    </div>
-                  );
-                }
-              })()}
+              {recentRecords.length > 0 ? recentRecords.map(r => (
+                <div key={r.id} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-900/50 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors">
+                  <div className="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <div className="overflow-hidden">
+                    <div className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{r.title}</div>
+                    <div className="text-xs font-medium text-gray-500">{r.date}</div>
+                  </div>
+                </div>
+              )) : (
+                <p className="text-xs font-medium text-gray-400 py-2">No recent records.</p>
+              )}
             </div>
-            <button
-              onClick={() => navigate('/app/appointments')}
-              className="w-full mt-4 py-3 rounded-xl bg-gray-900 dark:bg-gray-700 text-white text-sm font-bold hover:bg-black dark:hover:bg-gray-600 transition-colors shadow-md"
-            >
-              {t('book_appointment') || 'Book Appointment'}
-            </button>
           </div>
 
-          {/* Weekly Goals Tracker */}
-          <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-lg transition-all duration-300">
-            <div className="flex justify-between items-center mb-6">
-              <SectionHeader title={t('weekly_goals') || 'Weekly Goals'} />
-              <div className="w-10 h-10 rounded-full bg-orange-50 dark:bg-orange-900/30 flex items-center justify-center text-orange-500 transition-transform hover:scale-110 cursor-pointer">
-                <Target className="w-5 h-5" />
-              </div>
-            </div>
-
-            <div className="space-y-6">
-              {/* Goal 1 */}
-              <div>
-                <div className="flex justify-between text-sm font-bold mb-2">
-                  <span className="flex items-center gap-2 text-gray-700 dark:text-gray-300"><Dumbbell className="w-4 h-4 text-orange-500" /> {t('workouts') || 'Workouts'}</span>
-                  <span className="text-gray-900 dark:text-gray-100">{fitnessStats?.workouts_this_week || 0} <span className="text-gray-400 font-medium">/ 5 Days</span></span>
-                </div>
-                <div className="h-2.5 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-orange-400 to-orange-500 rounded-full transition-all duration-1000" style={{ width: `${Math.min(((fitnessStats?.workouts_this_week || 0) / 5) * 100, 100)}%` }}></div>
-                </div>
-              </div>
-
-              {/* Goal 2 */}
-              <div>
-                <div className="flex justify-between text-sm font-bold mb-2">
-                  <span className="flex items-center gap-2 text-gray-700 dark:text-gray-300"><Moon className="w-4 h-4 text-cyan-500" /> {t('sleep_8h') || '8h Sleep'}</span>
-                  <span className="text-gray-900 dark:text-gray-100">{
-                    (healthData?.sleep || []).filter(s => s.value >= 8).length
-                  } <span className="text-gray-400 font-medium">/ 7 Days</span></span>
-                </div>
-                <div className="h-2.5 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-cyan-400 to-cyan-500 rounded-full transition-all duration-1000" style={{ width: `${Math.min((((healthData?.sleep || []).filter(s => s.value >= 8).length) / 7) * 100, 100)}%` }}></div>
-                </div>
-              </div>
-
-              {/* Goal 3 */}
-              <div>
-                <div className="flex justify-between text-sm font-bold mb-2">
-                  <span className="flex items-center gap-2 text-gray-700 dark:text-gray-300"><Brain className="w-4 h-4 text-purple-500" /> Mindfulness</span>
-                  <span className="text-gray-900 dark:text-gray-100">{
-                    (healthData?.mindfulness || []).length
-                  } <span className="text-gray-400 font-medium">/ 3 Sessions</span></span>
-                </div>
-                <div className="h-2.5 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-purple-400 to-purple-500 rounded-full transition-all duration-1000" style={{ width: `${Math.min((((healthData?.mindfulness || []).length) / 3) * 100, 100)}%` }}></div>
-                </div>
-              </div>
-
-            </div>
-          </div>        </div>
+        </div>
 
       </div>
 
@@ -1007,6 +837,17 @@ const DashboardOverview = ({ currentUser, voiceAction, onVoiceActionConsumed }) 
         </div>
       )}
 
+      <MedicineActionDialog 
+        dialog={dialog} 
+        busy={busy} 
+        reason={reason} 
+        setReason={setReason} 
+        quantity={quantity} 
+        setQuantity={setQuantity} 
+        action={action} 
+        setDialog={setDialog} 
+        run={runDialogAction} 
+      />
     </div>
   );
 };

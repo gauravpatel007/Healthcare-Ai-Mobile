@@ -253,7 +253,7 @@ const AISymptom = ({ voiceAction, onVoiceActionConsumed }) => {
             <Stethoscope className="w-8 h-8" />
           </div>
           <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-1">{t("AI Symptom Checker")}</h1>
+            <h1 className="text-xl md:text-2xl lg:text-3xl font-bold md:font-extrabold text-gray-900 dark:text-white tracking-tight mb-1">{t("AI Symptom Checker")}</h1>
             <p className="text-xs sm:text-sm lg:text-base text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
               {t("Enter your symptoms for AI-powered triage")}

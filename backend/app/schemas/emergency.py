@@ -58,6 +58,15 @@ class SOSAlertResponse(BaseModel):
     emergency_number: str = "112"
 
 
+class SOSAudioClipResponse(BaseModel):
+    id: str
+    user_id: str
+    file_path: str
+    original_filename: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
 class QRHealthData(BaseModel):
     name: str
     blood_type: str

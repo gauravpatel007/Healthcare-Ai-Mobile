@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import API from '../utils/api';
 import MedicalDisclaimer from '../components/MedicalDisclaimer';
 import { useLang } from '../contexts/LangContext';
-import { 
+import {
   Bot,
   MessageSquare,
   Copy,
@@ -25,7 +25,7 @@ import {
 
 /* ─── Reusable Action Card (Matches Dashboard StatCard) ──────────── */
 const ActionCard = ({ title, value, subtitle, icon: Icon, colorClass, onClick }) => (
-  <div 
+  <div
     onClick={onClick}
     tabIndex={0}
     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick?.(e); } }}
@@ -65,7 +65,7 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
       }
     };
   }, []);
-  
+
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -80,7 +80,7 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
   const chatContainerRef = useRef(null);
   const chatClearedRef = useRef(false);
   const abortControllerRef = useRef(null);
-  
+
   const messagesRef = useRef(messages);
   useEffect(() => {
     messagesRef.current = messages;
@@ -133,9 +133,9 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
         <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">{t('try_asking_me')}</p>
         <ul className="space-y-3">
           {sampleQuestions.map((q, i) => (
-            <li 
-              key={i} 
-              className="text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center gap-3 cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors p-2 -mx-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800" 
+            <li
+              key={i}
+              className="text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center gap-3 cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors p-2 -mx-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
               onClick={() => setInput(q)}
             >
               <div className="w-6 h-6 rounded-full bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center shrink-0">
@@ -145,6 +145,19 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
             </li>
           ))}
         </ul>
+      </div>
+      <div className="md:hidden mt-4 grid grid-cols-2 gap-3">
+        {[
+          { id: 'medicine', icon: Pill, title: t('medicine_info'), color: 'bg-indigo-50 text-indigo-600' },
+          { id: 'firstaid', icon: Stethoscope, title: t('first_aid'), color: 'bg-emerald-50 text-emerald-600' },
+          { id: 'report', icon: FileText, title: t('report_qa'), color: 'bg-sky-50 text-sky-600' },
+          { id: 'general', icon: HeartPulse, title: t('general_health'), color: 'bg-amber-50 text-amber-600' }
+        ].map(action => (
+          <button key={action.id} onClick={() => quickAction(action.id)} className={`flex flex-col items-center justify-center p-3 rounded-xl border border-gray-100 dark:border-gray-700 ${action.color} dark:bg-gray-800 transition-colors`}>
+            <action.icon className="w-5 h-5 mb-1" />
+            <span className="text-[10px] font-bold text-center leading-tight dark:text-gray-300">{action.title}</span>
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -156,11 +169,11 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
           API.get('/ai/chat/sessions').catch(() => []),
           API.get('/ai/chat/tips').catch(() => ({}))
         ]);
-        
+
         if (tipsRes && tipsRes.tips) {
           setHealthTips(tipsRes.tips.map(tip => tip.tip));
         }
-        
+
         const isFirstVisit = !sessionStorage.getItem('aiChatVisited');
         sessionStorage.setItem('aiChatVisited', 'true');
 
@@ -189,7 +202,7 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
     };
     initChat();
   }, []);
-  
+
   const loadSession = async (sid) => {
     try {
       setShowHistoryModal(false);
@@ -201,7 +214,7 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
       } else {
         setMessages([{ role: 'assistant', custom: defaultGreeting }]);
       }
-    } catch(e) {
+    } catch (e) {
       console.error(e);
     }
   };
@@ -254,7 +267,7 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
     try {
       const payload = { message: userMessage };
       if (sessionId) payload.session_id = sessionId;
-      
+
       const res = await API.request('/ai/chat', {
         method: 'POST',
         body: payload,
@@ -269,7 +282,7 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
         }
       }
     } catch (e) {
-      if (e.name === 'AbortError') return; 
+      if (e.name === 'AbortError') return;
       if (!chatClearedRef.current) {
         setMessages(prev => [...prev, { role: 'assistant', text: t('error_server') }]);
       }
@@ -314,9 +327,9 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
           const payload = { message: userMessage };
           if (sessionId) payload.session_id = sessionId;
           API.request('/ai/chat', { method: 'POST', body: payload, signal: controller.signal })
-            .then(res => { 
+            .then(res => {
               if (!chatClearedRef.current) {
-                setMessages(prev => [...prev, { role: 'assistant', text: res.response, id: res.message_id }]); 
+                setMessages(prev => [...prev, { role: 'assistant', text: res.response, id: res.message_id }]);
                 if (res.session_id && res.session_id !== sessionId) {
                   setSessionId(res.session_id);
                   API.get('/ai/chat/sessions').then(setChatSessions).catch(console.error);
@@ -376,15 +389,15 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto space-y-6 pb-20">
-      
-      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-row flex-wrap md:flex-nowrap items-center justify-between gap-4 relative overflow-hidden w-full">
+    <div className="w-full max-w-7xl mx-auto flex flex-col md:block space-y-0 md:space-y-6 md:pb-20 h-full md:h-auto">
+
+      <div className="flex bg-white dark:bg-gray-800 rounded-[2rem] md:rounded-[2.5rem] p-4 sm:p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex-row flex-wrap md:flex-nowrap items-center justify-between gap-4 relative overflow-hidden w-full shrink-0 z-10">
         <div className="flex items-center gap-4 lg:gap-6 relative z-10 w-auto">
           <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
             <Bot className="w-8 h-8" />
           </div>
           <div className="text-left">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-1 text-left">
+            <h1 className="text-xl md:text-2xl lg:text-3xl font-bold md:font-extrabold text-gray-900 dark:text-white tracking-tight mb-1 text-left">
               {t('ai_health_assistant_title')}
             </h1>
             <p className="text-xs sm:text-sm lg:text-base text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2 text-left">
@@ -394,22 +407,22 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
           </div>
         </div>
         <div className="flex items-center justify-end gap-3 relative z-10 shrink-0 ml-auto pr-2">
-          <button 
-            onClick={() => setShowHistoryModal(true)} 
+          <button
+            onClick={() => setShowHistoryModal(true)}
             className="flex items-center gap-2 p-3 rounded-xl transition-all bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"
             title="Chat History"
           >
             <History className="w-5 h-5 shrink-0" />
           </button>
-          <button 
-            onClick={() => setShowTipsModal(true)} 
+          <button
+            onClick={() => setShowTipsModal(true)}
             className="flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50"
           >
             <Lightbulb className="w-4 h-4 shrink-0" />
             <span className="whitespace-nowrap">{t('daily_tips_btn')}</span>
           </button>
-          <button 
-            onClick={startNewChat} 
+          <button
+            onClick={startNewChat}
             className="flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
           >
             <Plus className="w-4 h-4 shrink-0" />
@@ -418,10 +431,12 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
         </div>
       </div>
 
-      <MedicalDisclaimer />
+      <div className="hidden md:block">
+        <MedicalDisclaimer />
+      </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+      <div className="hidden md:grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
         {[
           { id: 'medicine', icon: Pill, title: t('medicine_info'), desc: t('drug_information'), color: 'bg-indigo-500 text-indigo-500' },
           { id: 'firstaid', icon: Stethoscope, title: t('first_aid'), desc: t('emergency_guide'), color: 'bg-emerald-500 text-emerald-500' },
@@ -441,10 +456,10 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
       </div>
 
       {/* Main Chat Interface */}
-      <div className="flex flex-col bg-white dark:bg-gray-800 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden h-[500px] lg:h-[600px] max-h-[60vh]">
-        
+      <div className="flex flex-col flex-1 bg-transparent md:bg-white dark:bg-transparent md:dark:bg-gray-800 md:rounded-[2.5rem] md:border md:border-gray-100 md:dark:border-gray-700 md:shadow-sm md:overflow-hidden md:h-[600px] md:max-h-[60vh] -mx-4 md:mx-0">
+
         {/* Messages area */}
-        <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-6 lg:p-8 space-y-6">
+        <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 space-y-6 pb-[145px] md:pb-32 custom-scrollbar">
           {messages.length === 0 ? defaultGreeting : messages.map((m, i) => {
             const isAI = m.role === 'ai' || m.role === 'assistant';
             return (
@@ -457,20 +472,19 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
                     <span className="text-xs font-bold text-gray-500 dark:text-gray-400">{t('greeting_title')}</span>
                   </div>
                 )}
-                
+
                 {m.custom ? m.custom : (
-                  <div className={`max-w-[85%] md:max-w-[75%] rounded-3xl p-4 lg:p-5 text-sm lg:text-base font-medium ${
-                    isAI 
-                      ? 'bg-gray-50 dark:bg-gray-900/50 text-gray-800 dark:text-gray-200 border border-gray-100 dark:border-gray-800 rounded-tl-none' 
+                  <div className={`max-w-[85%] md:max-w-[75%] rounded-3xl p-4 lg:p-5 text-sm lg:text-base font-medium ${isAI
+                      ? 'bg-gray-50 dark:bg-gray-900/50 text-gray-800 dark:text-gray-200 border border-gray-100 dark:border-gray-800 rounded-tl-none'
                       : 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-md rounded-tr-none'
-                  }`}>
+                    }`}>
                     {formatMessage(m.text)}
                   </div>
                 )}
 
                 {isAI && m.text && !m.custom && (
                   <div className="flex items-center gap-1 mt-2 ml-2">
-                    <button onClick={() => copyToClipboard(m.text, m.id || i)} className="p-2 text-gray-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors flex items-center gap-1" title="Copy">
+                    <button onClick={() => copyToClipboard(m.text, m.id || i)} className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors active:scale-95 touch-manipulation flex items-center gap-1" title="Copy">
                       {copiedMessageId === (m.id || i) ? (
                         <>
                           <Check className="w-4 h-4 text-emerald-500" />
@@ -480,10 +494,10 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
                         <Copy className="w-4 h-4" />
                       )}
                     </button>
-                    <button onClick={() => handleFeedback(m.id, 1, i)} className={`p-2 rounded-lg transition-colors ${m.feedback === 1 ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/30' : 'text-gray-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/30'}`} title="Helpful">
+                    <button onClick={() => handleFeedback(m.id, 1, i)} className={`p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg active:scale-95 touch-manipulation transition-colors ${m.feedback === 1 ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/30' : 'text-gray-400 active:bg-emerald-100 dark:active:bg-emerald-800 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/30'}`} title="Helpful">
                       <ThumbsUp className="w-4 h-4" />
                     </button>
-                    <button onClick={() => handleFeedback(m.id, -1, i)} className={`p-2 rounded-lg transition-colors ${m.feedback === -1 ? 'text-rose-500 bg-rose-50 dark:bg-rose-900/30' : 'text-gray-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30'}`} title="Not Helpful">
+                    <button onClick={() => handleFeedback(m.id, -1, i)} className={`p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg active:scale-95 touch-manipulation transition-colors ${m.feedback === -1 ? 'text-rose-500 bg-rose-50 dark:bg-rose-900/30' : 'text-gray-400 active:bg-rose-100 dark:active:bg-rose-800 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30'}`} title="Not Helpful">
                       <ThumbsDown className="w-4 h-4" />
                     </button>
                   </div>
@@ -493,37 +507,36 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
           })}
           {isTyping && (
             <div className="flex flex-col items-start">
-               <div className="flex items-center gap-2 mb-2 ml-1">
-                 <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-                   <Bot className="w-3.5 h-3.5" />
-                 </div>
-                 <span className="text-xs font-bold text-gray-500 dark:text-gray-400">{t('greeting_title')}</span>
-               </div>
-               <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 rounded-3xl rounded-tl-none p-5 flex gap-2">
-                 <span className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                 <span className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                 <span className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '300ms' }}></span>
-               </div>
+              <div className="flex items-center gap-2 mb-2 ml-1">
+                <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                  <Bot className="w-3.5 h-3.5" />
+                </div>
+                <span className="text-xs font-bold text-gray-500 dark:text-gray-400">{t('greeting_title')}</span>
+              </div>
+              <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 rounded-3xl rounded-tl-none p-5 flex gap-2">
+                <span className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                <span className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                <span className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '300ms' }}></span>
+              </div>
             </div>
           )}
           <div ref={messagesEndRef} />
         </div>
 
         {/* Input area */}
-        <div className="p-4 lg:p-6 bg-white dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700">
-          <div className="flex items-center gap-3 bg-gray-50 dark:bg-gray-900/80 p-2 pl-4 rounded-[2.5rem] border border-gray-200 dark:border-gray-700 focus-within:border-indigo-500/50 dark:focus-within:border-indigo-500/50 focus-within:ring-4 focus-within:ring-indigo-500/10 transition-all">
-            <button 
+        <div className="fixed md:static bottom-[calc(4.75rem+env(safe-area-inset-bottom))] md:bottom-auto left-0 right-0 z-40 px-3 py-1 md:p-6 pointer-events-none">
+          <div className="max-w-7xl mx-auto flex items-center gap-3 bg-white dark:bg-gray-800 md:bg-gray-50 md:dark:bg-gray-900/80 p-2 pl-4 rounded-[2.5rem] border border-gray-200 dark:border-gray-700 focus-within:border-indigo-500/50 dark:focus-within:border-indigo-500/50 focus-within:ring-4 focus-within:ring-indigo-500/10 transition-all shadow-sm md:shadow-none pointer-events-auto">
+            <button
               onClick={startVoiceRecognition}
-              className={`w-11 h-11 shrink-0 rounded-full flex items-center justify-center transition-all ${
-                isListening 
-                  ? 'bg-rose-500 text-white shadow-[0_0_15px_rgba(244,63,94,0.5)] animate-pulse' 
-                  : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-indigo-600 border border-gray-200 dark:border-gray-700 shadow-sm'
-              }`}
+              className={`w-11 h-11 shrink-0 rounded-full flex items-center justify-center active:scale-95 touch-manipulation transition-all ${isListening
+                  ? 'bg-rose-500 text-white shadow-[0_0_15px_rgba(244,63,94,0.5)] animate-pulse'
+                  : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-indigo-600 active:bg-gray-100 dark:active:bg-gray-700 border border-gray-200 dark:border-gray-700 shadow-sm'
+                }`}
               title="Voice Input"
             >
               <Mic className="w-5 h-5" />
             </button>
-            <input 
+            <input
               type="text"
               placeholder={t('chat_placeholder')}
               value={input}
@@ -531,10 +544,10 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
               onKeyDown={handleKeyDown}
               className="flex-1 bg-transparent border-0 outline-none focus:outline-none focus:ring-0 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 font-medium"
             />
-            <button 
+            <button
               onClick={handleSend}
               disabled={!input.trim()}
-              className="w-12 h-12 shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full flex items-center justify-center transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+              className="w-12 h-12 shrink-0 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-full flex items-center justify-center active:scale-95 touch-manipulation transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
             >
               <Send className="w-5 h-5 m-0 p-0" />
             </button>
@@ -544,7 +557,7 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
 
       {/* Daily Tips Modal */}
       {showTipsModal && (
-        <div 
+        <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm !mt-0"
           onClick={(e) => { if (e.target === e.currentTarget) setShowTipsModal(false); }}
         >
@@ -554,41 +567,41 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
                 <Lightbulb className="w-6 h-6 text-amber-500" />
                 {t('daily_health_tips')}
               </h3>
-              <button 
+              <button
                 onClick={() => setShowTipsModal(false)}
                 className="p-2 bg-gray-50 dark:bg-gray-900/50 hover:bg-gray-100 dark:hover:bg-gray-900 rounded-full text-gray-500 dark:text-gray-400 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             <div className="p-6 lg:p-8 overflow-y-auto max-h-[60vh] custom-scrollbar">
-            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-[2rem] p-6 text-center border border-indigo-100 dark:border-indigo-800/30 mb-8">
-              <Star className="w-10 h-10 text-amber-400 mx-auto mb-3 drop-shadow-sm" />
-              <h4 className="font-extrabold text-gray-900 dark:text-white mb-2">{t('todays_tip')}</h4>
-              <p className="text-sm font-bold text-indigo-900 dark:text-indigo-200 leading-relaxed">
-                {healthTips[new Date().getDate() % (healthTips.length || 1)] || t('fallback_tip_1')}
-              </p>
-            </div>
-            
-            <div>
-              <h4 className="font-extrabold text-gray-900 dark:text-white mb-3 text-sm px-2 uppercase tracking-wider">{t('more_tips')}</h4>
-              <div className="space-y-2">
-                {(healthTips.length > 0 ? healthTips.slice(0, 5) : [t('fallback_tip_2'), t('fallback_tip_3')]).map((tip, i) => (
-                  <div key={i} className="px-5 py-3.5 bg-gray-50 dark:bg-gray-900/50 rounded-2xl text-sm font-semibold text-gray-600 dark:text-gray-300 border border-gray-100 dark:border-gray-700/50">
-                    {tip}
-                  </div>
-                ))}
+              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-[2rem] p-6 text-center border border-indigo-100 dark:border-indigo-800/30 mb-8">
+                <Star className="w-10 h-10 text-amber-400 mx-auto mb-3 drop-shadow-sm" />
+                <h4 className="font-extrabold text-gray-900 dark:text-white mb-2">{t('todays_tip')}</h4>
+                <p className="text-sm font-bold text-indigo-900 dark:text-indigo-200 leading-relaxed">
+                  {healthTips[new Date().getDate() % (healthTips.length || 1)] || t('fallback_tip_1')}
+                </p>
+              </div>
+
+              <div>
+                <h4 className="font-extrabold text-gray-900 dark:text-white mb-3 text-sm px-2 uppercase tracking-wider">{t('more_tips')}</h4>
+                <div className="space-y-2">
+                  {(healthTips.length > 0 ? healthTips.slice(0, 5) : [t('fallback_tip_2'), t('fallback_tip_3')]).map((tip, i) => (
+                    <div key={i} className="px-5 py-3.5 bg-gray-50 dark:bg-gray-900/50 rounded-2xl text-sm font-semibold text-gray-600 dark:text-gray-300 border border-gray-100 dark:border-gray-700/50">
+                      {tip}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
       )}
 
       {/* Chat History Modal */}
       {showHistoryModal && (
-        <div 
+        <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm !mt-0"
           onClick={(e) => { if (e.target === e.currentTarget) setShowHistoryModal(false); }}
         >
@@ -598,27 +611,26 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
                 <History className="w-6 h-6 text-indigo-500" />
                 Recent Chats
               </h3>
-              <button 
+              <button
                 onClick={() => setShowHistoryModal(false)}
                 className="p-2 bg-gray-50 dark:bg-gray-900/50 hover:bg-gray-100 dark:hover:bg-gray-900 rounded-full text-gray-500 dark:text-gray-400 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             <div className="p-6 lg:p-8 space-y-3 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
               {chatSessions.length === 0 ? (
                 <div className="text-center text-gray-500 dark:text-gray-400 py-6 font-medium">No recent chats found.</div>
               ) : (
                 chatSessions.map((session, i) => (
-                  <div 
-                    key={i} 
+                  <div
+                    key={i}
                     onClick={() => loadSession(session.session_id)}
-                    className={`cursor-pointer px-5 py-4 rounded-2xl transition-all border ${
-                      sessionId === session.session_id 
-                        ? 'bg-indigo-50 border-indigo-200 dark:bg-indigo-900/30 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300' 
+                    className={`cursor-pointer px-5 py-4 rounded-2xl transition-all border ${sessionId === session.session_id
+                        ? 'bg-indigo-50 border-indigo-200 dark:bg-indigo-900/30 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300'
                         : 'bg-gray-50 border-gray-100 hover:bg-indigo-50/50 dark:bg-gray-900/50 dark:border-gray-800 dark:hover:bg-gray-800/80 text-gray-700 dark:text-gray-300'
-                    }`}
+                      }`}
                   >
                     <div className="font-bold text-sm mb-1 truncate">{session.title || "Chat Session"}</div>
                     <div className="flex items-center justify-between text-xs opacity-70">

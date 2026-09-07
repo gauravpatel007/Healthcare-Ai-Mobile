@@ -179,17 +179,7 @@ const AdminHealth = () => {
           <Calendar className={`w-4 h-4 ${activeTab === 'appointment' ? 'text-blue-600 dark:!text-blue-400' : ''}`} />
           Appointments
         </button>
-        <button
-          onClick={() => setActiveTab('organ')}
-          className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all ${
-            activeTab === 'organ'
-              ? 'bg-teal-50 dark:!bg-gray-700 text-teal-700 dark:!text-teal-400 shadow-sm'
-              : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-gray-200'
-          }`}
-        >
-          <Heart className={`w-4 h-4 ${activeTab === 'organ' ? 'text-teal-600 dark:!text-teal-400' : ''}`} />
-          Organ Donors
-        </button>
+
         <button
           onClick={() => setActiveTab('ai_triage')}
           className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all ${
@@ -244,7 +234,7 @@ const AdminHealth = () => {
               />
             </div>
             
-            <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+            <div className="space-y-4">
             {filteredAppointments.length === 0 ? (
               <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No appointments found.</p>
             ) : (
@@ -308,7 +298,7 @@ const AdminHealth = () => {
             )}
           </div>
           
-          <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+          <div className="space-y-4">
             {data.emergencies.length === 0 ? (
               <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No active emergencies found.</p>
             ) : (
@@ -367,7 +357,7 @@ const AdminHealth = () => {
           </button>
         </div>
         
-        <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+        <div className="space-y-4">
           {data.triageLogs?.length === 0 ? (
             <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No AI triage logs found.</p>
           ) : (
@@ -417,72 +407,7 @@ const AdminHealth = () => {
         </div>
         )}
 
-        {/* Registered Organ Donors Module */}
-        {activeTab === 'organ' && (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-teal-100 dark:border-teal-900/30 shadow-sm p-6 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-teal-500/10 rounded-bl-full -z-10"></div>
-        <div className="flex justify-between items-center mb-6">
-           <h3 className="text-lg font-bold flex items-center text-teal-600 dark:text-teal-400">
-            <Activity className="w-5 h-5 mr-2" /> Registered Organ Donors
-          </h3>
-        </div>
-        
-        <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
-          {!data.organ_donors || data.organ_donors.length === 0 ? (
-            <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No registered organ donors found.</p>
-          ) : (
-            data.organ_donors.slice(0, displayCountOrganDonors).map((donor) => (
-              <div key={donor.id} className="p-4 bg-teal-50 dark:bg-teal-900/10 border border-teal-100 dark:border-teal-900/30 rounded-xl flex flex-col justify-start items-start text-left gap-3 w-full">
-                <div className="flex flex-col lg:flex-row justify-between items-start w-full gap-3">
-                  <div className="flex flex-col items-start text-left">
-                    <h4 className="font-bold text-teal-900 dark:text-teal-100 flex items-center justify-start gap-2 text-left">
-                      {donor.name} 
-                      <span className="text-xs font-bold px-2 py-0.5 rounded bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300">
-                        Blood: {donor.blood_type || 'Unknown'}
-                      </span>
-                    </h4>
-                    <p className="text-sm text-teal-700 dark:text-teal-400 mt-1 flex flex-wrap items-center justify-start gap-4 text-left w-full">
-                      <span className="flex items-center"><Mail className="w-3 h-3 inline mr-1"/> {donor.email}</span>
-                      <span>Age: {donor.age || 'N/A'}</span>
-                    </p>
-                  </div>
-                  {donor.registered_date && (
-                    <div className="self-start text-xs font-medium text-teal-600 dark:text-teal-400 bg-white/60 dark:bg-gray-800/60 px-3 py-1 rounded-full border border-teal-100 dark:border-teal-800 shrink-0">
-                      Registered: {formatTimeAgo(donor.registered_date)}
-                    </div>
-                  )}
-                </div>
-                
-                <div className="mt-1 w-full border-t border-teal-200/50 dark:border-teal-800/50 pt-3 flex flex-col items-start">
-                  <p className="text-[10px] font-bold text-teal-600 dark:text-teal-400 uppercase tracking-wider mb-2 text-left w-full">Pledged Organs</p>
-                  <div className="flex flex-wrap gap-2 justify-start w-full">
-                    {donor.preferences && donor.preferences.length > 0 ? (
-                      donor.preferences.map(org => (
-                        <span key={org} className="text-xs font-medium px-2.5 py-1 bg-white dark:bg-gray-800 border border-teal-200 dark:border-teal-700 rounded-lg shadow-sm text-gray-700 dark:text-gray-300">
-                          {org}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-xs text-gray-500 italic text-left">General Donor</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-          {data.organ_donors?.length > displayCountOrganDonors && (
-            <div className="p-4 mt-2 flex justify-center">
-              <button
-                onClick={() => setDisplayCountOrganDonors(prev => prev + 20)}
-                className="px-4 py-2 text-sm font-medium text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 hover:bg-teal-100 rounded-lg transition-colors"
-              >
-                See More ({data.organ_donors.length - displayCountOrganDonors} more)
-              </button>
-            </div>
-          )}
-        </div>
-        </div>
-        )}
+
       </div>
 
       {/* Reschedule Modal */}

@@ -151,7 +151,12 @@ const UserDrawer = ({ userId, onClose, onRefresh }) => {
           {/* ── Profile Card ─────────────────────────────────── */}
           <div className="flex items-center gap-4">
             {p.avatar_url ? (
-              <img src={`http://localhost:8000${p.avatar_url}`} alt="" className="w-16 h-16 rounded-2xl object-cover border-2 border-gray-100 dark:border-gray-700 shadow-sm" />
+              <img 
+                src={API.getImageUrl(p.avatar_url)} 
+                alt="" 
+                className="w-16 h-16 rounded-2xl object-cover border-2 border-gray-100 dark:border-gray-700 shadow-sm" 
+                onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name || detail.email || 'User')}&background=random`; }}
+              />
             ) : (
               <div className={`w-16 h-16 rounded-2xl flex items-center justify-center font-extrabold text-lg ${detail.role === 'admin' ? 'bg-rose-100 text-rose-600' : detail.role === 'doctor' ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'}`}>
                 {((p.name && p.name !== 'User') ? p.name : detail.email).substring(0, 2).toUpperCase()}
@@ -451,28 +456,28 @@ const AdminUsers = () => {
     <div className="space-y-6 animate-in fade-in duration-500 pb-10">
 
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 lg:p-8 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-row flex-wrap md:flex-nowrap items-center justify-between gap-4 relative overflow-visible w-full">
-        <div className="flex items-center gap-4 lg:gap-6 relative z-10 w-auto">
-          <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
-            <Users className="w-8 h-8" />
+      <div className="bg-white dark:bg-gray-800 rounded-2xl sm:rounded-[2rem] p-4 sm:p-5 shadow-sm border border-gray-100 dark:border-gray-700 flex items-center justify-between gap-3 w-full">
+        <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+          <div className="w-12 h-12 sm:w-14 sm:h-14 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
+            <Users className="w-6 h-6 sm:w-7 sm:h-7" />
           </div>
-          <div className="text-left">
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-1 text-left">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight leading-tight truncate">
               User Management
             </h1>
-            <p className="text-xs sm:text-sm lg:text-base text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2 text-left">
+            <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 font-medium mt-0.5 truncate">
               Manage patients, doctors, and system administrators.
             </p>
           </div>
         </div>
-        <div className="flex items-center justify-end gap-3 relative z-10 shrink-0 ml-auto pr-2 flex-wrap">
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5"
-          >
-            <UserPlus className="w-5 h-5" /> Add User
-          </button>
-        </div>
+
+        <button
+          onClick={() => setShowAddModal(true)}
+          title="Add User"
+          className="w-11 h-11 sm:w-12 sm:h-12 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl flex items-center justify-center shadow-md transition-all active:scale-95 shrink-0"
+        >
+          <UserPlus className="w-5 h-5" />
+        </button>
       </div>
 
       {/* Table Card */}
@@ -531,7 +536,12 @@ const AdminUsers = () => {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         {user.avatar_url ? (
-                          <img src={`http://localhost:8000${user.avatar_url}`} alt="" className="w-10 h-10 rounded-full object-cover border-2 border-white dark:border-gray-800 shadow-sm" />
+                          <img 
+                            src={API.getImageUrl(user.avatar_url)} 
+                            alt="Avatar" 
+                            className="w-10 h-10 rounded-full object-cover border-2 border-white dark:border-gray-800 shadow-sm" 
+                            onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || user.email || 'User')}&background=random`; }}
+                          />
                         ) : (
                           <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${user.role === 'admin' ? 'bg-rose-100 text-rose-600' : user.role === 'doctor' ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'}`}>
                             {user.name ? user.name.substring(0, 2).toUpperCase() : 'U'}

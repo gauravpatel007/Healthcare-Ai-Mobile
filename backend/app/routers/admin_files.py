@@ -5,12 +5,14 @@ Handles file metadata CRUD operations for the admin dashboard.
 
 import os
 import shutil
+import uuid
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
+from app.config import get_settings
 from app.database import get_db
 from app.models.file_asset import FileAsset
 
@@ -33,6 +35,7 @@ class FileAssetResponse(BaseModel):
         from_attributes = True
 
 
+@router.get("", response_model=List[FileAssetResponse])
 @router.get("/", response_model=List[FileAssetResponse])
 async def get_all_files(category: str = None, db: AsyncSession = Depends(get_db)):
     """Fetch all file assets, including user uploaded medical records."""
@@ -96,6 +99,7 @@ async def get_all_files(category: str = None, db: AsyncSession = Depends(get_db)
     return files
 
 
+@router.post("", response_model=FileAssetResponse, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=FileAssetResponse, status_code=status.HTTP_201_CREATED)
 async def create_file(
     name: str = Form(...),
@@ -104,26 +108,31 @@ async def create_file(
     db: AsyncSession = Depends(get_db)
 ):
     """Upload a new file and create asset record."""
-    upload_dir = "uploads"
+    settings = get_settings()
+    upload_dir = settings.UPLOAD_DIR
     os.makedirs(upload_dir, exist_ok=True)
-    
-    file_path = os.path.join(upload_dir, file.filename)
-    
-    # Save the file
+
+    # Generate unique filename to avoid collisions
+    ext = os.path.splitext(file.filename or "file")[1]
+    unique_filename = f"{uuid.uuid4().hex}{ext}"
+    file_path = os.path.join(upload_dir, unique_filename)
+
+    # Read file content
     try:
+        content = await file.read()
         with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+            buffer.write(content)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Could not save file: {e}")
 
-    file_size = os.path.getsize(file_path)
-    
+    file_size = len(content)
+
     new_file = FileAsset(
         name=name,
         type=file.content_type or "unknown",
         category=category,
         size_bytes=file_size,
-        file_path=f"/uploads/{file.filename}"
+        file_path=f"/uploads/{unique_filename}"
     )
     db.add(new_file)
     try:
@@ -187,7 +196,7 @@ async def delete_file(file_id: str, db: AsyncSession = Depends(get_db)):
     
     if file_record:
         try:
-            db.delete(file_record)
+            await db.delete(file_record)
             await db.commit()
             return
         except Exception as e:
@@ -203,7 +212,7 @@ async def delete_file(file_id: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="File not found")
         
     try:
-        db.delete(med_record)
+        await db.delete(med_record)
         await db.commit()
     except Exception as e:
         await db.rollback()

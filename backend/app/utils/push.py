@@ -45,8 +45,10 @@ def send_push_notification(player_id: str, title: str, message: str):
     )
     
     try:
-        with urllib.request.urlopen(req) as response:
+        with urllib.request.urlopen(req, timeout=10) as response:
             res_data = json.loads(response.read())
+            if not res_data.get("id"):
+                return False, "Push provider did not accept the notification"
             logger.info(f"Push notification sent successfully: {res_data}")
             return True, "Sent"
     except Exception as e:
