@@ -158,38 +158,49 @@ SYSTEM_PROMPTS = {
 _dynamic_model = None
 
 async def _get_best_model(client) -> str:
+    """Select the best available Groq model, preferring the configured GROQ_MODEL."""
     global _dynamic_model
     if _dynamic_model:
         return _dynamic_model
+    
+    configured_model = settings.GROQ_MODEL or "llama-3.3-70b-versatile"
+    
     try:
         models_response = await client.models.list()
         model_ids = [m.id for m in models_response.data]
         
-        # We MUST ONLY use openai/gpt-oss-120b for text models as requested by the user previously
-        if "openai/gpt-oss-120b" in model_ids:
-            _dynamic_model = "openai/gpt-oss-120b"
+        # Priority 1: Use the configured GROQ_MODEL from settings/env
+        if configured_model in model_ids:
+            _dynamic_model = configured_model
+            logger.info("Using configured model: %s", _dynamic_model)
             return _dynamic_model
-        # Priority 2: Gemma 2
-        for m_id in model_ids:
-            if "gemma2" in m_id.lower():
-                _dynamic_model = m_id
-                return _dynamic_model
-        # Priority 3: Mixtral
-        for m_id in model_ids:
-            if "mixtral" in m_id.lower():
-                _dynamic_model = m_id
+        
+        # Priority 2: Known reliable Groq models
+        preferred_models = [
+            "llama-3.3-70b-versatile",
+            "llama3-70b-8192",
+            "llama3-8b-8192",
+            "mixtral-8x7b-32768",
+            "gemma2-9b-it",
+        ]
+        for preferred in preferred_models:
+            if preferred in model_ids:
+                _dynamic_model = preferred
+                logger.info("Using preferred fallback model: %s", _dynamic_model)
                 return _dynamic_model
                 
         # If no preferred model found but there are models, pick the first one
         if model_ids:
             _dynamic_model = model_ids[0]
+            logger.info("Using first available model: %s", _dynamic_model)
             return _dynamic_model
             
     except Exception as e:
         logger.warning("Failed to fetch dynamic models: %s", e)
     
-    # Fallback to configured model if api fails
-    _dynamic_model = "openai/gpt-oss-120b"
+    # Fallback to configured model if API call fails entirely
+    _dynamic_model = configured_model
+    logger.info("Using configured model as fallback: %s", _dynamic_model)
     return _dynamic_model
 
 

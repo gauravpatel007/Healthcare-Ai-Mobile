@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useUnit } from '../contexts/UnitContext';
+import API from '../utils/api';
 
 const MedicalIDCard = () => {
   const [data, setData] = useState(null);
@@ -51,7 +52,7 @@ const MedicalIDCard = () => {
             <div className="relative z-10 flex items-center gap-8">
               <div className="w-28 h-28 bg-white rounded-2xl flex items-center justify-center text-5xl shadow-inner text-slate-800 overflow-hidden">
                 {profile.avatar || profile.avatar_url ? (
-                  <img src={(profile.avatar || profile.avatar_url).startsWith('http') ? (profile.avatar || profile.avatar_url) : `http://localhost:8000${profile.avatar || profile.avatar_url}`} alt="Profile" className="w-full h-full object-cover" />
+                  <img src={API.getImageUrl(profile.avatar || profile.avatar_url)} alt="Profile" className="w-full h-full object-cover" />
                 ) : (
                   <span>👤</span>
                 )}

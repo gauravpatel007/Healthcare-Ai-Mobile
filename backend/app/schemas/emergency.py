@@ -44,17 +44,13 @@ class SOSAlertRequest(BaseModel):
     longitude: float | None = None
     accuracy: float | None = None
     is_silent: bool = False
+    session_id: str | None = None
 
 
 class SOSAlertResponse(BaseModel):
     success: bool = True
     message: str = "SOS Emergency Alert Activated"
-    actions: list[str] = [
-        "Location shared with emergency contacts",
-        "Health QR card sent to contacts",
-        "Medical history prepared for sharing",
-        "Nearby hospitals notified",
-    ]
+    actions: list[str] = Field(default_factory=list)
     emergency_number: str = "112"
 
 
@@ -67,6 +63,7 @@ class SOSAudioClipResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
 class QRHealthData(BaseModel):
     name: str
     blood_type: str

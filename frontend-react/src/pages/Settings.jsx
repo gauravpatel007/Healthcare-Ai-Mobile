@@ -304,11 +304,13 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
     const formData = new FormData();
     formData.append('file', file);
     try {
-      const res = await API.post('/users/avatar', formData);
-      if (res && res.avatar_url) {
+      const result = await API.post('/users/avatar', formData);
+      const res = result?.data || result;
+      if (!res?.avatar_url) throw new Error('The server did not return the saved profile picture.');
+      if (res.avatar_url) {
         setProfile(prev => ({ ...prev, avatar_url: res.avatar_url }));
         toast.success(t('Profile picture updated successfully!'));
-        window.location.reload(); // Force reload to update sidebar
+        window.dispatchEvent(new CustomEvent('profile-updated', { detail: res }));
       }
     } catch (error) {
       console.error('Avatar upload failed', error);

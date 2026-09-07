@@ -1,4 +1,8 @@
-const BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
+import { Capacitor } from '@capacitor/core';
+import { validateMobileApiUrl } from './apiConfig.js';
+import { resolveMediaUrl } from './mediaUrl.js';
+
+const BASE_URL = (import.meta.env.VITE_API_URL || '/api/v1').trim().replace(/\/$/, '');
 const TOKEN_KEY = 'lifeos_access_token';
 const REFRESH_KEY = 'lifeos_refresh_token';
 
@@ -42,40 +46,11 @@ const API = {
   },
 
   getImageUrl(url) {
-    if (!url) return null;
-
-    // Strip hardcoded localhost if present (fixes bad DB records)
-    let cleanUrl = url;
-    if (cleanUrl.startsWith('http://localhost:8000')) {
-      cleanUrl = cleanUrl.replace('http://localhost:8000', '');
-    } else if (cleanUrl.startsWith('http://127.0.0.1:8000')) {
-      cleanUrl = cleanUrl.replace('http://127.0.0.1:8000', '');
-    }
-
-    // If it's a real external URL (like Google OAuth), return it
-    if (cleanUrl.startsWith('http')) return cleanUrl;
-
-    // Extract base URL without /api/v1
-    let base = BASE_URL;
-    if (base.endsWith('/api/v1')) {
-      base = base.substring(0, base.length - 7);
-    } else if (base.startsWith('/')) {
-      base = window.location.origin;
-    }
-
-    // Fallback if base is empty or just /
-    if (!base || base === '/') {
-      return url.startsWith('/') ? url : '/' + url;
-    }
-
-    return base + url;
+    return resolveMediaUrl(url, BASE_URL, window.location.origin);
   },
 
   getMediaUrl(path) {
-    if (!path) return '';
-    if (path.startsWith('http')) return path;
-    const base = import.meta.env.VITE_API_BASE_URL || '';
-    return base + path;
+    return this.getImageUrl(path) || '';
   },
 
   isAuthenticated() {
@@ -88,6 +63,9 @@ const API = {
   },
 
   async logout(emailToRemove = null) {
+    if (Capacitor.isNativePlatform()) {
+      await import('./nativeAuth').then(m => m.GoogleAuth.signOut()).catch(console.error);
+    }
     await import('./reminders').then(m => m.clearReminderSession()).catch(console.error);
     if (emailToRemove) {
       let accounts = this.getSavedAccounts();
@@ -189,6 +167,7 @@ const API = {
   },
 
   async request(endpoint, options = {}) {
+    if (Capacitor.isNativePlatform()) validateMobileApiUrl(BASE_URL);
     const url = `${BASE_URL}${endpoint}`;
 
     const headers = {
@@ -217,6 +196,7 @@ const API = {
           let refreshed = await this.refreshToken();
 
           if (refreshed) {
+            config.headers = { ...config.headers, ...this._authHeaders() };
             response = await fetch(url, config);
           } else {
             this.logout();
@@ -249,6 +229,10 @@ const API = {
         const error = new Error(errorMsg);
         error.status = response.status;
         throw error;
+      }
+
+      if (response.status !== 204 && data === null) {
+        throw new Error('The server returned an empty or invalid response. Check the backend URL and rebuild the app if it has changed.');
       }
 
       return data;

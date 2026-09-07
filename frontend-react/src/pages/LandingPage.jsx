@@ -137,7 +137,7 @@ const LandingPage = () => {
                 return (
                   <a href="/medical-id" className={`flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-full text-xs font-bold transition-colors no-underline ${isDark ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}>
                     {avatar ? (
-                      <img src={avatar.startsWith('http') ? avatar : `http://localhost:8000${avatar}`} alt="Profile" className="w-[18px] h-[18px] rounded-full object-cover" />
+                      <img src={API.getImageUrl(avatar)} alt="Profile" className="w-[18px] h-[18px] rounded-full object-cover" />
                     ) : (
                       <span className="material-symbols-outlined text-[16px] ml-1">medical_services</span>
                     )}

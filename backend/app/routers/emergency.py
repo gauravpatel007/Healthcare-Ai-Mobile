@@ -102,6 +102,7 @@ async def trigger_sos(request: SOSAlertRequest, user_id: CurrentUserId, db: Asyn
                 
         # Attempt notifications as best-effort (don't block success on these)
         actions_taken = []
+        accepted_count = 0
         tasks = []
         if emails:
             tasks.append(asyncio.to_thread(send_sos_email, emails, user_name, location_url))
@@ -126,12 +127,14 @@ async def trigger_sos(request: SOSAlertRequest, user_id: CurrentUserId, db: Asyn
                     if isinstance(result, Exception):
                         err = f"SOS notification task {i} exception: {result}"
                         logger.error(err)
-                        actions_taken.append(err)
+                        actions_taken.append("SOS notification failed. Please call your contact directly.")
                     elif isinstance(result, tuple) and len(result) == 2:
                         success, msg = result
-                        actions_taken.append(msg)
+                        accepted_count += int(bool(success))
+                        actions_taken.append(msg if success else f"Notification failed: {msg}")
                     elif result:
-                        actions_taken.append("Notification sent successfully")
+                        accepted_count += 1
+                        actions_taken.append("Notification request accepted")
                     else:
                         actions_taken.append("Notification failed silently")
             except Exception as notify_err:
@@ -140,7 +143,11 @@ async def trigger_sos(request: SOSAlertRequest, user_id: CurrentUserId, db: Asyn
         if not actions_taken:
             actions_taken.append("SOS logged. Notifications could not be delivered — please call your emergency contact directly.")
         
-        return SOSAlertResponse(success=True, message="Emergency alert sent.", actions=actions_taken)
+        return SOSAlertResponse(
+            success=accepted_count > 0,
+            message="Notification requests submitted; delivery is not confirmed." if accepted_count else "SOS recorded, but notifications failed. Please call your contact directly.",
+            actions=actions_taken,
+        )
     except Exception as e:
         import logging as _log
         _log.getLogger("lifeos.emergency").error(f"SOS endpoint error: {e}", exc_info=True)

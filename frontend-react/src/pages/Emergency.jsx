@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useLang } from '../contexts/LangContext';
 import API from '../utils/api';
+import { sosResult } from '../utils/sosResult';
 import toast from 'react-hot-toast';
 import {
   AlertTriangle, Phone, Activity, HeartPulse, Plus, X, Edit2, Trash2,
@@ -43,6 +44,7 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
 
   const [loading, setLoading] = useState(true);
   const [sosLoading, setSosLoading] = useState(false);
+  const [sosStatus, setSosStatus] = useState(null);
   const [profile, setProfile] = useState(null);
   const [contacts, setContacts] = useState([]);
 
@@ -150,9 +152,11 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
 
   const triggerSOS = async (skipConfirm = false, isSilent = false) => {
     const shouldSkipConfirm = skipConfirm === true || isSilent === true;
-    if (shouldSkipConfirm || confirm(t('🚨 EMERGENCY SOS 🚨\n\nAre you sure you want to trigger an SOS alert? This will immediately notify your emergency contacts and local authorities.'))) {
+    if (sosLoading) return;
+    if (shouldSkipConfirm || confirm(t('Send an SOS alert to your saved emergency contacts? Delivery depends on the notification service. This does not automatically contact local authorities.'))) {
       try {
-        if (!isSilent) setSosLoading(true);
+        setSosLoading(true);
+        if (!isSilent) setSosStatus(null);
         const getPosition = () => {
           return new Promise((resolve) => {
             if (!navigator.geolocation) {
@@ -169,31 +173,25 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
 
         const locationData = await getPosition();
         const sessionId = Date.now().toString();
-        const payload = locationData ? { ...locationData, session_id: sessionId } : { session_id: sessionId };
+        const payload = { ...locationData, session_id: sessionId, is_silent: isSilent };
 
         const res = await API.post('/emergency/sos', payload);
 
-        startLiveTracking(sessionId);
+        if (res.success) startLiveTracking(sessionId);
 
         if (!isSilent) {
-          if (res.success) {
-            console.log("SOS Backend Actions:", res.actions);
-            const errors = res.actions ? res.actions.filter(a => a.toLowerCase().includes('failed') || a.toLowerCase().includes('error')) : [];
-            if (errors.length > 0) {
-              toast.error('SOS Alert Error: ' + errors[0], { duration: 10000 });
-            } else {
-              toast.success(t('Emergency alert sent.'), { duration: 5000 });
-            }
-          } else {
-            toast.error(t('Emergency alert could not be confirmed. Please call your emergency contact directly.'), { duration: 8000 });
-          }
+          const status = sosResult(res);
+          setSosStatus(status);
+          if (status.ok) toast.success(t(status.message), { duration: 8000 });
+          else toast.error(t(status.message), { duration: 10000 });
         } else {
           console.log(res.success ? "Silent SOS executed successfully." : "Silent SOS failed.");
         }
       } catch (e) {
+        if (!isSilent) setSosStatus({ ok: false, message: e.message || 'SOS delivery failed. Call your emergency contact directly.' });
         if (!isSilent) toast.error(t('Emergency alert could not be confirmed. Please call your emergency contact directly.'), { duration: 8000 });
       } finally {
-        if (!isSilent) setSosLoading(false);
+        setSosLoading(false);
       }
     }
   };
@@ -596,11 +594,18 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
           <div className="mt-8 text-center relative z-10">
             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{t('Emergency Assistance')}</h3>
             <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto text-sm leading-relaxed mb-4">
-              {t('Press the SOS button to instantly alert your emergency contacts, share your live location, and begin audio recording.')}
+              {t('SOS requests notifications to your saved contacts. Location and audio require permission. If help is urgent, call directly.')}
             </p>
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-full text-xs font-bold uppercase tracking-wider">
-              <Phone size={14} /> {t('Also call 911 / 112')}
-            </div>
+            {sosStatus && <p role="status" className="my-3 whitespace-pre-line text-sm font-semibold">{t(sosStatus.message)}</p>}
+            <a href="tel:112" className="inline-flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-full text-xs font-bold uppercase tracking-wider">
+              <Phone size={14} /> {t('Call 112')}
+            </a>
+            {sosStatus && !sosStatus.ok && contacts.filter(c => c.phone).map(contact => (
+              <div key={contact.id} className="mt-3 flex flex-wrap justify-center gap-3 text-sm">
+                <a className="font-bold text-blue-600" href={`tel:${contact.phone.replace(/[^+\d]/g, '')}`}>Call {contact.name}</a>
+                <a className="font-bold text-blue-600" href={`sms:${contact.phone.replace(/[^+\d]/g, '')}?body=${encodeURIComponent('SOS: I need urgent help. Please call me immediately.')}`}>Message {contact.name}</a>
+              </div>
+            ))}
           </div>
         </div>
 

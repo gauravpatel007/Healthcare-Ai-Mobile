@@ -292,7 +292,7 @@ def send_sos_sms_twilio(phone_numbers: List[str], user_name: str, location_url: 
                 errors.append(err_msg)
                 
         if success_count > 0:
-            return True, f"Sent {success_count} SMS"
+            return True, f"SMS requests accepted: {success_count}." + (f" Failed: {len(errors)}." if errors else "")
         return False, " | ".join(errors)
     except Exception as e:
         return False, f"Twilio connection failed: {str(e)}"
@@ -314,7 +314,10 @@ def send_sos_call_twilio(phone_numbers: List[str], user_name: str, location_url:
         from twilio.rest import Client
         client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
         
+        from xml.sax.saxutils import escape
+        user_name = escape(user_name)
         if audio_url:
+            audio_url = escape(audio_url)
             twiml_content = f"<Response><Say voice='alice' language='en-US'>Emergency message from {user_name}.</Say><Play>{audio_url}</Play></Response>"
         else:
             twiml_content = f"<Response><Say voice='alice' language='en-US'>Emergency Alert. {user_name} has an emergency. Immediately go there or check the sent text message for location details.</Say></Response>"
@@ -344,7 +347,7 @@ def send_sos_call_twilio(phone_numbers: List[str], user_name: str, location_url:
                 errors.append(err_msg)
                 
         if success_count > 0:
-            return True, f"Initiated {success_count} calls"
+            return True, f"Call requests accepted: {success_count}." + (f" Failed: {len(errors)}." if errors else "")
         return False, " | ".join(errors)
     except Exception as e:
         return False, f"Twilio connection failed: {str(e)}"

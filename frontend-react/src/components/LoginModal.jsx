@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import API from '../utils/api';
+import { GoogleAuth, isNativeApp } from '../utils/nativeAuth';
 import { useSettings } from '../contexts/SettingsContext';
 
 const GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID || '749609290729-7p9u9ujo98odpldasobtvqascmvejumb.apps.googleusercontent.com').replace(/['"]/g, '').trim();
@@ -55,7 +56,7 @@ const LoginModal = ({ show, onClose }) => {
 
   // Initialize Google Sign-In button when in login/signup mode
   useEffect(() => {
-    if (!show) return;
+    if (!show || isNativeApp) return;
     if (mode !== 'login' && mode !== 'signup') return;
 
     let pollInterval = null;
@@ -175,6 +176,9 @@ const LoginModal = ({ show, onClose }) => {
         method: 'POST',
         body: { temp_token: tempToken, code: twoFactorCode },
       });
+      const tokens = response?.data || response;
+      if (tokens?.access_token) API.setToken(tokens.access_token);
+      if (tokens?.refresh_token) API.setRefreshToken(tokens.refresh_token);
       API.setAuthenticated(true);
       await API.saveCurrentAccount(response.data?.refresh_token);
       window.location.href = '/app';
@@ -294,6 +298,32 @@ const LoginModal = ({ show, onClose }) => {
   };
 
   // ─── Google Auth ─────────────────────────────────
+
+  const handleNativeGoogleLogin = async () => {
+    if (loading) return;
+    setLoading(true);
+    setError('');
+    try {
+      const result = await GoogleAuth.signIn({ clientId: GOOGLE_CLIENT_ID });
+      await handleGoogleResponse(result);
+    } catch (err) {
+      console.error('Native Google sign-in error:', err);
+      const code = err?.code || '';
+      const msg = err?.message || '';
+      
+      if (code === 'CANCELLED' || msg.includes('cancel')) {
+        // User cancelled — don't show error
+      } else if (code === 'NO_CREDENTIALS' || msg.includes('No credentials') || msg.includes('could not start')) {
+        setError('Google Sign-In is not configured for this app. Please use email/password login, or contact support.');
+      } else if (code === 'CONFIGURATION_ERROR' || msg.includes('configuration')) {
+        setError('Google Sign-In configuration error. The Android OAuth client may not be registered. Please contact support.');
+      } else if (msg.includes('network') || msg.includes('connect')) {
+        setError('Network error during Google sign-in. Please check your internet connection.');
+      } else {
+        setError(msg || 'Google sign-in failed. Please try email/password login.');
+      }
+    } finally { setLoading(false); }
+  };
 
   const handleGoogleResponse = async (response) => {
     if (isMaintenance) {
@@ -603,7 +633,7 @@ const LoginModal = ({ show, onClose }) => {
             </div>
 
             {/* Google Sign-In */}
-            <div ref={googleBtnRef} style={{ display: 'flex', justifyContent: 'center' }}></div>
+            {isNativeApp ? <button type="button" disabled={loading} onClick={handleNativeGoogleLogin} style={{ ...faceBtnStyle, background: '#fff', color: '#1f2937', border: '1px solid #cbd5e1' }}>Sign in with Google</button> : <div ref={googleBtnRef} style={{ display: 'flex', justifyContent: 'center' }}></div>}
 
             <p style={toggleTextStyle}>
               Don't have an account?{' '}
@@ -669,7 +699,7 @@ const LoginModal = ({ show, onClose }) => {
             </div>
 
             {/* Google Sign-In */}
-            <div ref={googleBtnRef} style={{ display: 'flex', justifyContent: 'center' }}></div>
+            {isNativeApp ? <button type="button" disabled={loading} onClick={handleNativeGoogleLogin} style={{ ...faceBtnStyle, background: '#fff', color: '#1f2937', border: '1px solid #cbd5e1' }}>Sign in with Google</button> : <div ref={googleBtnRef} style={{ display: 'flex', justifyContent: 'center' }}></div>}
 
             <p style={toggleTextStyle}>
               Already have an account?{' '}

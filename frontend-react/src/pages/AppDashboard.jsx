@@ -139,6 +139,19 @@ const AppDashboard = () => {
   }, [navigate]);
 
   useEffect(() => {
+    const updateProfile = ({ detail }) => {
+      setCurrentUser(previous => ({ ...previous, avatar_url: detail.avatar_url }));
+      try {
+        const cached = JSON.parse(localStorage.getItem('offline_medical_id') || '{}');
+        cached.profile = { ...cached.profile, ...detail };
+        localStorage.setItem('offline_medical_id', JSON.stringify(cached));
+      } catch { /* Invalid old offline cache can be replaced on the next fetch. */ }
+    };
+    window.addEventListener('profile-updated', updateProfile);
+    return () => window.removeEventListener('profile-updated', updateProfile);
+  }, []);
+
+  useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setDropdownOpen(false);

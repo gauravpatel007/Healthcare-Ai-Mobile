@@ -266,7 +266,8 @@ async def upload_avatar(
     avatar_dir.mkdir(parents=True, exist_ok=True)
     
     # Save file
-    filename = f"avatar_{user_id}_{int(time.time())}.{ext}"
+    from uuid import uuid4
+    filename = f"avatar_{user_id}_{uuid4().hex}.{ext}"
     file_path = avatar_dir / filename
     
     with open(file_path, "wb") as buffer:
