@@ -159,13 +159,28 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
         if (!isSilent) setSosStatus(null);
         const getPosition = () => {
           return new Promise((resolve) => {
+            const fallbackToIP = async () => {
+              try {
+                const response = await fetch('https://ipapi.co/json/');
+                const data = await response.json();
+                if (data && data.latitude && data.longitude) {
+                  resolve({ latitude: data.latitude, longitude: data.longitude, accuracy: 10000 });
+                } else {
+                  resolve(null);
+                }
+              } catch (e) {
+                resolve(null);
+              }
+            };
+
             if (!navigator.geolocation) {
-              resolve(null);
+              fallbackToIP();
               return;
             }
+
             navigator.geolocation.getCurrentPosition(
               (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy }),
-              (err) => resolve(null),
+              (err) => fallbackToIP(),
               { timeout: 6000, enableHighAccuracy: true }
             );
           });
@@ -174,7 +189,6 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
         const locationData = await getPosition();
         const sessionId = Date.now().toString();
         const payload = { ...locationData, session_id: sessionId, is_silent: isSilent };
-
         const res = await API.post('/emergency/sos', payload);
 
         if (res.success) startLiveTracking(sessionId);
