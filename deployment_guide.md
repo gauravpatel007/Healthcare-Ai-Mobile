@@ -100,6 +100,16 @@ For the internet (and Twilio) to reach your backend, you **must** open Port `800
 
 The frontend is a React application powered by Vite and Capacitor.
 
+Quick Start frontend convert to apk :
+```bash
+cd frontend-react
+npm run build:android
+cd android
+.\gradlew assembleDebug
+
+```
+
+
 ### Step 1: Install Dependencies
 On your local machine (not AWS), open a new terminal, navigate to the frontend directory, and install the npm packages:
 ```bash
