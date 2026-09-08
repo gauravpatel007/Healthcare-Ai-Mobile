@@ -319,15 +319,11 @@ def send_sos_call_twilio(phone_numbers: List[str], user_name: str, location_url:
             audio_warning = " Recording unavailable; used a spoken SOS instead."
         spoken = f"Emergency Alert. {user_name} has requested urgent help through LifeOS. Please contact them immediately."
         if location_url:
-            from urllib.parse import urlsplit, parse_qs
-            coordinates = parse_qs(urlsplit(location_url).query).get('q', [''])[0]
-            import re
-            if re.fullmatch(r'-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?', coordinates):
-                spoken += " A live Google Maps location has been sent via text message."
-        spoken += " Text message delivery is not guaranteed."
+            spoken += " A live Google Maps location has been sent via text message."
+            
         if audio_url:
             audio_url = escape(audio_url)
-            twiml_content = f"<Response><Say voice='alice' language='en-US'>{spoken}</Say><Play>{audio_url}</Play></Response>"
+            twiml_content = f"<Response><Gather numDigits='1' timeout='5'><Say voice='alice' language='en-US'>Emergency alert from {user_name}. Press any key to listen to their message.</Say></Gather><Play>{audio_url}</Play></Response>"
         else:
             twiml_content = f"<Response><Say voice='alice' language='en-US'>{spoken}</Say></Response>"
         
