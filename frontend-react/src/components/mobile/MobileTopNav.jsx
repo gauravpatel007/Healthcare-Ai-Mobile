@@ -12,7 +12,7 @@ const MobileTopNav = ({ items, checkIsActive, topNavRef }) => {
 
   return (
     <div
-      className="relative z-20 px-1 pt-2.5 pb-1 bg-transparent shrink-0 no-scrollbar pointer-events-none"
+      className="relative z-20 px-1 pt-2.5 pb-1 bg-transparent shrink-0 no-scrollbar pointer-events-none md:hidden"
       style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       ref={topNavRef}
     >
