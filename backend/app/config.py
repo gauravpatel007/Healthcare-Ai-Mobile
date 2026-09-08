@@ -5,17 +5,20 @@ Loads environment variables using Pydantic Settings.
 
 from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from dotenv import load_dotenv
+from pathlib import Path
+from pydantic import field_validator
 import os
 
-load_dotenv()
+ROOT_DIR = Path(__file__).resolve().parents[2]
+# Process environment wins; backend/.env overrides root .env for local development.
+ENV_FILES = (ROOT_DIR / ".env", ROOT_DIR / "backend" / ".env")
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables / .env file."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=ENV_FILES,
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -58,6 +61,15 @@ class Settings(BaseSettings):
     TWILIO_ACCOUNT_SID: str = ""
     TWILIO_AUTH_TOKEN: str = ""
     TWILIO_FROM_NUMBER: str = ""
+    # Trial calls require a URL; Twilio's Echo Twimlet serves the voice XML.
+    # URL contains voice text/audio URL, never credentials. Leave off for inline-capable accounts.
+    TWILIO_VOICE_USE_URL: bool = False
+    TWILIO_SMS_TEMPLATE_ONLY: bool = False
+
+    @field_validator("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM_NUMBER")
+    @classmethod
+    def strip_twilio_settings(cls, value: str) -> str:
+        return value.strip()
 
     # --- File Uploads ---
     UPLOAD_DIR: str = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "uploads")

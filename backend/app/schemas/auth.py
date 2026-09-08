@@ -6,14 +6,14 @@ from pydantic import BaseModel, EmailStr, Field
 
 
 class RegisterRequest(BaseModel):
-    email: EmailStr
+    email: str
     password: str = Field(..., min_length=6, max_length=128)
     name: str = Field(..., min_length=1, max_length=100)
     role: str = Field(default="patient", pattern="^(patient|doctor|admin)$")
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: str
     password: str
 
 

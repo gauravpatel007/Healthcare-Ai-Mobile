@@ -21,3 +21,18 @@ test('legacy SOS success does not hide provider failures', () => {
   assert.equal(accepted.ok, true);
   assert.match(accepted.message, /Delivery is not confirmed/);
 });
+
+test('legacy Twilio authentication errors are concise and omit provider internals', () => {
+  const result = sosResult({ success: true, actions: [null, 12, '\u001b[31mHTTP Error 401 POST /Accounts/private/Messages.json Authenticate'] });
+  assert.equal(result.ok, false);
+  assert.match(result.message, /authentication failed/);
+  assert.doesNotMatch(result.message, /Accounts|\u001b|POST/);
+});
+
+test('partial SOS result retains call acceptance and recording fallback beside SMS failure', () => {
+  const result = sosResult({success:true, actions:['Call requests accepted: 1. Recording unavailable; used a spoken SOS instead.', 'Notification failed: SMS unavailable: this Twilio trial only permits preset templates. The SOS location SMS was not sent.']});
+  assert.equal(result.ok, false);
+  assert.match(result.message, /Call requests accepted/);
+  assert.match(result.message, /Recording unavailable/);
+  assert.match(result.message, /location SMS was not sent/);
+});

@@ -11,8 +11,8 @@ const MobileTopNav = ({ items, checkIsActive, topNavRef }) => {
   };
 
   return (
-    <div 
-      className="md:hidden relative z-20 px-1 pt-2.5 pb-1 bg-transparent shrink-0 no-scrollbar pointer-events-none"
+    <div
+      className="relative z-20 px-1 pt-2.5 pb-1 bg-transparent shrink-0 no-scrollbar pointer-events-none"
       style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       ref={topNavRef}
     >
@@ -26,11 +26,10 @@ const MobileTopNav = ({ items, checkIsActive, topNavRef }) => {
             <Link
               key={item.id}
               to={item.path}
-              className={`flex-1 flex items-center justify-center px-1 py-2 min-h-[38px] rounded-[22px] transition-all duration-200 text-[12px] font-bold whitespace-nowrap touch-manipulation active:scale-95 ${
-                isActive 
-                  ? 'active-mobile-nav bg-[#0f172a] text-white dark:bg-[#262626] shadow-sm' 
+              className={`flex-1 flex items-center justify-center px-1 py-2 min-h-[38px] rounded-[22px] transition-all duration-200 text-[12px] font-bold whitespace-nowrap touch-manipulation active:scale-95 ${isActive
+                  ? 'active-mobile-nav bg-[#0f172a] text-white dark:bg-[#262626] shadow-sm'
                   : 'text-[#6b7280] dark:text-gray-400 active:bg-gray-200/50 dark:active:bg-gray-700/50 hover:bg-gray-100/50 dark:hover:bg-gray-800/50'
-              }`}
+                }`}
             >
               <Icon className="w-3.5 h-3.5 mr-1 shrink-0" strokeWidth={isActive ? 2.5 : 2} />
               <span>{labelText}</span>

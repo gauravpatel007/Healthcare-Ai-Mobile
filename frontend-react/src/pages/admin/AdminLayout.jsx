@@ -93,9 +93,9 @@ const AdminLayout = () => {
     <div className={adminTheme === 'dark' ? 'dark' : ''} style={{colorScheme: adminTheme}} data-theme={adminTheme}>
     <div className="fixed inset-0 z-50 flex bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
       
-      {/* Desktop Sidebar */}
+      {/* Desktop Sidebar (Hidden in favor of top/bottom nav for all sizes) */}
       <aside 
-        className={`hidden md:flex ${
+        className={`hidden ${
           isSidebarOpen ? 'w-64' : 'w-20'
         } transition-all duration-300 ease-in-out bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex-col justify-between shrink-0`}
       >

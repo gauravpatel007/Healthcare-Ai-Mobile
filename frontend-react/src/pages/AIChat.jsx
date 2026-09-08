@@ -146,19 +146,7 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
           ))}
         </ul>
       </div>
-      <div className="md:hidden mt-4 grid grid-cols-2 gap-3">
-        {[
-          { id: 'medicine', icon: Pill, title: t('medicine_info'), color: 'bg-indigo-50 text-indigo-600' },
-          { id: 'firstaid', icon: Stethoscope, title: t('first_aid'), color: 'bg-emerald-50 text-emerald-600' },
-          { id: 'report', icon: FileText, title: t('report_qa'), color: 'bg-sky-50 text-sky-600' },
-          { id: 'general', icon: HeartPulse, title: t('general_health'), color: 'bg-amber-50 text-amber-600' }
-        ].map(action => (
-          <button key={action.id} onClick={() => quickAction(action.id)} className={`flex flex-col items-center justify-center p-3 rounded-xl border border-gray-100 dark:border-gray-700 ${action.color} dark:bg-gray-800 transition-colors`}>
-            <action.icon className="w-5 h-5 mb-1" />
-            <span className="text-[10px] font-bold text-center leading-tight dark:text-gray-300">{action.title}</span>
-          </button>
-        ))}
-      </div>
+
     </div>
   );
 
@@ -435,25 +423,7 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
         <MedicalDisclaimer />
       </div>
 
-      {/* Quick Actions */}
-      <div className="hidden md:grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-        {[
-          { id: 'medicine', icon: Pill, title: t('medicine_info'), desc: t('drug_information'), color: 'bg-indigo-500 text-indigo-500' },
-          { id: 'firstaid', icon: Stethoscope, title: t('first_aid'), desc: t('emergency_guide'), color: 'bg-emerald-500 text-emerald-500' },
-          { id: 'report', icon: FileText, title: t('report_qa'), desc: t('explain_results'), color: 'bg-sky-500 text-sky-500' },
-          { id: 'general', icon: HeartPulse, title: t('general_health'), desc: t('any_question'), color: 'bg-amber-500 text-amber-500' }
-        ].map(action => (
-          <ActionCard
-            key={action.id}
-            title={t('quick_action')}
-            value={action.title}
-            subtitle={action.desc}
-            icon={action.icon}
-            colorClass={action.color}
-            onClick={() => quickAction(action.id)}
-          />
-        ))}
-      </div>
+
 
       {/* Main Chat Interface */}
       <div className="flex flex-col flex-1 bg-transparent md:bg-white dark:bg-transparent md:dark:bg-gray-800 md:rounded-[2.5rem] md:border md:border-gray-100 md:dark:border-gray-700 md:shadow-sm md:overflow-hidden md:h-[600px] md:max-h-[60vh] -mx-4 md:mx-0">
@@ -528,7 +498,7 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
           <div className="max-w-7xl mx-auto flex items-center gap-3 bg-white dark:bg-gray-800 md:bg-gray-50 md:dark:bg-gray-900/80 p-2 pl-4 rounded-[2.5rem] border border-gray-200 dark:border-gray-700 focus-within:border-indigo-500/50 dark:focus-within:border-indigo-500/50 focus-within:ring-4 focus-within:ring-indigo-500/10 transition-all shadow-sm md:shadow-none pointer-events-auto">
             <button
               onClick={startVoiceRecognition}
-              className={`w-11 h-11 shrink-0 rounded-full flex items-center justify-center active:scale-95 touch-manipulation transition-all ${isListening
+              className={`w-11 h-11 min-w-[44px] min-h-[44px] shrink-0 rounded-full flex items-center justify-center active:scale-95 touch-manipulation transition-all ${isListening
                   ? 'bg-rose-500 text-white shadow-[0_0_15px_rgba(244,63,94,0.5)] animate-pulse'
                   : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-indigo-600 active:bg-gray-100 dark:active:bg-gray-700 border border-gray-200 dark:border-gray-700 shadow-sm'
                 }`}
@@ -542,12 +512,12 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              className="flex-1 bg-transparent border-0 outline-none focus:outline-none focus:ring-0 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 font-medium"
+              className="flex-1 min-w-0 w-full bg-transparent border-0 outline-none focus:outline-none focus:ring-0 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 font-medium text-base"
             />
             <button
               onClick={handleSend}
               disabled={!input.trim()}
-              className="w-12 h-12 shrink-0 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-full flex items-center justify-center active:scale-95 touch-manipulation transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+              className="w-12 h-12 min-w-[48px] min-h-[48px] shrink-0 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-full flex items-center justify-center active:scale-95 touch-manipulation transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
             >
               <Send className="w-5 h-5 m-0 p-0" />
             </button>

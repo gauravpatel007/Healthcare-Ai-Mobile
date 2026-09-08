@@ -115,9 +115,10 @@ async def trigger_sos(request: SOSAlertRequest, user_id: CurrentUserId, db: Asyn
             clip = clip_r.scalar_one_or_none()
             if clip:
                 settings = get_settings()
-                base_url = settings.PUBLIC_API_URL or "http://127.0.0.1:8000"
-                base_url = base_url.rstrip("/")
-                audio_url = f"{base_url}/uploads/{clip.file_path}"
+                from app.utils.twilio_support import public_audio_url
+                audio_url = public_audio_url(settings.PUBLIC_API_URL, clip.file_path)
+                if not audio_url:
+                    logger.warning("Custom SOS audio has no public origin; using spoken alert")
                 
             tasks.append(asyncio.to_thread(send_sos_call_twilio, phone_numbers, user_name, location_url, audio_url))
         if tasks:

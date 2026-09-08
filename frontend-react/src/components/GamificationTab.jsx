@@ -94,7 +94,7 @@ export default function GamificationTab() {
     <div className="space-y-6 animate-fade-in-up relative">
       {zoomAvatarUrl && (
         <div className="fixed inset-0 bg-black/85 z-[9999] flex items-center justify-center cursor-zoom-out backdrop-blur-sm transition-opacity" onClick={() => setZoomAvatarUrl(null)}>
-          <img src={`http://localhost:8000${zoomAvatarUrl}`} alt="Avatar Zoom" className="max-w-[90vw] max-h-[90vh] rounded-3xl object-contain shadow-2xl" />
+          <img src={API.getMediaUrl(zoomAvatarUrl)} alt="Avatar Zoom" className="max-w-[90vw] max-h-[90vh] rounded-3xl object-contain shadow-2xl" />
           <div className="absolute top-6 right-8 text-white text-4xl font-light hover:text-gray-300 transition-colors">&times;</div>
         </div>
       )}

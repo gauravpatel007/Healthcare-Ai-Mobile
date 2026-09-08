@@ -2,6 +2,15 @@ __pycache__/
 *.py[cod]
 *.pyo
 .env
+**/.env
+**/.env.*
+**/venv/
+**/node_modules/
+.git/
+.history/
+*.dump
+**/*.db
+**/uploads/
 uploads/
 *.egg-info/
 dist/

@@ -1,0 +1,3 @@
+-r requirements.txt
+# In-memory database used by backend regression tests.
+aiosqlite==0.22.1

@@ -249,18 +249,20 @@ def send_sos_sms_twilio(phone_numbers: List[str], user_name: str, location_url: 
     """
     Sends an SOS SMS via Twilio. Returns (success, message).
     """
+    from app.utils.twilio_support import configuration_error, create_client, normalize_phone, provider_error
     settings = get_settings()
     
-    if not settings.TWILIO_ACCOUNT_SID or not settings.TWILIO_AUTH_TOKEN or not settings.TWILIO_FROM_NUMBER:
-        return False, "Twilio configuration missing"
+    if error := configuration_error(settings):
+        return False, error
+    if settings.TWILIO_SMS_TEMPLATE_ONLY:
+        return False, "SMS unavailable: this Twilio trial only permits preset templates. The SOS location SMS was not sent."
         
     if not phone_numbers:
-        return True, "No phone numbers provided"
+        return False, "No phone numbers provided"
         
     try:
         # pyrefly: ignore [missing-import]
-        from twilio.rest import Client
-        client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
+        client = create_client(settings)
         
         text = f"🚨SOS: {user_name} needs urgent help."
         if location_url:
@@ -270,14 +272,7 @@ def send_sos_sms_twilio(phone_numbers: List[str], user_name: str, location_url: 
         errors = []
         for number in phone_numbers:
             try:
-                # Ensure the number has a '+' prefix and correct country code
-                clean_number = "".join(filter(str.isdigit, number))
-                if number.startswith('+'):
-                    formatted_number = number
-                elif len(clean_number) == 10:
-                    formatted_number = f"+91{clean_number}" # Default to India for 10 digit numbers
-                else:
-                    formatted_number = f"+{clean_number}"
+                formatted_number = normalize_phone(number)
                 
                 message = client.messages.create(
                     body=text,
@@ -287,70 +282,79 @@ def send_sos_sms_twilio(phone_numbers: List[str], user_name: str, location_url: 
                 logger.info(f"SOS SMS sent to {formatted_number} (SID: {message.sid})")
                 success_count += 1
             except Exception as inner_e:
-                err_msg = f"SMS to {number} failed: {str(inner_e)}"
+                err_msg = "SMS: " + provider_error(inner_e)
                 logger.error(err_msg)
                 errors.append(err_msg)
+                if getattr(inner_e, "status", None) == 401 or getattr(inner_e, "code", None) == 20003:
+                    break
                 
         if success_count > 0:
             return True, f"SMS requests accepted: {success_count}." + (f" Failed: {len(errors)}." if errors else "")
         return False, " | ".join(errors)
     except Exception as e:
-        return False, f"Twilio connection failed: {str(e)}"
+        return False, provider_error(e)
 
 def send_sos_call_twilio(phone_numbers: List[str], user_name: str, location_url: Optional[str] = None, audio_url: Optional[str] = None) -> tuple[bool, str]:
     """
     Initiates an automated voice call via Twilio. Returns (success, message).
     """
+    from app.utils.twilio_support import configuration_error, create_client, normalize_phone, provider_error, voice_instructions, audio_is_reachable
     settings = get_settings()
     
-    if not settings.TWILIO_ACCOUNT_SID or not settings.TWILIO_AUTH_TOKEN or not settings.TWILIO_FROM_NUMBER:
-        return False, "Twilio configuration missing"
+    if error := configuration_error(settings):
+        return False, error
         
     if not phone_numbers:
-        return True, "No phone numbers provided"
+        return False, "No phone numbers provided"
         
     try:
         # pyrefly: ignore [missing-import]
-        from twilio.rest import Client
-        client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
+        client = create_client(settings)
         
         from xml.sax.saxutils import escape
         user_name = escape(user_name)
+        audio_warning = ""
+        if audio_url and not audio_is_reachable(audio_url):
+            audio_url = None
+            audio_warning = " Recording unavailable; used a spoken SOS instead."
+        spoken = f"Emergency Alert. {user_name} has requested urgent help through LifeOS. Please contact them immediately."
+        if location_url:
+            from urllib.parse import urlsplit, parse_qs
+            coordinates = parse_qs(urlsplit(location_url).query).get('q', [''])[0]
+            import re
+            if re.fullmatch(r'-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?', coordinates):
+                spoken += " A live Google Maps location has been sent via text message."
+        spoken += " Text message delivery is not guaranteed."
         if audio_url:
             audio_url = escape(audio_url)
-            twiml_content = f"<Response><Say voice='alice' language='en-US'>Emergency message from {user_name}.</Say><Play>{audio_url}</Play></Response>"
+            twiml_content = f"<Response><Say voice='alice' language='en-US'>{spoken}</Say><Play>{audio_url}</Play></Response>"
         else:
-            twiml_content = f"<Response><Say voice='alice' language='en-US'>Emergency Alert. {user_name} has an emergency. Immediately go there or check the sent text message for location details.</Say></Response>"
+            twiml_content = f"<Response><Say voice='alice' language='en-US'>{spoken}</Say></Response>"
         
         success_count = 0
         errors = []
         for number in phone_numbers:
             try:
-                # Ensure the number has a '+' prefix and correct country code
-                clean_number = "".join(filter(str.isdigit, number))
-                if number.startswith('+'):
-                    formatted_number = number
-                elif len(clean_number) == 10:
-                    formatted_number = f"+91{clean_number}" # Default to India for 10 digit numbers
-                else:
-                    formatted_number = f"+{clean_number}"
+                formatted_number = normalize_phone(number)
                 call = client.calls.create(
-                    twiml=twiml_content,
+                    **voice_instructions(settings, twiml_content),
                     to=formatted_number,
                     from_=settings.TWILIO_FROM_NUMBER
                 )
                 logger.info(f"SOS Voice call initiated to {formatted_number} (SID: {call.sid})")
                 success_count += 1
             except Exception as inner_e:
-                err_msg = f"Call to {number} failed: {str(inner_e)}"
+                err_msg = "Call: " + provider_error(inner_e)
                 logger.error(err_msg)
                 errors.append(err_msg)
+                if getattr(inner_e, "status", None) == 401 or getattr(inner_e, "code", None) == 20003:
+                    break
                 
         if success_count > 0:
-            return True, f"Call requests accepted: {success_count}." + (f" Failed: {len(errors)}." if errors else "")
+            return True, f"Call requests accepted: {success_count}." + (f" Failed: {len(errors)}." if errors else "") + audio_warning
         return False, " | ".join(errors)
     except Exception as e:
-        return False, f"Twilio connection failed: {str(e)}"
+        return False, provider_error(e)
 
 def send_organ_match_email(recipient_email: str, recipient_name: str, requester_name: str, organ: str, emergency_contact: str = None) -> bool:
     """

@@ -39,6 +39,10 @@ services:
       TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
       TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
       TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-}
+      TWILIO_VOICE_USE_URL: ${TWILIO_VOICE_USE_URL:-false}
+      TWILIO_SMS_TEMPLATE_ONLY: ${TWILIO_SMS_TEMPLATE_ONLY:-false}
+      SMTP_EMAIL: ${SMTP_EMAIL:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       PUBLIC_API_URL: ${PUBLIC_API_URL:-http://16.171.242.175}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       PINECONE_API_KEY: ${PINECONE_API_KEY:-}
@@ -60,23 +64,11 @@ services:
         condition: service_healthy
     command: >
       sh -c "
-        cd backend &&
-        alembic upgrade head 2>/dev/null || echo 'Alembic migration skipped' &&
-        uvicorn app.main:app --host 0.0.0.0 --port 8000
+        alembic -c /app/alembic.ini upgrade head &&
+        uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port 8000
       "
 
-  # ─── Chatbot Backend (Flask) ──────────────────────────────────────
-  chatbot:
-    build:
-      context: ./backend/chatbot
-      dockerfile: Dockerfile
-    container_name: lifeos_chatbot
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    environment:
-      - PINECONE_API_KEY=${PINECONE_API_KEY}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
+
 
 volumes:
   postgres_data:

@@ -18,6 +18,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    inspector = sa.inspect(op.get_bind())
+    # Fresh installations create all model tables in application startup.
+    # Existing installations may already have this column from create_all.
+    if not inspector.has_table('users'):
+        return
+    if 'webauthn_credentials' in {column['name'] for column in inspector.get_columns('users')}:
+        return
     op.add_column('users', sa.Column('webauthn_credentials', sa.JSON(), server_default='[]', nullable=True))
 
 

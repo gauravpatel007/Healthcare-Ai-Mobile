@@ -351,7 +351,7 @@ export default function AdminMedicalRecords() {
                       <div className="flex items-center justify-end gap-2">
                         {record.file_path && (
                           <a 
-                            href={`http://localhost:8000/uploads/${record.file_path.replace(/^\/+/, '')}`} 
+                            href={api.getMediaUrl(`/uploads/${record.file_path.replace(/^\/+/, '')}`)}
                             target="_blank" rel="noreferrer"
                             download
                             className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors"

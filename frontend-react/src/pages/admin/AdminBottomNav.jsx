@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 const AdminBottomNav = ({ items, checkIsActive }) => {
   return (
     <nav
-      className="md:hidden fixed z-50 left-2.5 right-2.5"
+      className="fixed z-50 left-2.5 right-2.5"
       style={{ bottom: 'calc(10px + env(safe-area-bottom, 0px))' }}
     >
       <div className="h-[58px] flex items-center justify-around bg-white/60 dark:bg-black/60 backdrop-blur-2xl backdrop-saturate-150 rounded-[28px] px-1 shadow-[0_4px_24px_rgba(0,0,0,0.15)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.35)] border border-black/[0.05] dark:border-white/[0.08]">
