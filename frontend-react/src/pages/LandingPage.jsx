@@ -53,8 +53,10 @@ const LandingPage = () => {
   useEffect(() => {
     if (window.location.search.includes('login=true')) {
       setShowLogin(true);
+    } else if (API.isAuthenticated()) {
+      navigate('/app');
     }
-  }, []);
+  }, [navigate]);
 
   const scrollToSection = (e, id) => {
     e.preventDefault();

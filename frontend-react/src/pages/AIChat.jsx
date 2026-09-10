@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import API from '../utils/api';
+import { startSpeechRecognition } from '../utils/voice';
 import MedicalDisclaimer from '../components/MedicalDisclaimer';
 import { useLang } from '../contexts/LangContext';
 import {
@@ -80,37 +81,65 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
   const chatContainerRef = useRef(null);
   const chatClearedRef = useRef(false);
   const abortControllerRef = useRef(null);
+  const recognitionRef = useRef(null);
 
   const messagesRef = useRef(messages);
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
 
-  const startVoiceRecognition = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert(t('error_voice_support'));
+  const startVoiceRecognition = async () => {
+    if (isListening) {
+      if (recognitionRef.current && recognitionRef.current.stop) {
+        recognitionRef.current.stop();
+      }
+      setIsListening(false);
       return;
     }
 
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'en-US';
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
+    setIsListening(true);
+    const recognitionLanguage = lang === 'hi' ? 'hi-IN' : (lang === 'gu' ? 'gu-IN' : 'en-US');
+    
+    let silenceTimeout = null;
 
-    recognition.onstart = () => setIsListening(true);
-    recognition.onresult = (event) => {
-      const speechResult = event.results[0][0].transcript;
-      setInput(speechResult);
-    };
-    recognition.onerror = (event) => {
-      console.error('Speech recognition error', event.error);
-      alert(t('error_voice'));
+    const stopAndClear = () => {
+      if (silenceTimeout) clearTimeout(silenceTimeout);
+      if (recognitionRef.current && recognitionRef.current.stop) {
+        try { recognitionRef.current.stop(); } catch (e) {}
+      }
       setIsListening(false);
     };
-    recognition.onend = () => setIsListening(false);
 
-    recognition.start();
+    const speech = await startSpeechRecognition({
+      language: recognitionLanguage,
+      onResult: (transcript) => {
+        setInput(transcript);
+        
+        if (silenceTimeout) clearTimeout(silenceTimeout);
+        silenceTimeout = setTimeout(() => {
+          stopAndClear();
+        }, 2500); // Stop after 2.5s of silence
+      },
+      onEnd: () => {
+        if (silenceTimeout) clearTimeout(silenceTimeout);
+        setIsListening(false);
+      },
+      onError: () => {
+        if (silenceTimeout) clearTimeout(silenceTimeout);
+        setIsListening(false);
+      }
+    });
+
+    if (!speech) {
+      setIsListening(false);
+    } else {
+      recognitionRef.current = speech;
+      
+      // Initial timeout if they tap but don't speak at all
+      silenceTimeout = setTimeout(() => {
+        stopAndClear();
+      }, 6000);
+    }
   };
 
   const sampleQuestions = [t('sample_q_1'), t('sample_q_2'), t('sample_q_3'), t('sample_q_4')];

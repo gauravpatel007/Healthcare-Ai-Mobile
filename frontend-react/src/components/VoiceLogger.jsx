@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import API from '../utils/api';
+import { startSpeechRecognition } from '../utils/voice';
 
 /**
  * "Hey LifeOS" — Always-on wake word voice assistant.
@@ -217,139 +218,116 @@ const VoiceLogger = ({ onLogSuccess, onAction }) => {
   }, []);
 
   // ── Initialize and start continuous recognition ──
-  const startListening = useCallback(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert("Speech recognition is not supported in your browser. Please use Chrome or Edge.");
-      return;
-    }
-
+  const startListening = useCallback(async () => {
     isEnabledRef.current = true;
 
     // Clean up existing instance
     if (recognitionRef.current) {
       isStoppedManuallyRef.current = true;
-      try { recognitionRef.current.stop(); } catch (e) { }
+      try {
+        if (recognitionRef.current.stop) await recognitionRef.current.stop();
+      } catch (e) { }
     }
 
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-    recognition.maxAlternatives = 1;
-
-    recognition.onstart = () => {
-      isStoppedManuallyRef.current = false;
-      if (stateRef.current === 'idle' || stateRef.current === 'processing') {
-        // Don't override processing state
-        if (stateRef.current !== 'processing') {
-          setState('passive');
-        }
+    isStoppedManuallyRef.current = false;
+    if (stateRef.current === 'idle' || stateRef.current === 'processing') {
+      // Don't override processing state
+      if (stateRef.current !== 'processing') {
+        setState('passive');
       }
-    };
+    }
 
-    recognition.onresult = (event) => {
-      if (isStoppedManuallyRef.current) return; // Completely block duplicate events after stopping
-      
-      // Build full transcript from all results
-      let finalText = '';
-      let interimTextLocal = '';
+    const speech = await startSpeechRecognition({
+      language: 'en-US',
+      onResult: (transcript) => {
+        if (isStoppedManuallyRef.current) return;
+        
+        // Treat every partial matching as fullText since the native wrapper abstracts isFinal.
+        const fullText = transcript.trim();
+        setInterimText(fullText);
 
-      for (let i = 0; i < event.results.length; i++) {
-        const result = event.results[i];
-        if (result.isFinal) {
-          finalText += result[0].transcript + ' ';
-        } else {
-          interimTextLocal += result[0].transcript;
-        }
-      }
-
-      const fullText = (finalText + interimTextLocal).trim();
-      setInterimText(interimTextLocal);
-
-      // If we already detected wake word and are collecting the command
-      if (wakeDetectedRef.current) {
-        // Check final results for the full command
-        if (finalText.trim()) {
-          const wake = detectWakeWord(finalText.trim());
-          const cmd = wake.detected ? wake.command : finalText.trim();
-          if (cmd.length > 2) {
-            // Clear timeout and process
-            if (commandTimeoutRef.current) clearTimeout(commandTimeoutRef.current);
-            isStoppedManuallyRef.current = true;
-            wakeDetectedRef.current = false; // Prevent double-firing
-            try { recognition.stop(); } catch (e) { }
-            processVoiceCommand(cmd, wakeTypeRef.current === 'ai');
+        // If we already detected wake word and are collecting the command
+        if (wakeDetectedRef.current) {
+          if (fullText) {
+            const wake = detectWakeWord(fullText);
+            const cmd = wake.detected ? wake.command : fullText;
+            
+            if (cmd.length > 2) {
+              // Clear timeout and process
+              if (commandTimeoutRef.current) clearTimeout(commandTimeoutRef.current);
+              isStoppedManuallyRef.current = true;
+              wakeDetectedRef.current = false; // Prevent double-firing
+              if (recognitionRef.current && recognitionRef.current.stop) {
+                try { recognitionRef.current.stop(); } catch (e) {}
+              }
+              processVoiceCommand(cmd, wakeTypeRef.current === 'ai');
+            }
           }
-        }
-        return;
-      }
-
-      // Check for wake word in the full text
-      const wakeResult = detectWakeWord(fullText);
-      if (wakeResult.detected) {
-        wakeDetectedRef.current = true;
-        wakeTypeRef.current = wakeResult.wakeType;
-
-        if (wakeResult.wakeType !== 'silent') {
-          setState('active');
-          setIsChatOpen(true);
-          playChime();
-        }
-
-        // If there's already a command after the wake word in final text
-        if (wakeResult.command.length > 2 && finalText.trim()) {
-          isStoppedManuallyRef.current = true;
-          wakeDetectedRef.current = false; // Prevent double-firing
-          try { recognition.stop(); } catch (e) { }
-          processVoiceCommand(wakeResult.command, wakeResult.wakeType === 'ai');
           return;
         }
 
-        // Set a timeout — if no command follows within 5 seconds, go back to passive
-        if (commandTimeoutRef.current) clearTimeout(commandTimeoutRef.current);
-        commandTimeoutRef.current = setTimeout(() => {
-          wakeDetectedRef.current = false;
-          wakeTypeRef.current = null;
-          setState('passive');
-          setInterimText('');
-          isStoppedManuallyRef.current = true;
-          try { recognition.stop(); } catch (e) { }
-          setTimeout(() => startListening(), 200);
-        }, 5000);
-      }
-    };
+        // Check for wake word in the full text
+        const wakeResult = detectWakeWord(fullText);
+        if (wakeResult.detected) {
+          wakeDetectedRef.current = true;
+          wakeTypeRef.current = wakeResult.wakeType;
 
-    recognition.onerror = (event) => {
-      if (event.error === 'aborted' || event.error === 'no-speech') {
-        // These are normal — auto-restart
-        return;
-      }
-      console.error("Speech recognition error:", event.error);
-    };
-
-    recognition.onend = () => {
-      // Auto-restart unless manually stopped or processing
-      if (isEnabledRef.current && !isStoppedManuallyRef.current && stateRef.current !== 'processing') {
-        if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
-        restartTimeoutRef.current = setTimeout(() => {
-          if (stateRef.current !== 'active') {
-            wakeDetectedRef.current = false;
+          if (wakeResult.wakeType !== 'silent') {
+            setState('active');
+            setIsChatOpen(true);
+            playChime();
           }
-          startListening();
-        }, 300);
+
+          // If there's already a command after the wake word in final text
+          if (wakeResult.command.length > 2 && fullText) {
+            isStoppedManuallyRef.current = true;
+            wakeDetectedRef.current = false; // Prevent double-firing
+            if (recognitionRef.current && recognitionRef.current.stop) {
+              try { recognitionRef.current.stop(); } catch (e) {}
+            }
+            processVoiceCommand(wakeResult.command, wakeResult.wakeType === 'ai');
+            return;
+          }
+
+          // Set a timeout — if no command follows within 5 seconds, go back to passive
+          if (commandTimeoutRef.current) clearTimeout(commandTimeoutRef.current);
+          commandTimeoutRef.current = setTimeout(() => {
+            wakeDetectedRef.current = false;
+            wakeTypeRef.current = null;
+            setState('passive');
+            setInterimText('');
+            isStoppedManuallyRef.current = true;
+            if (recognitionRef.current && recognitionRef.current.stop) {
+              try { recognitionRef.current.stop(); } catch (e) {}
+            }
+            setTimeout(() => startListening(), 200);
+          }, 5000);
+        }
+      },
+      onEnd: () => {
+        // Auto-restart unless manually stopped or processing
+        if (isEnabledRef.current && !isStoppedManuallyRef.current && stateRef.current !== 'processing') {
+          if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
+          restartTimeoutRef.current = setTimeout(() => {
+            if (stateRef.current !== 'active') {
+              wakeDetectedRef.current = false;
+            }
+            startListening();
+          }, 300);
+        }
+      },
+      onError: (err) => {
+        if (isEnabledRef.current && !isStoppedManuallyRef.current && stateRef.current !== 'processing') {
+          setTimeout(() => startListening(), 1000);
+        }
       }
-    };
+    });
 
-    startListeningRef.current = startListening;
-    recognitionRef.current = recognition;
-
-    try {
-      recognition.start();
-    } catch (e) {
-      console.error("Failed to start recognition:", e);
-      // Retry after a delay
-      setTimeout(() => startListening(), 1000);
+    if (speech) {
+      startListeningRef.current = startListening;
+      recognitionRef.current = speech;
+    } else {
+      setTimeout(() => startListening(), 2000);
     }
   }, [detectWakeWord, playChime, processVoiceCommand]);
 

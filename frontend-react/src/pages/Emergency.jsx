@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useLang } from '../contexts/LangContext';
 import API from '../utils/api';
 import { sosResult } from '../utils/sosResult';
+import { getSosLocation } from '../utils/sosLocation';
 import toast from 'react-hot-toast';
 import {
   AlertTriangle, Phone, Activity, HeartPulse, Plus, X, Edit2, Trash2,
@@ -62,9 +63,9 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
   const [isOrganDonorModalOpen, setIsOrganDonorModalOpen] = useState(false);
   const [isOrganNetworkModalOpen, setIsOrganNetworkModalOpen] = useState(false);
 
-  // Audio Clip State
-  const [audioClip, setAudioClip] = useState(null);
-  const [isUploadingAudio, setIsUploadingAudio] = useState(false);
+  // Audio Clip State (Archived)
+  // const [audioClip, setAudioClip] = useState(null);
+  // const [isUploadingAudio, setIsUploadingAudio] = useState(false);
 
   // Nearby Hospitals State
   const [realHospitals, setRealHospitals] = useState([]);
@@ -85,12 +86,13 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
       setContacts(fetchedContacts || []);
       setProfile(qrData || {});
 
-      try {
-        const audioRes = await API.get('/emergency/sos-audio');
-        setAudioClip(audioRes);
-      } catch (err) {
-        if (err.response?.status !== 404) console.error(err);
-      }
+      // ARCHIVED: Audio Clip Fetch
+      // try {
+      //   const audioRes = await API.get('/emergency/sos-audio');
+      //   setAudioClip(audioRes);
+      // } catch (err) {
+      //   if (err.response?.status !== 404) console.error(err);
+      // }
     } catch (e) {
       console.error(e);
     } finally {
@@ -157,36 +159,7 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
       try {
         setSosLoading(true);
         if (!isSilent) setSosStatus(null);
-        const getPosition = () => {
-          return new Promise((resolve) => {
-            const fallbackToIP = async () => {
-              try {
-                const response = await fetch('https://ipapi.co/json/');
-                const data = await response.json();
-                if (data && data.latitude && data.longitude) {
-                  resolve({ latitude: data.latitude, longitude: data.longitude, accuracy: 10000 });
-                } else {
-                  resolve(null);
-                }
-              } catch (e) {
-                resolve(null);
-              }
-            };
-
-            if (!navigator.geolocation) {
-              fallbackToIP();
-              return;
-            }
-
-            navigator.geolocation.getCurrentPosition(
-              (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy }),
-              (err) => fallbackToIP(),
-              { timeout: 6000, enableHighAccuracy: true }
-            );
-          });
-        };
-
-        const locationData = await getPosition();
+        const locationData = await getSosLocation();
         const sessionId = Date.now().toString();
         const payload = { ...locationData, session_id: sessionId, is_silent: isSilent };
         const res = await API.post('/emergency/sos', payload);
@@ -194,7 +167,7 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
         if (res.success) startLiveTracking(sessionId);
 
         if (!isSilent) {
-          const status = sosResult(res);
+          const status = sosResult(res, { locationAvailable: Boolean(locationData) });
           setSosStatus(status);
           if (status.ok) toast.success(t(status.message), { duration: 8000 });
           else toast.error(t(status.message), { duration: 10000 });
@@ -264,6 +237,7 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
     setModalOpen(true);
   };
 
+  /* --- ARCHIVED: Custom SOS Audio Upload & Delete Handlers ---
   const handleAudioUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -281,7 +255,11 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
 
       const res = await API.post('/emergency/sos-audio', formData);
       setAudioClip(res);
-      toast.success('SOS custom audio clip saved!');
+      if (res.call_audio_ready === false) {
+        toast.error(res.call_audio_message || 'Recording saved, but call audio is unavailable.');
+      } else {
+        toast.success('SOS custom audio clip saved!');
+      }
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to upload audio clip');
     } finally {
@@ -300,6 +278,7 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
       toast.error('Failed to remove audio clip');
     }
   };
+  ------------------------------------------------------------ */
 
   // Voice action handler
   useEffect(() => {
@@ -557,35 +536,7 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
         <div className="lg:col-span-2 p-8 rounded-[2rem] bg-gray-50 dark:bg-gray-800 shadow-sm border border-red-100 dark:border-red-900/30 flex flex-col items-center justify-center relative overflow-hidden group hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors duration-500">
           <div className="absolute -inset-10 bg-red-500/5 blur-3xl rounded-full pointer-events-none"></div>
 
-          {/* Custom Audio Upload Button */}
-          <div className="absolute top-6 right-6 z-20 flex items-center gap-2">
-            {audioClip && (
-              <button
-                onClick={handleDeleteAudio}
-                className="w-8 h-8 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 flex items-center justify-center transition-colors"
-                title="Remove Custom Audio"
-              >
-                <X size={14} />
-              </button>
-            )}
-            <label
-              className={`w-10 h-10 rounded-full flex items-center justify-center shadow-sm cursor-pointer transition-all ${audioClip ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-white text-gray-500 hover:bg-gray-100 border border-gray-200 dark:bg-gray-700 dark:text-gray-400 dark:border-gray-600'
-                } ${isUploadingAudio ? 'opacity-50 pointer-events-none' : ''}`}
-              title="Set Custom SOS Audio Message"
-            >
-              {isUploadingAudio ? (
-                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
-              ) : (
-                <Music size={18} />
-              )}
-              <input
-                type="file"
-                accept="audio/mpeg,audio/wav,audio/ogg"
-                className="hidden"
-                onChange={handleAudioUpload}
-              />
-            </label>
-          </div>
+          {/* [ARCHIVED] Custom Audio Upload Button from UI */}
 
           <button
             onClick={triggerSOS}
@@ -595,7 +546,7 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
             {sosLoading ? (
               <>
                 <div className="w-8 h-8 rounded-full border-4 border-white/30 border-t-white animate-spin mb-2"></div>
-                <span className="font-bold tracking-widest text-sm">{t('LOCATING')}</span>
+                <span className="font-bold tracking-widest text-sm">{t('SENDING SOS')}</span>
               </>
             ) : (
               <>
@@ -608,11 +559,12 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
           <div className="mt-8 text-center relative z-10">
             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{t('Emergency Assistance')}</h3>
             <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto text-sm leading-relaxed mb-4">
-              {t('SOS requests notifications to your saved contacts. Location and audio require permission. If help is urgent, call directly.')}
+              {t('SOS requests notifications to your saved contacts. Location requires permission. If help is urgent, call directly.')}
             </p>
+            {/* [ARCHIVED] Selected voice message display */}
             {sosStatus && <p role="status" className="my-3 whitespace-pre-line text-sm font-semibold">{t(sosStatus.message)}</p>}
-            <a href="tel:112" className="inline-flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-full text-xs font-bold uppercase tracking-wider">
-              <Phone size={14} /> {t('Call 112')}
+            <a href="tel:108" className="inline-flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-full text-xs font-bold uppercase tracking-wider">
+              <Phone size={14} /> {t('Call 108')}
             </a>
             {sosStatus && !sosStatus.ok && contacts.filter(c => c.phone).map(contact => (
               <div key={contact.id} className="mt-3 flex flex-wrap justify-center gap-3 text-sm">
@@ -939,31 +891,31 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
                 </div>
               </div>
 
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  {selectedHospital.phone && selectedHospital.phone !== 'N/A' && (
-                    <a href={`tel:${selectedHospital.phone}`} className="col-span-2 sm:col-span-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                      <Phone size={18} /> Call {selectedHospital.phone}
-                    </a>
-                  )}
-                  {selectedHospital.timing && (
-                    <div className="col-span-2 sm:col-span-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold border border-gray-200 dark:border-gray-600">
-                      <Clock size={18} /> {selectedHospital.timing}
-                    </div>
-                  )}
-                </div>
-
-                {selectedHospital.lat && selectedHospital.lon && (
-                  <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 mb-6 bg-gray-100 dark:bg-gray-800" style={{ height: '200px' }}>
-                    <iframe 
-                      width="100%" 
-                      height="100%" 
-                      frameBorder="0" 
-                      src={`https://maps.google.com/maps?q=${selectedHospital.lat},${selectedHospital.lon}&z=15&output=embed`}
-                      style={{ border: 0 }}
-                      allowFullScreen
-                    />
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                {selectedHospital.phone && selectedHospital.phone !== 'N/A' && (
+                  <a href={`tel:${selectedHospital.phone}`} className="col-span-2 sm:col-span-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                    <Phone size={18} /> Call {selectedHospital.phone}
+                  </a>
+                )}
+                {selectedHospital.timing && (
+                  <div className="col-span-2 sm:col-span-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold border border-gray-200 dark:border-gray-600">
+                    <Clock size={18} /> {selectedHospital.timing}
                   </div>
                 )}
+              </div>
+
+              {selectedHospital.lat && selectedHospital.lon && (
+                <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 mb-6 bg-gray-100 dark:bg-gray-800" style={{ height: '200px' }}>
+                  <iframe
+                    width="100%"
+                    height="100%"
+                    frameBorder="0"
+                    src={`https://maps.google.com/maps?q=${selectedHospital.lat},${selectedHospital.lon}&z=15&output=embed`}
+                    style={{ border: 0 }}
+                    allowFullScreen
+                  />
+                </div>
+              )}
             </div>
 
             <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex flex-wrap justify-end gap-3">

@@ -4,33 +4,82 @@ from unittest.mock import patch, MagicMock
 from app.config import Settings
 from app.utils.twilio_support import configuration_error, normalize_phone, provider_error, public_audio_url
 from app.utils.email import send_sos_sms_twilio, send_sos_call_twilio
+# pyrefly: ignore [missing-import]
 from twilio.base.exceptions import TwilioRestException
 
 
 def settings():
     return Settings(_env_file=None, TWILIO_ACCOUNT_SID='AC' + 'a' * 32,
-                    TWILIO_AUTH_TOKEN='b' * 32, TWILIO_FROM_NUMBER='+15005550006')
+                    TWILIO_AUTH_TOKEN='b' * 32, TWILIO_FROM_NUMBER='+15005550006', PUBLIC_API_URL='https://example.com')
 
 
 class TwilioTests(unittest.TestCase):
-    def test_dead_audio_url_falls_back_and_speaks_coordinates(self):
-        client = MagicMock()
-        with patch('app.utils.email.get_settings', return_value=settings()), patch('app.utils.twilio_support.create_client', return_value=client), patch('app.utils.twilio_support.audio_is_reachable', return_value=False):
-            ok, message = send_sos_call_twilio(['9725259773'], 'A & B', 'https://www.google.com/maps?q=23.1,72.5', 'https://example.com/missing.mp3')
-        self.assertTrue(ok)
-        self.assertIn('Recording unavailable', message)
-        xml = client.calls.create.call_args.kwargs['twiml']
-        self.assertNotIn('<Play>', xml)
-        self.assertIn('A &amp; B', xml)
-        self.assertIn('Latitude 23.1. Longitude 72.5.', xml)
+    def setUp(self):
+        self.voice_probe = self.enterContext(patch('app.utils.twilio_support.voice_url_problem', return_value=None))
+        self.audio_probe = self.enterContext(patch('app.utils.twilio_support.audio_url_problem', return_value=None))
 
-    def test_reachable_audio_keeps_recording_after_full_spoken_alert(self):
+    def test_sms_body_and_destination_include_actual_location(self):
         client = MagicMock()
-        with patch('app.utils.email.get_settings', return_value=settings()), patch('app.utils.twilio_support.create_client', return_value=client), patch('app.utils.twilio_support.audio_is_reachable', return_value=True):
+        client.messages.create.return_value.status = 'queued'
+        location = 'https://www.google.com/maps?q=23.0207834,72.4622436'
+        with patch('app.utils.email.get_settings', return_value=settings()), patch('app.utils.twilio_support.create_client', return_value=client):
+            ok, message = send_sos_sms_twilio(['97252 59773'], 'Gaurav Patel', location)
+        self.assertTrue(ok)
+        client.messages.create.assert_called_once_with(
+            body='🚨SOS: Gaurav Patel needs urgent help. Loc: ' + location,
+            from_='+15005550006', to='+919725259773')
+        self.assertNotIn('delivered', message)
+
+
+        client = MagicMock()
+        client.messages.create.side_effect = [MagicMock(status='queued'), TwilioRestException(400, '/private', code=21608)]
+        with patch('app.utils.email.get_settings', return_value=settings()), patch('app.utils.twilio_support.create_client', return_value=client):
+            ok, message = send_sos_sms_twilio(['9725259773', '9725259774'], 'Test')
+        self.assertTrue(ok)
+        self.assertIn('SMS requests accepted: 1.', message)
+
+    def test_sender_and_unknown_errors_include_only_safe_codes(self):
+        for code in (21660, 21661, 30044, 99999):
+            message = provider_error(TwilioRestException(400, '/private', msg='secret raw details', code=code))
+            self.assertIn(str(code), message)
+            self.assertNotIn('secret', message)
+            self.assertNotIn('/private', message)
+
+    def test_reachable_audio_plays_after_one_key(self):
+        client = MagicMock()
+        with patch('app.utils.email.get_settings', return_value=settings()), patch('app.utils.twilio_support.create_client', return_value=client):
             send_sos_call_twilio(['9725259773'], 'Test', audio_url='https://example.com/clip.mp3')
         xml = client.calls.create.call_args.kwargs['twiml']
         self.assertIn('<Play>https://example.com/clip.mp3</Play>', xml)
-        self.assertIn('Please contact them immediately.', xml)
+        from xml.etree import ElementTree
+        root = ElementTree.fromstring(xml)
+        self.assertEqual([node.tag for node in root], ['Gather', 'Play', 'Say', 'Hangup'])
+        self.assertIn('Press any key', xml)
+        self.assertEqual(root[0].get('numDigits'), '1')
+        self.assertEqual(root[0].get('finishOnKey'), '')
+        self.assertNotIn('SMS', xml)
+
+    def test_unavailable_voice_url_prevents_a_broken_call(self):
+        config = settings()
+        config.TWILIO_VOICE_USE_URL = True
+        self.voice_probe.return_value = 'Call not placed: the public voice URL returned HTTP 503.'
+        client = MagicMock()
+        with patch('app.utils.email.get_settings', return_value=config), patch('app.utils.twilio_support.create_client', return_value=client):
+            ok, message = send_sos_call_twilio(['9725259773'], 'Test')
+        self.assertFalse(ok)
+        self.assertIn('503', message)
+        client.calls.create.assert_not_called()
+
+    def test_unavailable_recording_uses_spoken_alert_without_a_key_loop(self):
+        self.audio_probe.return_value = 'Recording host returned HTTP 503.'
+        client = MagicMock()
+        with patch('app.utils.email.get_settings', return_value=settings()), patch('app.utils.twilio_support.create_client', return_value=client):
+            ok, message = send_sos_call_twilio(['9725259773'], 'Test', audio_url='https://example.com/clip.mp3')
+        self.assertTrue(ok)
+        self.assertIn('Recording unavailable', message)
+        xml = client.calls.create.call_args.kwargs['twiml']
+        self.assertNotIn('Gather', xml)
+        self.assertNotIn('Play', xml)
 
     def test_audio_probe_rejects_html_and_accepts_mp3(self):
         from app.utils.twilio_support import audio_is_reachable
@@ -44,6 +93,26 @@ class TwilioTests(unittest.TestCase):
             response.headers = {'Content-Type': 'audio/mpeg'}
             response.iter_content.return_value = iter([b'ID3' + b'\x00' * 13])
             self.assertTrue(audio_is_reachable('https://example.com/audio'))
+
+    def test_url_mode_recording_has_no_keypress_loop(self):
+        from urllib.parse import urlsplit, parse_qs
+        from xml.etree import ElementTree
+        config = settings()
+        config.TWILIO_VOICE_USE_URL = True
+        client = MagicMock()
+        audio = 'https://example.com/clip.mp3?v=2&format=mp3'
+        with patch('app.utils.email.get_settings', return_value=config), patch('app.utils.twilio_support.create_client', return_value=client):
+            ok, _ = send_sos_call_twilio(['9725259773'], 'Test', audio_url=audio)
+        self.assertTrue(ok)
+        client.calls.create.assert_called_once()
+        xml = parse_qs(urlsplit(client.calls.create.call_args.kwargs['url']).query)['twiml'][0]
+        root = ElementTree.fromstring(xml)
+        self.assertEqual([node.tag for node in root], ['Gather', 'Play', 'Say', 'Hangup'])
+        self.assertEqual(root[1].text, audio)
+        playback = ElementTree.fromstring(parse_qs(urlsplit(root[0].get('action')).query)['twiml'][0])
+        self.assertEqual([node.tag for node in playback], ['Play', 'Say', 'Hangup'])
+        self.assertEqual(playback[0].text, audio)
+        self.assertIsNone(playback.find('Gather'))
 
     def test_template_only_trial_does_not_substitute_sms(self):
         config = settings()
@@ -63,12 +132,12 @@ class TwilioTests(unittest.TestCase):
             self.assertTrue(send_sos_call_twilio(['9725259773'], 'A & B')[0])
         request = client.calls.create.call_args.kwargs
         self.assertNotIn('twiml', request)
+        self.assertNotIn('method', request)
         url = urlsplit(request['url'])
-        self.assertEqual(url.hostname, 'twimlets.com')
-        xml = parse_qs(url.query)['Twiml'][0]
-        self.assertIn('A &amp; B', xml)
+        self.assertEqual(parse_qs(url.query)['twiml'][0], '<Response><Say voice=\'alice\' language=\'en-US\'>Emergency Alert. A &amp; B has requested urgent help through LifeOS. Please contact them immediately.</Say><Hangup/></Response>')
         self.assertNotIn(config.TWILIO_AUTH_TOKEN, request['url'])
-        self.assertIn('delivery is not guaranteed', xml)
+        self.assertNotIn('Gather', parse_qs(url.query)['twiml'][0])
+        self.assertNotIn('SMS', parse_qs(url.query)['twiml'][0])
 
     def test_trial_denial_is_not_misreported_as_bad_credentials(self):
         for status, code, reason in [(400, 0, 'Invalid or disallowed parameters provided - trial accounts have limited parameter access'), (401, 20003, 'This feature is not available on a Trial account. Please upgrade your account')]:

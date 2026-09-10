@@ -58,6 +58,20 @@ const AppRoutes = () => {
   const isRoot = location.pathname === '/';
   
   const [showLogoutMsg, setShowLogoutMsg] = useState(false);
+  const [authInitialized, setAuthInitialized] = useState(false);
+
+  useEffect(() => {
+    import('./utils/api').then(({ default: API }) => {
+      API.initAuth().then(() => {
+        setAuthInitialized(true);
+        // If they are on the root and have a token, optionally auto-redirect to /app
+        // But let's leave the explicit redirect to LandingPage logic or handle it here
+        if (window.location.pathname === '/' && API.isAuthenticated()) {
+          // navigate('/app'); // Done in LandingPage if preferred, or here
+        }
+      });
+    });
+  }, []);
 
   useEffect(() => {
     if (isMaintenance && !isAdminRoute) {
@@ -84,31 +98,48 @@ const AppRoutes = () => {
   // OneSignal Push Notifications Setup
   useEffect(() => {
     const initOneSignal = async () => {
-      if (Capacitor.isNativePlatform()) return;
-      try {
-        const OneSignal = (await import('react-onesignal')).default;
-        await OneSignal.init({
-          appId: "66baddfc-24d8-4b43-a3dc-2d4d9f297f54",
-          notifyButton: {
-            enable: false,
-          },
-          allowLocalhostAsSecureOrigin: true,
-        });
+      const appId = "66baddfc-24d8-4b43-a3dc-2d4d9f297f54";
+      
+      if (Capacitor.isNativePlatform()) {
+        try {
+          // Wait for device to be ready
+          if (window.plugins && window.plugins.OneSignal) {
+            const OneSignal = window.plugins.OneSignal;
+            
+            // Set your OneSignal AppId
+            OneSignal.setAppId(appId);
+            
+            // Prompt for push on Android 13+ / iOS
+            OneSignal.promptForPushNotificationsWithUserResponse((accepted) => {
+              console.log("User accepted notifications: " + accepted);
+            });
+            
+            // Set notification handler
+            OneSignal.setNotificationOpenedHandler((jsonData) => {
+              console.log('notificationOpenedCallback: ' + JSON.stringify(jsonData));
+            });
 
-        const token = localStorage.getItem('token');
-        if (token) {
-          OneSignal.Slidedown.promptPush();
-          // The OneSignal Player ID (device token)
-          const playerId = await OneSignal.User.PushSubscription.id;
-          if (playerId) {
-            import('./utils/api').then(({ default: API }) => {
-              API.put('/users/me/device-token', { token: playerId })
-                .catch(err => console.error("Failed to register device token", err));
+            // Get device token
+            OneSignal.getDeviceState((state) => {
+              if (state && state.userId) {
+                const playerId = state.userId; // This is the OneSignal player ID for native
+                const token = localStorage.getItem('token');
+                if (token && playerId) {
+                  import('./utils/api').then(({ default: API }) => {
+                    API.put('/users/me/device-token', { token: playerId })
+                      .catch(err => console.error("Failed to register device token", err));
+                  });
+                }
+              }
             });
           }
+        } catch (err) {
+          console.error("Native OneSignal initialization failed", err);
         }
-      } catch (err) {
-        console.error("OneSignal initialization failed", err);
+      } else {
+        // Fallback for Web Push (PWA/Browser) - NOTE: react-onesignal was uninstalled
+        // but if reinstalled, it can be used here. For now, doing nothing on web.
+        console.log("Running in browser, skipping native push notifications.");
       }
     };
     initOneSignal();
@@ -120,6 +151,14 @@ const AppRoutes = () => {
   // If maintenance mode is active, not on an admin route, and not on root
   if (isMaintenance && !isAdminRoute && !isRoot) {
     return <MaintenanceScreen showLogoutMsg={showLogoutMsg} />;
+  }
+
+  if (!authInitialized) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
   }
 
   return (

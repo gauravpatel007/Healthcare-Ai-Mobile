@@ -25,11 +25,11 @@ const MedicalDisclaimer = () => {
         <div>
           <h4 className="text-sm font-bold text-amber-900 dark:text-amber-100 mb-1">Medical Disclaimer</h4>
           <p className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed pr-6">
-            The AI features in this platform are for informational purposes only and do not constitute professional medical advice, diagnosis, or treatment. Always consult a qualified healthcare provider for medical concerns. In an emergency, dial 112 or use the SOS feature immediately.
+            The AI features in this platform are for informational purposes only and do not constitute professional medical advice, diagnosis, or treatment. Always consult a qualified healthcare provider for medical concerns. In an emergency, dial 108 or use the SOS feature immediately.
           </p>
         </div>
       </div>
-      <button 
+      <button
         onClick={handleDismiss}
         className="absolute top-3 right-3 text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200 transition-colors p-1"
         aria-label="Dismiss disclaimer"

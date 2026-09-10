@@ -294,11 +294,63 @@ def send_sos_sms_twilio(phone_numbers: List[str], user_name: str, location_url: 
     except Exception as e:
         return False, provider_error(e)
 
+def send_sos_whatsapp_twilio(phone_numbers: List[str], user_name: str, location_url: Optional[str] = None) -> tuple[bool, str]:
+    """
+    Sends an SOS WhatsApp message via Twilio. Returns (success, message).
+    """
+    from app.utils.twilio_support import configuration_error, create_client, normalize_phone, provider_error
+    settings = get_settings()
+    
+    if error := configuration_error(settings):
+        return False, error
+        
+    if not phone_numbers:
+        return False, "No phone numbers provided"
+        
+    whatsapp_from = settings.TWILIO_WHATSAPP_NUMBER or settings.TWILIO_FROM_NUMBER
+    if not whatsapp_from.startswith("whatsapp:"):
+        whatsapp_from = f"whatsapp:{whatsapp_from}"
+        
+    try:
+        # pyrefly: ignore [missing-import]
+        client = create_client(settings)
+        
+        # Format to match Twilio's pre-approved template: "Your {{1}} code is {{2}}"
+        # This bypasses the WhatsApp 24-hour session requirement for testing.
+        text = f"Your Emergency SOS code is {user_name}. Location: {location_url}"
+            
+        success_count = 0
+        errors = []
+        for number in phone_numbers:
+            try:
+                formatted_number = normalize_phone(number)
+                whatsapp_to = f"whatsapp:{formatted_number}"
+                
+                message = client.messages.create(
+                    body=text,
+                    from_=whatsapp_from,
+                    to=whatsapp_to
+                )
+                logger.info(f"SOS WhatsApp sent to {whatsapp_to} (SID: {message.sid})")
+                success_count += 1
+            except Exception as inner_e:
+                err_msg = "WhatsApp: " + provider_error(inner_e)
+                logger.error(err_msg)
+                errors.append(err_msg)
+                if getattr(inner_e, "status", None) == 401 or getattr(inner_e, "code", None) == 20003:
+                    break
+                
+        if success_count > 0:
+            return True, f"WhatsApp requests accepted: {success_count}." + (f" Failed: {len(errors)}." if errors else "")
+        return False, " | ".join(errors)
+    except Exception as e:
+        return False, provider_error(e)
+
 def send_sos_call_twilio(phone_numbers: List[str], user_name: str, location_url: Optional[str] = None, audio_url: Optional[str] = None) -> tuple[bool, str]:
     """
     Initiates an automated voice call via Twilio. Returns (success, message).
     """
-    from app.utils.twilio_support import configuration_error, create_client, normalize_phone, provider_error, voice_instructions, audio_is_reachable
+    from app.utils.twilio_support import configuration_error, create_client, normalize_phone, provider_error, voice_instructions, recording_call_twiml, audio_url_problem, voice_url_problem, twiml_url
     settings = get_settings()
     
     if error := configuration_error(settings):
@@ -314,18 +366,22 @@ def send_sos_call_twilio(phone_numbers: List[str], user_name: str, location_url:
         from xml.sax.saxutils import escape
         user_name = escape(user_name)
         audio_warning = ""
-        if audio_url and not audio_is_reachable(audio_url):
+        if (settings.TWILIO_VOICE_USE_URL or audio_url):
+            try:
+                probe = '<Response><Hangup/></Response>'
+                if problem := voice_url_problem(twiml_url(settings.PUBLIC_API_URL, probe), probe):
+                    return False, problem
+            except ValueError:
+                return False, "Call not placed: PUBLIC_API_URL must be a reachable public server address."
+        if audio_url and (problem := audio_url_problem(audio_url)):
             audio_url = None
-            audio_warning = " Recording unavailable; used a spoken SOS instead."
+            audio_warning = " Recording unavailable; used a spoken SOS instead. " + problem
         spoken = f"Emergency Alert. {user_name} has requested urgent help through LifeOS. Please contact them immediately."
-        if location_url:
-            spoken += " A live Google Maps location has been sent via text message."
             
         if audio_url:
-            audio_url = escape(audio_url)
-            twiml_content = f"<Response><Gather numDigits='1' timeout='5'><Say voice='alice' language='en-US'>Emergency alert from {user_name}. Press any key to listen to their message.</Say></Gather><Play>{audio_url}</Play></Response>"
+            twiml_content = recording_call_twiml(settings.PUBLIC_API_URL, audio_url, spoken)
         else:
-            twiml_content = f"<Response><Say voice='alice' language='en-US'>{spoken}</Say></Response>"
+            twiml_content = f"<Response><Say voice='alice' language='en-US'>{spoken}</Say><Hangup/></Response>"
         
         success_count = 0
         errors = []
@@ -368,7 +424,7 @@ def send_organ_match_email(recipient_email: str, recipient_name: str, requester_
             f"Hello {recipient_name},\n\n"
             f"A potential match has been found! {requester_name} has initiated a match process for: {organ}.\n\n"
             f"Please log in to your LifeOS account to review the request and contact your primary healthcare provider.\n"
-            f"If you require immediate medical assistance, please contact the requester's emergency line at {emergency_contact or '112'}.\n\n"
+            f"If you require immediate medical assistance, please contact the requester's emergency line at {emergency_contact or '108'}.\n\n"
             f"Thank you for being a registered organ donor."
         )
         msg["Subject"] = f"LifeOS - Organ Match Request Initiated: {organ}"

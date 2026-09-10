@@ -3,7 +3,7 @@ LifeOS Backend — Emergency Schemas
 """
 
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class EmergencyContactCreate(BaseModel):
@@ -42,16 +42,22 @@ class EmergencyContactResponse(BaseModel):
 class SOSAlertRequest(BaseModel):
     latitude: float | None = Field(None, ge=-90, le=90)
     longitude: float | None = Field(None, ge=-180, le=180)
-    accuracy: float | None = None
+    accuracy: float | None = Field(None, ge=0, allow_inf_nan=False)
     is_silent: bool = False
     session_id: str | None = None
+
+    @model_validator(mode="after")
+    def location_pair(self):
+        if (self.latitude is None) != (self.longitude is None):
+            raise ValueError("Latitude and longitude must be supplied together")
+        return self
 
 
 class SOSAlertResponse(BaseModel):
     success: bool = True
     message: str = "SOS Emergency Alert Activated"
     actions: list[str] = Field(default_factory=list)
-    emergency_number: str = "112"
+    emergency_number: str = "108"
 
 
 class SOSAudioClipResponse(BaseModel):
@@ -61,6 +67,8 @@ class SOSAudioClipResponse(BaseModel):
     original_filename: str
     created_at: datetime
     updated_at: datetime
+    call_audio_ready: bool | None = None
+    call_audio_message: str | None = None
 
     model_config = {"from_attributes": True}
 

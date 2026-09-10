@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "change-this-to-a-random-secret-key-in-production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 365
     # --- AI Settings ---
     GROQ_API_KEY: str = ""
     GROQ_MODEL: str = "llama-3.3-70b-versatile"
@@ -61,12 +61,13 @@ class Settings(BaseSettings):
     TWILIO_ACCOUNT_SID: str = ""
     TWILIO_AUTH_TOKEN: str = ""
     TWILIO_FROM_NUMBER: str = ""
-    # Trial calls require a URL; Twilio's Echo Twimlet serves the voice XML.
+    # URL-mode calls fetch voice XML from this backend's public voice route.
     # URL contains voice text/audio URL, never credentials. Leave off for inline-capable accounts.
     TWILIO_VOICE_USE_URL: bool = False
     TWILIO_SMS_TEMPLATE_ONLY: bool = False
+    TWILIO_WHATSAPP_NUMBER: str = ""
 
-    @field_validator("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM_NUMBER")
+    @field_validator("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM_NUMBER", "TWILIO_WHATSAPP_NUMBER")
     @classmethod
     def strip_twilio_settings(cls, value: str) -> str:
         return value.strip()

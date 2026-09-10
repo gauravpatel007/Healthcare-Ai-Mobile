@@ -3,7 +3,7 @@ LifeOS Backend — Emergency Router
 Emergency contacts, SOS, QR health card, organ donor.
 """
 
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File, Request
 import os
 import shutil
 from app.config import get_settings
@@ -20,10 +20,24 @@ from app.schemas.emergency import (
     EmergencyContactCreate, EmergencyContactResponse, EmergencyContactUpdate,
     QRHealthData, SOSAlertResponse, SOSAlertRequest, OrganPreferencesUpdate, OrganSuitabilityRequest, OrganMatchRequest, SOSAudioClipResponse
 )
-from app.utils.email import send_sos_email, send_sos_sms_twilio, send_sos_call_twilio
+from app.utils.email import send_sos_email, send_sos_sms_twilio, send_sos_call_twilio, send_sos_whatsapp_twilio
 import asyncio
 
 router = APIRouter(prefix="/emergency", tags=["Emergency"])
+
+
+async def audio_clip_response(clip):
+    from app.utils.twilio_support import public_audio_url, audio_url_problem
+    settings = get_settings()
+    response = SOSAudioClipResponse.model_validate(clip)
+    if not os.path.isfile(os.path.join(settings.UPLOAD_DIR, clip.file_path)):
+        problem = "The saved recording file is missing from the server. Please select and upload the audio again."
+    else:
+        url = public_audio_url(settings.PUBLIC_API_URL, clip.file_path)
+        problem = await asyncio.to_thread(audio_url_problem, url)
+    response.call_audio_ready = problem is None
+    response.call_audio_message = problem or "Recording address is reachable. During the call, press any key once to play it."
+    return response
 
 
 @router.get("/contacts", response_model=list[EmergencyContactResponse])
@@ -106,9 +120,17 @@ async def trigger_sos(request: SOSAlertRequest, user_id: CurrentUserId, db: Asyn
         tasks = []
         if emails:
             tasks.append(asyncio.to_thread(send_sos_email, emails, user_name, location_url))
+        
+        if profile and profile.push_device_token:
+            from app.utils.push import send_push_notification
+            tasks.append(asyncio.to_thread(
+                send_push_notification, 
+                profile.push_device_token, 
+                "🚨 SOS Activated", 
+                "Your emergency contacts have been notified with your location."
+            ))
+
         if phone_numbers:
-            tasks.append(asyncio.to_thread(send_sos_sms_twilio, phone_numbers, user_name, location_url))
-            
             # Fetch Custom Audio Clip URL
             audio_url = None
             clip_r = await db.execute(select(SOSAudioClip).where(SOSAudioClip.user_id == user_id))
@@ -121,6 +143,7 @@ async def trigger_sos(request: SOSAlertRequest, user_id: CurrentUserId, db: Asyn
                     logger.warning("Custom SOS audio has no public origin; using spoken alert")
                 
             tasks.append(asyncio.to_thread(send_sos_call_twilio, phone_numbers, user_name, location_url, audio_url))
+            tasks.append(asyncio.to_thread(send_sos_whatsapp_twilio, phone_numbers, user_name, location_url))
         if tasks:
             try:
                 results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -224,7 +247,7 @@ async def upload_sos_audio(
         
     await db.commit()
     await db.refresh(clip)
-    return clip
+    return await audio_clip_response(clip)
 
 
 @router.get("/sos-audio", response_model=SOSAudioClipResponse)
@@ -234,7 +257,7 @@ async def get_sos_audio(user_id: CurrentUserId, db: AsyncSession = Depends(get_d
     clip = result.scalar_one_or_none()
     if not clip:
         raise HTTPException(404, "No SOS audio clip found.")
-    return clip
+    return await audio_clip_response(clip)
 
 
 @router.delete("/sos-audio")
@@ -253,6 +276,22 @@ async def delete_sos_audio(user_id: CurrentUserId, db: AsyncSession = Depends(ge
     await db.delete(clip)
     await db.commit()
     return {"success": True, "message": "Audio clip deleted successfully"}
+
+
+@router.api_route("/echo-twiml", methods=["GET", "POST"])
+async def echo_twiml(twiml: str, request: Request):
+    """Echo endpoint for Twilio TwiML playback logic without external dependencies."""
+    from fastapi import Response
+    from app.utils.twilio_support import render_voice_twiml
+    digits = request.query_params.get('Digits')
+    if request.method == 'POST':
+        form = await request.form()
+        digits = form.get('Digits') or digits
+    try:
+        content = render_voice_twiml(twiml, digits)
+    except ValueError:
+        raise HTTPException(400, 'Invalid voice instructions')
+    return Response(content=content, media_type="application/xml", headers={'Cache-Control': 'no-store'})
 
 
 # Active SOS sessions for live tracking

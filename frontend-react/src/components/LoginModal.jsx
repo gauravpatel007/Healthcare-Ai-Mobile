@@ -414,7 +414,12 @@ const LoginModal = ({ show, onClose }) => {
           window.faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
         ]);
         
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        let stream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+        } catch (e) {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        }
         streamRef.current = stream;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
@@ -863,7 +868,7 @@ const LoginModal = ({ show, onClose }) => {
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
                   </div>
                 )}
-                <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)', WebkitTransform: 'scaleX(-1)' }} />
               </div>
             ) : null}
 

@@ -6,6 +6,51 @@ const BASE_URL = (import.meta.env.VITE_API_URL || '/api/v1').trim().replace(/\/$
 const TOKEN_KEY = 'lifeos_access_token';
 const REFRESH_KEY = 'lifeos_refresh_token';
 
+// Safe native preferences helper that avoids compile-time import dependency on @capacitor/preferences
+const NativePreferences = {
+  async get(key) {
+    try {
+      if (Capacitor.isNativePlatform() && Capacitor.Plugins?.Preferences) {
+        const res = await Capacitor.Plugins.Preferences.get({ key });
+        return res?.value ?? null;
+      }
+    } catch (e) {
+      console.warn('NativePreferences.get error', e);
+    }
+    return null;
+  },
+  async set(key, value) {
+    try {
+      if (Capacitor.isNativePlatform() && Capacitor.Plugins?.Preferences) {
+        await Capacitor.Plugins.Preferences.set({ key, value });
+      }
+    } catch (e) {
+      console.warn('NativePreferences.set error', e);
+    }
+  },
+  async remove(key) {
+    try {
+      if (Capacitor.isNativePlatform() && Capacitor.Plugins?.Preferences) {
+        await Capacitor.Plugins.Preferences.remove({ key });
+      }
+    } catch (e) {
+      console.warn('NativePreferences.remove error', e);
+    }
+  }
+};
+
+let isRefreshing = false;
+let refreshSubscribers = [];
+
+function subscribeTokenRefresh(cb) {
+  refreshSubscribers.push(cb);
+}
+
+function onRefreshed(success) {
+  refreshSubscribers.forEach(cb => cb(success));
+  refreshSubscribers = [];
+}
+
 const API = {
   async supportsReminders() {
     // Public schema check avoids requesting routes absent on an older deployment.
@@ -19,22 +64,51 @@ const API = {
       return Boolean(schema.paths?.['/api/v1/reminders']);
     } catch { return true; }
   },
+  async initAuth() {
+    try {
+      const nativeAccessToken = await NativePreferences.get(TOKEN_KEY);
+      const nativeRefreshToken = await NativePreferences.get(REFRESH_KEY);
+      const nativeAuth = await NativePreferences.get('lifeos_is_authenticated');
+
+      if (nativeAccessToken) {
+        localStorage.setItem(TOKEN_KEY, nativeAccessToken);
+      }
+      if (nativeRefreshToken) {
+        localStorage.setItem(REFRESH_KEY, nativeRefreshToken);
+      }
+      if (nativeAuth === 'true') {
+        localStorage.setItem('lifeos_is_authenticated', 'true');
+      }
+      return true;
+    } catch (e) {
+      console.warn("Failed to restore native preferences", e);
+      return false;
+    }
+  },
   // Token management
   getToken() {
     return localStorage.getItem(TOKEN_KEY);
   },
   setToken(token) {
-    if (token && token !== 'cookie') localStorage.setItem(TOKEN_KEY, token);
+    if (token && token !== 'cookie') {
+      localStorage.setItem(TOKEN_KEY, token);
+      NativePreferences.set(TOKEN_KEY, token);
+    }
   },
   getRefreshToken() {
     return localStorage.getItem(REFRESH_KEY);
   },
   setRefreshToken(token) {
-    if (token && token !== 'cookie') localStorage.setItem(REFRESH_KEY, token);
+    if (token && token !== 'cookie') {
+      localStorage.setItem(REFRESH_KEY, token);
+      NativePreferences.set(REFRESH_KEY, token);
+    }
   },
   clearTokens() {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(REFRESH_KEY);
+    NativePreferences.remove(TOKEN_KEY);
+    NativePreferences.remove(REFRESH_KEY);
   },
 
   getWebSocketUrl(path) {
@@ -58,8 +132,13 @@ const API = {
   },
 
   setAuthenticated(status) {
-    if (status) localStorage.setItem('lifeos_is_authenticated', 'true');
-    else localStorage.removeItem('lifeos_is_authenticated');
+    if (status) {
+      localStorage.setItem('lifeos_is_authenticated', 'true');
+      NativePreferences.set('lifeos_is_authenticated', 'true');
+    } else {
+      localStorage.removeItem('lifeos_is_authenticated');
+      NativePreferences.remove('lifeos_is_authenticated');
+    }
   },
 
   async logout(emailToRemove = null) {
@@ -193,7 +272,18 @@ const API = {
       if (response.status === 401 && !options._retry) {
         if (!url.includes('/auth/login') && !url.includes('/auth/register') && !url.includes('/auth/face-login') && !url.includes('/auth/google') && !url.includes('/auth/login/2fa')) {
           config._retry = true;
-          let refreshed = await this.refreshToken();
+          
+          if (!isRefreshing) {
+            isRefreshing = true;
+            this.refreshToken().then(refreshed => {
+              isRefreshing = false;
+              onRefreshed(refreshed);
+            });
+          }
+          
+          const refreshed = await new Promise(resolve => {
+            subscribeTokenRefresh(resolve);
+          });
 
           if (refreshed) {
             config.headers = { ...config.headers, ...this._authHeaders() };

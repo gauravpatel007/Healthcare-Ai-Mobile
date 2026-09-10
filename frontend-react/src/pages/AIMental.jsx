@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import API from '../utils/api';
+import { startSpeechRecognition } from '../utils/voice';
 import { useLang } from '../contexts/LangContext';
 import { 
   SmilePlus, 
@@ -139,44 +140,34 @@ const AIMental = ({ voiceAction, onVoiceActionConsumed }) => {
     }
   };
 
-  const handleVoiceRecord = () => {
+  const handleVoiceRecord = async () => {
     if (isRecording) {
-      if (recognitionRef.current) {
+      if (recognitionRef.current && recognitionRef.current.stop) {
         recognitionRef.current.stop();
       }
       setIsRecording(false);
       return;
     }
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert("Your browser doesn't support voice recording.");
-      return;
-    }
+    setIsRecording(true);
+    const recognitionLanguage = lang === 'hi' ? 'hi-IN' : (lang === 'gu' ? 'gu-IN' : 'en-US');
 
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = lang === 'hi' ? 'hi-IN' : (lang === 'gu' ? 'gu-IN' : 'en-US');
-
-    recognition.onresult = (event) => {
-      let finalTranscript = '';
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript;
+    const speech = await startSpeechRecognition({
+      language: recognitionLanguage,
+      onResult: (transcript) => {
+        if (transcript) {
+          setJournalEntry(prev => (prev ? prev + ' ' + transcript : transcript));
         }
-      }
-      if (finalTranscript) {
-        setJournalEntry(prev => (prev ? prev + ' ' + finalTranscript : finalTranscript));
-      }
-    };
+      },
+      onEnd: () => setIsRecording(false),
+      onError: () => setIsRecording(false)
+    });
 
-    recognition.onend = () => {
+    if (speech) {
+      recognitionRef.current = speech;
+    } else {
       setIsRecording(false);
-    };
-
-    recognition.start();
-    recognitionRef.current = recognition;
+    }
     setIsRecording(true);
   };
 

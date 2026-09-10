@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import API from '../utils/api';
+import { startSpeechRecognition } from '../utils/voice';
 import { useLang } from '../contexts/LangContext';
 import { 
   Stethoscope, 
@@ -182,32 +183,26 @@ const AISymptom = ({ voiceAction, onVoiceActionConsumed }) => {
     }
   };
 
-  const startVoiceRecognition = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert('Voice recognition is not supported in your browser.');
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'en-US';
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-
-    recognition.onstart = () => setIsListening(true);
-    recognition.onresult = (event) => {
-      const speechResult = event.results[0][0].transcript;
-      setInputValue(speechResult);
-      setTimeout(() => handleAddSymptom(speechResult), 300);
-    };
-    recognition.onerror = (event) => {
-      console.error('Speech recognition error', event.error);
-      alert('Could not recognize voice. Try again.');
+  const startVoiceRecognition = async () => {
+    setIsListening(true);
+    const recognitionLanguage = lang === 'hi' ? 'hi-IN' : (lang === 'gu' ? 'gu-IN' : 'en-US');
+    
+    const speech = await startSpeechRecognition({
+      language: recognitionLanguage,
+      onResult: (transcript) => {
+        setInputValue(transcript);
+        setTimeout(() => handleAddSymptom(transcript), 300);
+        // After recognizing, we stop listening.
+        if (speech && speech.stop) speech.stop();
+        setIsListening(false);
+      },
+      onEnd: () => setIsListening(false),
+      onError: () => setIsListening(false)
+    });
+    
+    if (!speech) {
       setIsListening(false);
-    };
-    recognition.onend = () => setIsListening(false);
-
-    recognition.start();
+    }
   };
 
   const analyze = async (overrideSymptoms = null) => {
