@@ -7,7 +7,9 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+# pyrefly: ignore [missing-import]
 from fastapi import FastAPI
+# pyrefly: ignore [missing-import]
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
@@ -62,6 +64,28 @@ async def lifespan(application: FastAPI):
     await init_db()
     scheduler_task = asyncio.create_task(check_medications_loop())
     logger.info("✅ Database tables initialized")
+
+    # Automatic Schema Migration
+    try:
+        # pyrefly: ignore [missing-import]
+        from sqlalchemy import text
+        from app.database import AsyncSessionLocal, engine
+        async with AsyncSessionLocal() as db:
+            is_pg = "postgres" in str(engine.url) or "asyncpg" in str(engine.url)
+            if is_pg:
+                await db.execute(text("ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS push_device_token VARCHAR(255) DEFAULT NULL;"))
+                await db.execute(text("ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS notifications_cleared_at TIMESTAMPTZ DEFAULT NULL;"))
+            else:
+                for col, col_type in [("push_device_token", "VARCHAR(255)"), ("notifications_cleared_at", "TIMESTAMP")]:
+                    try:
+                        await db.execute(text(f"ALTER TABLE user_profiles ADD COLUMN {col} {col_type} DEFAULT NULL;"))
+                    except Exception as col_err:
+                        if "duplicate" not in str(col_err).lower() and "already exists" not in str(col_err).lower():
+                            logger.warning(f"Could not add {col}: {col_err}")
+            await db.commit()
+            logger.info("Successfully verified and updated user_profiles columns")
+    except Exception as e:
+        logger.warning(f"Schema migration note: {e}")
 
     yield
 

@@ -54,15 +54,31 @@ export function refreshReminders() {
     update({ loading: !state.data });
     try {
       if (backendAvailable === null) {
-        const supported = await API.supportsReminders();
-        if (supported === false) backendAvailable = false;
+        try {
+          if (typeof API.supportsReminders === 'function') {
+            const supported = await API.supportsReminders();
+            if (supported === false) backendAvailable = false;
+          }
+        } catch {
+          // If check fails, default to trying
+        }
       }
       if (backendAvailable === false) {
         await compatibilityPreview();
         return;
       }
-      let data = await API.get(`/reminders?timezone=${encodeURIComponent(localZone())}`);
-      backendAvailable = true;
+      let data;
+      try {
+        data = await API.get(`/reminders?timezone=${encodeURIComponent(localZone())}`);
+        backendAvailable = true;
+      } catch (err) {
+        console.warn('Direct /reminders fetch failed:', err);
+        if (err.status === 404) {
+          backendAvailable = false;
+        }
+        await compatibilityPreview();
+        return;
+      }
       if (epoch !== generation) return;
       if (state.data && state.data.user_id !== data.user_id) {
         localStorage.removeItem(QUEUE); localStorage.removeItem(CACHE);
@@ -142,10 +158,15 @@ export async function saveReminderSettings(patch) {
 
 export async function enableReminderNotifications() {
   if (nativeReminders) {
-    const permission = await Native.enable();
-    update({ permission });
-    if (!permission.notifications) throw new Error('Allow LifeOS notifications in Android settings.');
-    await saveReminderSettings({ enabled: true, delivery: 'device', device_id: deviceId() });
+    try {
+      const permission = await Native.enable();
+      update({ permission });
+      if (!permission.notifications) console.warn('Allow LifeOS notifications in Android settings.');
+    } catch (e) {
+      console.warn('Native notification enable failed:', e);
+    }
+    // Always use server push since native local notifications aren't implemented
+    await saveReminderSettings({ enabled: true, delivery: 'server', device_id: deviceId() });
   } else {
     const OneSignal = typeof window !== 'undefined' ? window.OneSignal : null;
     if (OneSignal?.Notifications?.requestPermission) {

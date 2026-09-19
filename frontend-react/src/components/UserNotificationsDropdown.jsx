@@ -15,9 +15,23 @@ const UserNotificationsDropdown = () => {
 
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 60000); // Poll every minute
+    
+    // Poll more aggressively, and hook into visibility/focus
+    const interval = setInterval(fetchNotifications, 15000); 
+    const handleVisibilityFocus = () => {
+      if (document.visibilityState !== 'hidden') fetchNotifications();
+    };
+    
     window.addEventListener('medicine-reminders-updated', fetchNotifications);
-    return () => { clearInterval(interval); window.removeEventListener('medicine-reminders-updated', fetchNotifications); };
+    window.addEventListener('focus', handleVisibilityFocus);
+    document.addEventListener('visibilitychange', handleVisibilityFocus);
+    
+    return () => { 
+      clearInterval(interval); 
+      window.removeEventListener('medicine-reminders-updated', fetchNotifications);
+      window.removeEventListener('focus', handleVisibilityFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityFocus);
+    };
   }, []);
 
   useEffect(() => {
@@ -37,8 +51,9 @@ const UserNotificationsDropdown = () => {
       const data = results.flatMap(r => r.status === 'fulfilled' ? (r.value || []) : [])
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
       if (data) {
-        const readIds = JSON.parse(localStorage.getItem('read_notifications') || '[]');
-        const unreadData = data.filter(n => n.href ? !n.read : !readIds.includes(n.id));
+        // Because the backend now completely filters out old notifications based on the cleared timestamp,
+        // we can confidently trust the unread status returned by the server.
+        const unreadData = data.filter(n => (n.href ? !n.read : true));
         setNotifications(unreadData);
         setUnreadCount(unreadData.length);
       }
@@ -53,6 +68,10 @@ const UserNotificationsDropdown = () => {
     setClearing(true);
 
     try {
+      // 1. Tell backend to mark ALL notifications as cleared for this user (updates profile.notifications_cleared_at)
+      await API.clearUserNotifications();
+
+      // 2. Also optionally set medicine reminders to read-all as a fallback for existing backend state
       if (reminderApiAvailable()) {
         await Promise.allSettled([
           API.post('/reminders/notifications/read-all', {}),
@@ -60,14 +79,8 @@ const UserNotificationsDropdown = () => {
         ]);
       }
     } catch (err) {
-      console.error('Failed to clear reminder notifications on server:', err);
+      console.error('Failed to clear notifications on server:', err);
     }
-
-    // Mark all notifications as read in localStorage
-    const readIds = JSON.parse(localStorage.getItem('read_notifications') || '[]');
-    const allIds = notifications.map(n => n.id);
-    const updated = Array.from(new Set([...readIds, ...allIds]));
-    localStorage.setItem('read_notifications', JSON.stringify(updated));
 
     setNotifications([]);
     setUnreadCount(0);
@@ -85,12 +98,6 @@ const UserNotificationsDropdown = () => {
     }
     setNotifications(prev => prev.filter(n => n.id !== id));
     setUnreadCount(prev => prev - 1);
-
-    const readIds = JSON.parse(localStorage.getItem('read_notifications') || '[]');
-    if (!readIds.includes(id)) {
-      readIds.push(id);
-      localStorage.setItem('read_notifications', JSON.stringify(readIds));
-    }
   };
 
   return (
@@ -108,9 +115,14 @@ const UserNotificationsDropdown = () => {
         <Bell size={20} strokeWidth={2} />
         {unreadCount > 0 && (
           <span style={{
-            position: 'absolute', top: '8px', right: '8px', width: '8px', height: '8px',
-            background: 'var(--danger)', borderRadius: '50%'
-          }}></span>
+            position: 'absolute', top: '2px', right: '2px',
+            background: '#ef4444', color: 'white', borderRadius: '10px',
+            fontSize: '0.65rem', fontWeight: 'bold', minWidth: '16px', height: '16px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px',
+            border: '1.5px solid var(--bg-card)'
+          }}>
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </span>
         )}
       </button>
 
@@ -159,8 +171,8 @@ const UserNotificationsDropdown = () => {
                 </button>
               )}
               {unreadCount > 0 && (
-                <span className="badge" style={{ background: 'var(--primary-light)', color: 'var(--primary)', fontSize: '0.75rem' }}>
-                  {unreadCount} New
+                <span className="badge" style={{ background: '#0ea5e9', color: '#ffffff', fontSize: '0.75rem', padding: '2px 8px', borderRadius: '12px', fontWeight: 'bold' }}>
+                  {unreadCount} NEW
                 </span>
               )}
             </div>

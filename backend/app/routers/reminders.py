@@ -183,8 +183,15 @@ async def refill(medicine_id: str, data: RefillInput, user_id: CurrentUserId, db
 
 @router.get("/notifications")
 async def notifications(user_id: CurrentUserId, db: AsyncSession = Depends(get_db)):
-    return (await db.execute(select(ReminderNotice).where(ReminderNotice.user_id == user_id,
-            ReminderNotice.read == False).order_by(ReminderNotice.created_at.desc()).limit(100))).scalars().all()
+    from app.models.user import UserProfile
+    profile = (await db.execute(select(UserProfile).where(UserProfile.user_id == user_id))).scalar_one_or_none()
+    
+    query = select(ReminderNotice).where(ReminderNotice.user_id == user_id, ReminderNotice.read == False)
+    
+    if profile and profile.notifications_cleared_at:
+        query = query.where(ReminderNotice.created_at > profile.notifications_cleared_at)
+        
+    return (await db.execute(query.order_by(ReminderNotice.created_at.desc()).limit(100))).scalars().all()
 
 
 @router.post("/notifications/{notice_id}/read")

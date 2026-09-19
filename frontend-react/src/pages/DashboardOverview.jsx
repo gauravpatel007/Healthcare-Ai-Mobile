@@ -84,7 +84,7 @@ const DashboardOverview = ({ currentUser, voiceAction, onVoiceActionConsumed }) 
   const [savingParam, setSavingParam] = useState(false);
 
   // Medicine reminder states
-  const { data: reminderData } = useReminders();
+  const { data: reminderData, loading: reminderLoading, error: reminderError } = useReminders();
   const [dialog, setDialog] = useState(null);
   const [reason, setReason] = useState('');
   const [quantity, setQuantity] = useState(30);
@@ -719,6 +719,7 @@ const DashboardOverview = ({ currentUser, voiceAction, onVoiceActionConsumed }) 
               </div>
               <div className="space-y-4 pr-2">
                 {(() => {
+                  if (reminderError) return <p className="text-xs font-medium text-red-500 py-2">Backend unavailable. Please ensure the server is running.</p>;
                   if (!reminderData || !reminderData.doses) return <p className="text-xs font-medium text-gray-400 py-2">Loading...</p>;
                   const s = reminderData.settings;
                   const today = new Intl.DateTimeFormat('en-CA', { timeZone: s.timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());

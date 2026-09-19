@@ -6,6 +6,7 @@ import { LangProvider } from './contexts/LangContext'
 import { AlertTriangle } from 'lucide-react'
 import { Toaster } from 'react-hot-toast'
 import { Capacitor } from '@capacitor/core'
+import OneSignal from 'onesignal-cordova-plugin'
 import { startReminderNavigation } from './utils/reminders'
 
 // Lazy-loaded pages — each becomes a separate JS chunk loaded on demand
@@ -111,35 +112,38 @@ const AppRoutes = () => {
       
       if (Capacitor.isNativePlatform()) {
         try {
-          // Wait for device to be ready
-          if (window.plugins && window.plugins.OneSignal) {
-            const OneSignal = window.plugins.OneSignal;
-            
-            // Set your OneSignal AppId
-            OneSignal.setAppId(appId);
-            
-            // Prompt for push on Android 13+ / iOS
-            OneSignal.promptForPushNotificationsWithUserResponse((accepted) => {
-              console.log("User accepted notifications: " + accepted);
-            });
-            
-            // Set notification handler
-            OneSignal.setNotificationOpenedHandler((jsonData) => {
-              console.log('notificationOpenedCallback: ' + JSON.stringify(jsonData));
-            });
+          // Initialize OneSignal (v5 SDK API)
+          OneSignal.initialize(appId);
+          
+          // Request push notification permission
+          OneSignal.Notifications.requestPermission(true).then((accepted) => {
+            console.log("User accepted notifications: " + accepted);
+          });
+          
+          // Set notification handler
+          OneSignal.Notifications.addEventListener('click', (event) => {
+            console.log('notificationOpenedCallback: ' + JSON.stringify(event));
+          });
 
-            // Get device token
-            OneSignal.getDeviceState((state) => {
-              if (state && state.userId) {
-                const playerId = state.userId; // This is the OneSignal player ID for native
-                const token = localStorage.getItem('token');
-                if (token && playerId) {
-                  import('./utils/api').then(({ default: API }) => {
-                    API.put('/users/me/device-token', { token: playerId })
-                      .catch(err => console.error("Failed to register device token", err));
-                  });
-                }
-              }
+          // Helper function to register token
+          const registerToken = (playerId) => {
+            if (!playerId) return;
+            const token = localStorage.getItem('token');
+            if (token) {
+              import('./utils/api').then(({ default: API }) => {
+                API.put('/users/me/device-token', { token: playerId })
+                  .catch(err => console.error("Failed to register device token", err));
+              });
+            }
+          };
+
+          // Try to register token immediately on startup (for returning users)
+          if (OneSignal.User.pushSubscription.id) {
+            registerToken(OneSignal.User.pushSubscription.id);
+          } else {
+            // Also listen for changes (when user first grants permission, the ID will populate async)
+            OneSignal.User.pushSubscription.addEventListener('change', (subscription) => {
+              registerToken(subscription.current.id);
             });
           }
         } catch (err) {

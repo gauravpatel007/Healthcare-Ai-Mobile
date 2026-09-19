@@ -303,6 +303,22 @@ async def update_device_token(
     
     return {"success": True, "message": "Device token registered"}
 
+@router.post("/me/notifications/clear")
+async def clear_notifications(user_id: CurrentUserId, db: AsyncSession = Depends(get_db)):
+    """Mark all notifications as cleared for the user."""
+    from datetime import datetime, timezone
+    
+    result = await db.execute(select(UserProfile).where(UserProfile.user_id == user_id))
+    profile = result.scalar_one_or_none()
+    
+    if profile:
+        profile.notifications_cleared_at = datetime.now(timezone.utc)
+        await db.commit()
+        return {"success": True, "cleared_at": profile.notifications_cleared_at.isoformat()}
+    
+    from app.exceptions import NotFoundException
+    raise NotFoundException("Profile")
+
 @router.post("/me/test-push")
 async def test_push_notification(
     user_id: CurrentUserId, db: AsyncSession = Depends(get_db)

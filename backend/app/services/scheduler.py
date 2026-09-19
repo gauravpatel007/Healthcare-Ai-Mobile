@@ -32,7 +32,7 @@ async def check_and_send_medication_reminders():
                 await refill_notices(db, settings, meds)
                 now = datetime.now(timezone.utc)
                 profile = (await db.execute(select(UserProfile).where(UserProfile.user_id == user_id))).scalar_one_or_none()
-                if settings.enabled and settings.delivery == "server" and profile and profile.push_device_token:
+                if settings.enabled and profile and profile.push_device_token:
                     notices = (await db.execute(select(ReminderNotice).where(ReminderNotice.user_id == user_id,
                         ReminderNotice.id.like("refill:%"), ReminderNotice.push_sent == False,
                         ReminderNotice.push_attempts < 3))).scalars().all()
@@ -48,7 +48,7 @@ async def check_and_send_medication_reminders():
                     if not await db.get(ReminderNotice, notice_id):
                         db.add(ReminderNotice(id=notice_id, user_id=user_id, title=f"Medicine: {dose.name}",
                             message=f"{dose.dosage} · Scheduled {dose.local_time} ({dose.timezone}). Record your dose in Reminders."))
-                    if (not settings.enabled or settings.delivery == "device" or dose.notified_at or
+                    if (not settings.enabled or dose.notified_at or
                             dose.push_attempts >= 3 or now > due + timedelta(minutes=settings.grace_minutes)):
                         continue
                     if profile and profile.push_device_token:

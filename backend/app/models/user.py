@@ -2,7 +2,9 @@
 LifeOS Backend — User & Profile Models
 """
 
+# pyrefly: ignore [missing-import]
 from sqlalchemy import Boolean, Enum as SAEnum, ForeignKey, Integer, String, Text, DateTime, JSON, func
+# pyrefly: ignore [missing-import]
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 
@@ -91,6 +93,7 @@ class UserProfile(Base, TimestampMixin):
     fitbit_access_token: Mapped[str | None] = mapped_column(Text, nullable=True)
     fitbit_refresh_token: Mapped[str | None] = mapped_column(Text, nullable=True)
     push_device_token: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    notifications_cleared_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="profile")

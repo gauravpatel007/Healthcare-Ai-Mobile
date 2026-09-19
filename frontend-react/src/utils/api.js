@@ -387,6 +387,14 @@ const API = {
     return this.get('/notifications');
   },
 
+  clearUserNotifications() {
+    return this.post('/users/me/notifications/clear', {});
+  },
+
+  async supportsReminders() {
+    return true;
+  },
+
   // User Feedback
   submitFeedback(data) {
     return this.post('/feedback', data);
