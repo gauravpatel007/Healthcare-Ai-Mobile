@@ -9,7 +9,7 @@ Frontend :
 ```bash
 cd frontend-react
 npm install
-npm run dev
+npm run dev 
 ```
 Backend :
 ```bash

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import API from '../utils/api';
+import { cachedGet, invalidateCache } from '../utils/apiCache';
 import { useLang } from '../contexts/LangContext';
 import { toast } from 'react-hot-toast';
 import { 
@@ -87,8 +88,8 @@ const Appointments = ({ voiceAction, onVoiceActionConsumed }) => {
   const fetchData = async () => {
     try {
       const [apts, suggs] = await Promise.all([
-        API.get('/appointments'),
-        API.get('/appointments/suggestions')
+        cachedGet(API, '/appointments'),
+        cachedGet(API, '/appointments/suggestions')
       ]);
       setAppointments(apts || []);
       setSuggestions(suggs || []);
@@ -177,6 +178,7 @@ const Appointments = ({ voiceAction, onVoiceActionConsumed }) => {
     try {
       const added = await API.post('/appointments', { ...newApt, status: 'upcoming' });
       setAppointments([...appointments, added]);
+      invalidateCache('/appointments');
       setShowForm(false);
       setNewApt({ doctor: '', specialty: 'General Physician', hospital: '', date: '', time: '10:00', notes: '' });
       toast.success(t('Appointment added successfully'));
@@ -190,6 +192,7 @@ const Appointments = ({ voiceAction, onVoiceActionConsumed }) => {
     try {
       await API.put(`/appointments/${id}`, { status: 'completed' });
       setAppointments(appointments.map(a => a.id === id ? { ...a, status: 'completed' } : a));
+      invalidateCache('/appointments');
       toast.success(t('Appointment marked as completed'));
     } catch (e) {
       toast.error(t('Failed to update status'));
@@ -201,6 +204,7 @@ const Appointments = ({ voiceAction, onVoiceActionConsumed }) => {
       try {
         await API.delete(`/appointments/${id}`);
         setAppointments(appointments.filter(a => a.id !== id));
+        invalidateCache('/appointments');
         toast.success(t('Appointment deleted'));
       } catch (e) {
         toast.error(t('Failed to delete'));
@@ -240,6 +244,7 @@ const Appointments = ({ voiceAction, onVoiceActionConsumed }) => {
     try {
       const updatedApt = await API.post(`/appointments/${prepModal.aptId}/prep`, { symptoms: prepSymptoms, language: 'en' });
       setAppointments(appointments.map(a => a.id === updatedApt.id ? updatedApt : a));
+      invalidateCache('/appointments');
       setPrepModal({ isOpen: false, aptId: null });
       setPrepSymptoms('');
       toast.success(t('AI Preparation generated!'));

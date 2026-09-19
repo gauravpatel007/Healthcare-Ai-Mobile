@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import MedicineReminders from '../components/MedicineReminders';
 import { refreshReminders } from '../utils/reminders';
 import API from '../utils/api';
+import { cachedGet, invalidateCache } from '../utils/apiCache';
 import { useLang } from '../contexts/LangContext';
 import { toast } from 'react-hot-toast';
 import editIcon from '../../../Icons/edit sign.png';
@@ -213,8 +214,8 @@ const Medicine = ({ voiceAction, onVoiceActionConsumed }) => {
   const fetchData = async () => {
     try {
       const [meds, preds] = await Promise.all([
-        API.get('/medicines'),
-        API.get('/medicines/refill-predictions')
+        cachedGet(API, '/medicines'),
+        cachedGet(API, '/medicines/refill-predictions')
       ]);
       setMedicines(meds || []);
       setPredictions(preds || []);
@@ -233,16 +234,21 @@ const Medicine = ({ voiceAction, onVoiceActionConsumed }) => {
 
   const deleteMedicine = async (id) => {
     if (window.confirm(t('Remove this medicine?'))) {
+      const previousMedicines = [...medicines];
+      // Optimistic update
+      setMedicines(medicines.filter(m => m.id !== id));
+      
       try {
         await API.delete(`/medicines/${id}`);
-        setMedicines(medicines.filter(m => m.id !== id));
-        await refreshReminders();
+        invalidateCache('/medicines');
+        refreshReminders(); // Fire and forget
       } catch (e) {
+        // Rollback on failure
+        setMedicines(previousMedicines);
         toast.error(t('Failed to delete medicine'));
       }
     }
   };
-
   const openEditModal = (med) => {
     setEditMedicine({ ...med });
     setShowEditForm(true);
@@ -253,17 +259,28 @@ const Medicine = ({ voiceAction, onVoiceActionConsumed }) => {
       toast.error(t('Name and dosage are required'));
       return;
     }
+    
+    const previousMedicines = [...medicines];
+    const optimisticUpdated = { ...editMedicine, times: normalizedTimes(editMedicine) };
+    
+    // Optimistic update
+    setMedicines(medicines.map(m => m.id === optimisticUpdated.id ? optimisticUpdated : m));
+    setShowEditForm(false);
+    setEditMedicine(null);
+    toast.success(t('Medicine updated'));
+
     try {
-      const updated = await API.request(`/medicines/${editMedicine.id}`, {
+      const updated = await API.request(`/medicines/${optimisticUpdated.id}`, {
         method: 'PUT',
-        body: { ...editMedicine, times: normalizedTimes(editMedicine) }
+        body: optimisticUpdated
       });
-      setMedicines(medicines.map(m => m.id === updated.id ? updated : m));
-      setShowEditForm(false);
-      setEditMedicine(null);
-      toast.success(t('Medicine updated'));
-      await refreshReminders();
+      // Update with server response (which might have extra server-side fields)
+      setMedicines(prev => prev.map(m => m.id === updated.id ? updated : m));
+      invalidateCache('/medicines');
+      refreshReminders(); // Fire and forget
     } catch (e) {
+      // Rollback
+      setMedicines(previousMedicines);
       toast.error(t('Failed to update medicine'));
     }
   };
@@ -287,15 +304,33 @@ const Medicine = ({ voiceAction, onVoiceActionConsumed }) => {
       toast.error(t('Name and dosage are required'));
       return;
     }
+    
+    const previousMedicines = [...medicines];
+    // Create a temporary optimistic record with a fake ID
+    const tempId = `temp-${Date.now()}`;
+    const optimisticAdded = { 
+      ...newMedicine, 
+      id: tempId,
+      times: normalizedTimes(newMedicine),
+      created_at: new Date().toISOString()
+    };
+    
+    // Optimistic update
+    setMedicines([optimisticAdded, ...medicines]);
+    setShowAddForm(false);
+    setNewMedicine({ name: '', dosage: '', type: 'tablet', frequency: 'once_daily', purpose: '', times: ['08:00'], total_pills: 30, remaining: 30, start_date: new Date().toISOString().split('T')[0] });
+    toast.success(t('Medicine saved'));
+
     try {
       const added = await API.post('/medicines', { ...newMedicine, times: normalizedTimes(newMedicine) });
-      setMedicines([added, ...medicines]);
-      setShowAddForm(false);
-      setShowAddForm(false);
-      setNewMedicine({ name: '', dosage: '', type: 'tablet', frequency: 'once_daily', purpose: '', times: ['08:00'], total_pills: 30, remaining: 30, start_date: new Date().toISOString().split('T')[0] });
-      toast.success(t('Medicine saved'));
-      await refreshReminders();
+      // Swap out the temporary record with the real one from the server
+      setMedicines(prev => prev.map(m => m.id === tempId ? added : m));
+      invalidateCache('/medicines');
+      refreshReminders(); // Fire and forget
     } catch (e) {
+      // Rollback
+      setMedicines(previousMedicines);
+      setShowAddForm(true); // Re-open form so they don't lose their data
       toast.error(t('Failed to save medicine'));
     }
   };

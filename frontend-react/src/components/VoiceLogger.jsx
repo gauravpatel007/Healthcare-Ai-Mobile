@@ -327,7 +327,9 @@ const VoiceLogger = ({ onLogSuccess, onAction }) => {
       startListeningRef.current = startListening;
       recognitionRef.current = speech;
     } else {
-      setTimeout(() => startListening(), 2000);
+      setState('idle');
+      isEnabledRef.current = false;
+      isStoppedManuallyRef.current = true;
     }
   }, [detectWakeWord, playChime, processVoiceCommand]);
 
@@ -446,7 +448,7 @@ const VoiceLogger = ({ onLogSuccess, onAction }) => {
   return (
     <>
       {/* Fixed bottom-right floating assistant */}
-      <div className={`fixed z-[999999] flex flex-col items-end gap-2.5 right-4 md:right-6 ${isAiChat ? 'bottom-[calc(9.5rem+env(safe-area-inset-bottom))] md:bottom-20' : 'bottom-[calc(6rem+env(safe-area-inset-bottom))] md:bottom-6'}`}>
+      <div className={`fixed z-[999999] flex flex-col items-end gap-2.5 right-4 md:right-6 ${isAiChat ? 'bottom-[calc(9.5rem+env(safe-area-inset-bottom))] md:bottom-20' : 'bottom-[calc(7rem+env(safe-area-inset-bottom))] md:bottom-6'}`}>
         {/* Chat window — shown when chat is open */}
         {isChatOpen && (
           <div className="bg-white dark:bg-gray-800 rounded-2xl w-[320px] max-h-[400px] flex flex-col shadow-[0_10px_40px_rgba(0,0,0,0.2)] border border-slate-200 dark:border-gray-700 overflow-hidden mb-2" style={{ animation: 'fadeSlideUp 0.3s ease' }}>

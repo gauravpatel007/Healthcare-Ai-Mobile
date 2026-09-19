@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import useTheme from '../hooks/useTheme';
 import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -10,20 +10,27 @@ import { useLang } from '../contexts/LangContext';
 // Create a motion-enabled Link component
 const MotionLink = motion.create(Link);
 
-// Pages
-import DashboardOverview from './DashboardOverview';
-import AIChat from './AIChat';
-import AIFitness from './AIFitness';
-import Appointments from './Appointments';
-import Records from './Records';
-import Medicine from './Medicine';
-import Analytics from './Analytics';
-import AISymptom from './AISymptom';
-import AINutrition from './AINutrition';
-import AIMental from './AIMental';
-import Trackers from './Trackers';
-import Settings from './Settings';
-import Emergency from './Emergency';
+// Pages — lazy loaded for code splitting (each tab is a separate chunk)
+const DashboardOverview = React.lazy(() => import('./DashboardOverview'));
+const AIChat = React.lazy(() => import('./AIChat'));
+const AIFitness = React.lazy(() => import('./AIFitness'));
+const Appointments = React.lazy(() => import('./Appointments'));
+const Records = React.lazy(() => import('./Records'));
+const Medicine = React.lazy(() => import('./Medicine'));
+const Analytics = React.lazy(() => import('./Analytics'));
+const AISymptom = React.lazy(() => import('./AISymptom'));
+const AINutrition = React.lazy(() => import('./AINutrition'));
+const AIMental = React.lazy(() => import('./AIMental'));
+const Trackers = React.lazy(() => import('./Trackers'));
+const Settings = React.lazy(() => import('./Settings'));
+const Emergency = React.lazy(() => import('./Emergency'));
+
+// Lightweight loading spinner for lazy-loaded tabs
+const TabLoader = () => (
+  <div className="flex items-center justify-center py-20">
+    <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+  </div>
+);
 
 // Components
 import VoiceLogger from '../components/VoiceLogger';
@@ -63,6 +70,7 @@ const AppDashboard = () => {
   const { theme: userTheme, toggleTheme: toggleUserTheme } = useTheme('user_theme');
 
   const [currentUser, setCurrentUser] = useState({ name: 'Loading...', email: '' });
+  const [userProfile, setUserProfile] = useState(null);
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [savedAccounts, setSavedAccounts] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -131,6 +139,7 @@ const AppDashboard = () => {
     // Also fetch offline medical ID data like the old right panel did
     API.get('/users/profile').then(profile => {
       if (profile) {
+        setUserProfile(profile);
         API.get('/emergency/contacts').then(contacts => {
           localStorage.setItem('offline_medical_id', JSON.stringify({ profile, contacts: contacts || [] }));
         }).catch(() => { });
@@ -141,6 +150,7 @@ const AppDashboard = () => {
   useEffect(() => {
     const updateProfile = ({ detail }) => {
       setCurrentUser(previous => ({ ...previous, avatar_url: detail.avatar_url }));
+      setUserProfile(previous => previous ? { ...previous, ...detail } : detail);
       try {
         const cached = JSON.parse(localStorage.getItem('offline_medical_id') || '{}');
         cached.profile = { ...cached.profile, ...detail };
@@ -570,17 +580,19 @@ const AppDashboard = () => {
             className="flex-1 overflow-y-auto px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] -mt-[56px] pt-[64px] md:mt-0 md:pt-6 md:px-6 md:pb-[calc(6rem+env(safe-area-inset-bottom))] lg:px-8 lg:pb-[calc(6rem+env(safe-area-inset-bottom))] scroll-smooth bg-gray-50 dark:bg-black relative"
             onScroll={handleContentScroll}
           >
-            <Routes>
-              <Route path="/" element={<DashboardOverview currentUser={currentUser} voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
-              <Route path="/appointments" element={<Appointments voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
-              <Route path="/records" element={<Records voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
-              <Route path="/medicine" element={<Medicine voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
-              <Route path="/ai-chat" element={<AIChat voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
-              <Route path="/ai-symptom" element={<AISymptom voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
-              <Route path="/ai-mental" element={<AIMental voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
-              <Route path="/settings" element={<Settings voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
-              <Route path="/emergency" element={<Emergency voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
-            </Routes>
+            <Suspense fallback={<TabLoader />}>
+              <Routes>
+                <Route path="/" element={<DashboardOverview currentUser={currentUser} voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
+                <Route path="/appointments" element={<Appointments voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
+                <Route path="/records" element={<Records voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
+                <Route path="/medicine" element={<Medicine voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
+                <Route path="/ai-chat" element={<AIChat voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
+                <Route path="/ai-symptom" element={<AISymptom voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
+                <Route path="/ai-mental" element={<AIMental voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
+                <Route path="/settings" element={<Settings voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
+                <Route path="/emergency" element={<Emergency voiceAction={voiceAction} onVoiceActionConsumed={() => setVoiceAction(null)} />} />
+              </Routes>
+            </Suspense>
           </div>
 
           {/* Mobile Bottom Navigation */}
@@ -592,8 +604,10 @@ const AppDashboard = () => {
 
         <FeedbackModal isOpen={showFeedbackModal} onClose={() => setShowFeedbackModal(false)} />
       </div>
-      {/* Global "Hey LifeOS" Voice Assistant — always present */}
-      <VoiceLogger onLogSuccess={(msg) => toast.success(msg)} onAction={handleVoiceAction} />
+      {/* Global "Hey LifeOS" Voice Assistant — conditionally present */}
+      {userProfile?.notification_preferences?.jarvis_enabled && (
+        <VoiceLogger onLogSuccess={(msg) => toast.success(msg)} onAction={handleVoiceAction} />
+      )}
     </div>
   );
 };

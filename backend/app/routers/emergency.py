@@ -3,11 +3,14 @@ LifeOS Backend — Emergency Router
 Emergency contacts, SOS, QR health card, organ donor.
 """
 
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File, Request
 import os
 import shutil
 from app.config import get_settings
+# pyrefly: ignore [missing-import]
 from sqlalchemy import select
+# pyrefly: ignore [missing-import]
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -143,7 +146,7 @@ async def trigger_sos(request: SOSAlertRequest, user_id: CurrentUserId, db: Asyn
                     logger.warning("Custom SOS audio has no public origin; using spoken alert")
                 
             tasks.append(asyncio.to_thread(send_sos_call_twilio, phone_numbers, user_name, location_url, audio_url))
-            tasks.append(asyncio.to_thread(send_sos_whatsapp_twilio, phone_numbers, user_name, location_url))
+            # tasks.append(asyncio.to_thread(send_sos_whatsapp_twilio, phone_numbers, user_name, location_url)) # Disabled per user request
         if tasks:
             try:
                 results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -155,12 +158,15 @@ async def trigger_sos(request: SOSAlertRequest, user_id: CurrentUserId, db: Asyn
                     elif isinstance(result, tuple) and len(result) == 2:
                         success, msg = result
                         accepted_count += int(bool(success))
-                        actions_taken.append(msg if success else f"Notification failed: {msg}")
+                        if success:
+                            actions_taken.append(msg)
+                        else:
+                            logger.warning(f"Notification failed (hidden from UI): {msg}")
                     elif result:
                         accepted_count += 1
                         actions_taken.append("Notification request accepted")
                     else:
-                        actions_taken.append("Notification failed silently")
+                        logger.warning("Notification failed silently (hidden from UI)")
             except Exception as notify_err:
                 logger.error(f"SOS notification dispatch error: {notify_err}")
         
@@ -281,6 +287,7 @@ async def delete_sos_audio(user_id: CurrentUserId, db: AsyncSession = Depends(ge
 @router.api_route("/echo-twiml", methods=["GET", "POST"])
 async def echo_twiml(twiml: str, request: Request):
     """Echo endpoint for Twilio TwiML playback logic without external dependencies."""
+    # pyrefly: ignore [missing-import]
     from fastapi import Response
     from app.utils.twilio_support import render_voice_twiml
     digits = request.query_params.get('Digits')

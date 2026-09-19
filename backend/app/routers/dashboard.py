@@ -3,6 +3,7 @@ LifeOS Backend — Dashboard Router
 Aggregated health dashboard data.
 """
 
+import asyncio
 from datetime import date
 
 from fastapi import APIRouter, Depends
@@ -24,13 +25,34 @@ router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
 @router.get("/summary", response_model=DashboardSummary)
 async def get_dashboard_summary(user_id: CurrentUserId, db: AsyncSession = Depends(get_db)):
-    """Get aggregated dashboard data."""
-    # Profile
-    user_r = await db.execute(
+    """Get aggregated dashboard data.  All queries run in parallel."""
+    # Build all queries up front
+    user_query = (
         select(User, UserProfile)
         .join(UserProfile, User.id == UserProfile.user_id, isouter=True)
         .where(User.id == user_id)
     )
+    meds_query = select(Medicine).where(Medicine.user_id == user_id, Medicine.is_active == True)
+    apts_query = (
+        select(Appointment).where(
+            Appointment.user_id == user_id,
+            Appointment.status == "upcoming",
+            Appointment.date >= date.today(),
+        ).order_by(Appointment.date)
+    )
+    records_query = select(func.count(MedicalRecord.id)).where(MedicalRecord.user_id == user_id)
+    family_query = select(FamilyMember).where(FamilyMember.user_id == user_id)
+
+    # Execute all 5 queries in parallel
+    user_r, meds_r, apts_r, records_r, family_r = await asyncio.gather(
+        db.execute(user_query),
+        db.execute(meds_query),
+        db.execute(apts_query),
+        db.execute(records_query),
+        db.execute(family_query),
+    )
+
+    # Process results
     row = user_r.first()
     if row:
         user_obj, profile = row
@@ -45,31 +67,9 @@ async def get_dashboard_summary(user_id: CurrentUserId, db: AsyncSession = Depen
     bmi = calculate_bmi(profile.weight, profile.height) if profile else 0
     blood_type = profile.blood_type if profile else "O+"
 
-    # Medicines
-    meds_r = await db.execute(
-        select(Medicine).where(Medicine.user_id == user_id, Medicine.is_active == True)
-    )
     meds = meds_r.scalars().all()
-
-    # Appointments
-    apts_r = await db.execute(
-        select(Appointment).where(
-            Appointment.user_id == user_id,
-            Appointment.status == "upcoming",
-            Appointment.date >= date.today(),
-        ).order_by(Appointment.date)
-    )
     apts = apts_r.scalars().all()
-
-
-    # Records count
-    records_r = await db.execute(
-        select(func.count(MedicalRecord.id)).where(MedicalRecord.user_id == user_id)
-    )
     records_count = records_r.scalar() or 0
-
-    # Family
-    family_r = await db.execute(select(FamilyMember).where(FamilyMember.user_id == user_id))
     family = family_r.scalars().all()
 
     # Health score

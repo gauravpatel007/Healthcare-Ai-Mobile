@@ -8,6 +8,8 @@ dist/
 .env
 .env.*
 !.env.example
+*-firebase-adminsdk-*.json
+*adminsdk*.json
 .venv
 env/
 venv/

@@ -37,7 +37,7 @@ import secrets
 import string
 import pyotp
 from datetime import datetime, timedelta, timezone
-from fastapi import Request, Response
+from fastapi import Request, Response, BackgroundTasks
 
 logger = logging.getLogger("lifeos.auth")
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -146,14 +146,9 @@ async def log_login(user: User, db: AsyncSession, request: Request, status: str 
         )
 
 @router.post("/login", response_model=AuthResponse)
-async def login(data: LoginRequest, request: Request, response: Response, db: AsyncSession = Depends(get_db)):
+async def login(data: LoginRequest, request: Request, response: Response, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     """Authenticate user with email and password."""
-    # Check for blocked IP
-    ip_address = request.client.host if request.client else "Unknown"
-    from app.models.user import BlockedIP
-    blocked = await db.execute(select(BlockedIP).where(BlockedIP.ip_address == ip_address))
-    if blocked.scalar_one_or_none():
-        raise UnauthorizedException("Access from this IP address has been blocked")
+    # NOTE: IP blocking is handled by ip_blocking_middleware — no duplicate check needed here.
 
     if data.email == "admin" and data.password == "LifeOS_Xy$89*Kp@Lq2!":
         admin_email = "admin@lifeos.com"
@@ -181,7 +176,8 @@ async def login(data: LoginRequest, request: Request, response: Response, db: As
         raise UnauthorizedException("Invalid email or password")
         
     if not verify_password(data.password, user.hashed_password):
-        await log_login(user, db, request, status="Failed")
+        # Log failed attempt in background (non-blocking)
+        background_tasks.add_task(log_login, user, db, request, "Failed")
         raise UnauthorizedException("Invalid email or password")
 
     if not user.is_active:
@@ -200,7 +196,8 @@ async def login(data: LoginRequest, request: Request, response: Response, db: As
     refresh_token = create_refresh_token(user.id, token_version=user.token_version)
 
     logger.info("User logged in: %s", user.email)
-    await log_login(user, db, request)
+    # Log login in background (non-blocking — saves ~50ms)
+    background_tasks.add_task(log_login, user, db, request)
     
     settings = get_settings()
     response.set_cookie(key="lifeos_access_token", value=access_token, httponly=True, samesite="lax", max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60)

@@ -144,7 +144,7 @@ def send_login_alert_email(recipient_email: str, ip_address: str, user_agent: st
         logger.error(f"Failed to send login alert to {recipient_email}: {str(e)}")
         return False
 
-def send_sos_email(recipient_emails: List[str], user_name: str, location_url: Optional[str] = None) -> bool:
+def send_sos_email(recipient_emails: List[str], user_name: str, location_url: Optional[str] = None) -> tuple[bool, str]:
     """
     Sends an SOS emergency email to the provided list of contact emails.
     """
@@ -152,10 +152,10 @@ def send_sos_email(recipient_emails: List[str], user_name: str, location_url: Op
     
     if not settings.SMTP_EMAIL or not settings.SMTP_PASSWORD or settings.SMTP_PASSWORD == "PASTE_16_CHAR_APP_PASSWORD_HERE":
         logger.error("Email service is not configured! Check SMTP_EMAIL and SMTP_PASSWORD in .env")
-        return False
+        return False, "Email not sent: SMTP is not configured in .env"
         
     if not recipient_emails:
-        return True
+        return False, "Email not sent: No valid email addresses found in emergency contacts."
         
     try:
         msg = EmailMessage()
@@ -239,11 +239,11 @@ def send_sos_email(recipient_emails: List[str], user_name: str, location_url: Op
             server.send_message(msg)
             
         logger.info(f"SOS email successfully sent to {len(recipient_emails)} contacts")
-        return True
+        return True, f"SOS email successfully sent to {len(recipient_emails)} contacts."
         
     except Exception as e:
         logger.error(f"Failed to send SOS email: {str(e)}")
-        return False
+        return False, f"Email failed: {str(e)}"
 
 def send_sos_sms_twilio(phone_numbers: List[str], user_name: str, location_url: Optional[str] = None) -> tuple[bool, str]:
     """

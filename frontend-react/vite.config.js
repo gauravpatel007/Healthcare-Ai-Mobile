@@ -10,6 +10,17 @@ export default defineConfig(({ mode }) => {
   }
   return {
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-ui': ['framer-motion', 'lucide-react'],
+          'vendor-toast': ['react-hot-toast'],
+        }
+      }
+    }
+  },
   server: {
     host: true,
     port: 5173,

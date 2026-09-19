@@ -1,32 +1,41 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, Suspense } from 'react'
 import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from 'react-router-dom'
 import { SettingsProvider, useSettings } from './contexts/SettingsContext'
 import { UnitProvider } from './contexts/UnitContext'
 import { LangProvider } from './contexts/LangContext'
 import { AlertTriangle } from 'lucide-react'
 import { Toaster } from 'react-hot-toast'
-import LandingPage from './pages/LandingPage'
-import AppDashboard from './pages/AppDashboard'
-import SharedProfile from './pages/SharedProfile'
-import MedicalIDCard from './components/MedicalIDCard'
 import { Capacitor } from '@capacitor/core'
 import { startReminderNavigation } from './utils/reminders'
 
-// Admin Pages
-import AdminLogin from './pages/admin/AdminLogin'
-import AdminLayout from './pages/admin/AdminLayout'
-import AdminOverview from './pages/admin/AdminOverview'
-import AdminUsers from './pages/admin/AdminUsers'
-import AdminMedicalRecords from './pages/admin/AdminMedicalRecords'
-import AdminMedicineDB from './pages/admin/AdminMedicineDB'
-import AdminDiseaseDB from './pages/admin/AdminDiseaseDB'
-import AdminSymptoms from './pages/admin/AdminSymptoms'
-import AdminHealth from './pages/admin/AdminHealth'
-import AdminFileManager from './pages/admin/AdminFileManager'
-import AdminSettings from './pages/admin/AdminSettings'
-import AdminSecurity from './pages/admin/AdminSecurity'
-import AdminAuditLogs from './pages/admin/AdminAuditLogs'
-import AdminAnalytics from './pages/admin/AdminAnalytics'
+// Lazy-loaded pages — each becomes a separate JS chunk loaded on demand
+const LandingPage = React.lazy(() => import('./pages/LandingPage'));
+const AppDashboard = React.lazy(() => import('./pages/AppDashboard'));
+const SharedProfile = React.lazy(() => import('./pages/SharedProfile'));
+const MedicalIDCard = React.lazy(() => import('./components/MedicalIDCard'));
+
+// Admin Pages (lazy)
+const AdminLogin = React.lazy(() => import('./pages/admin/AdminLogin'));
+const AdminLayout = React.lazy(() => import('./pages/admin/AdminLayout'));
+const AdminOverview = React.lazy(() => import('./pages/admin/AdminOverview'));
+const AdminUsers = React.lazy(() => import('./pages/admin/AdminUsers'));
+const AdminMedicalRecords = React.lazy(() => import('./pages/admin/AdminMedicalRecords'));
+const AdminMedicineDB = React.lazy(() => import('./pages/admin/AdminMedicineDB'));
+const AdminDiseaseDB = React.lazy(() => import('./pages/admin/AdminDiseaseDB'));
+const AdminSymptoms = React.lazy(() => import('./pages/admin/AdminSymptoms'));
+const AdminHealth = React.lazy(() => import('./pages/admin/AdminHealth'));
+const AdminFileManager = React.lazy(() => import('./pages/admin/AdminFileManager'));
+const AdminSettings = React.lazy(() => import('./pages/admin/AdminSettings'));
+const AdminSecurity = React.lazy(() => import('./pages/admin/AdminSecurity'));
+const AdminAuditLogs = React.lazy(() => import('./pages/admin/AdminAuditLogs'));
+const AdminAnalytics = React.lazy(() => import('./pages/admin/AdminAnalytics'));
+
+// Lightweight loading spinner for Suspense boundaries
+const PageLoader = () => (
+  <div className="fixed inset-0 z-40 flex items-center justify-center bg-gray-50/80 dark:bg-gray-900/80 backdrop-blur-sm">
+    <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+  </div>
+);
 
 const MaintenanceScreen = ({ showLogoutMsg }) => (
   <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
@@ -98,7 +107,7 @@ const AppRoutes = () => {
   // OneSignal Push Notifications Setup
   useEffect(() => {
     const initOneSignal = async () => {
-      const appId = "66baddfc-24d8-4b43-a3dc-2d4d9f297f54";
+      const appId = "b59262d3-8500-4aa1-a8be-4d87675cdd9e";
       
       if (Capacitor.isNativePlatform()) {
         try {
@@ -162,29 +171,31 @@ const AppRoutes = () => {
   }
 
   return (
-    <Routes>
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/medical-id" element={<MedicalIDCard />} />
-      <Route path="/app/*" element={<AppDashboard />} />
-      <Route path="/shared/:token" element={<SharedProfile />} />
-      
-      {/* Admin Routes */}
-      <Route path="/admin/login" element={<AdminLogin />} />
-      <Route path="/admin" element={<AdminLayout />}>
-        <Route index element={<AdminOverview />} />
-        <Route path="analytics" element={<AdminAnalytics />} />
-        <Route path="users" element={<AdminUsers />} />
-        <Route path="records" element={<AdminMedicalRecords />} />
-        <Route path="medicine-db" element={<AdminMedicineDB />} />
-        <Route path="diseases" element={<AdminDiseaseDB />} />
-        <Route path="symptoms" element={<AdminSymptoms />} />
-        <Route path="health" element={<AdminHealth />} />
-        <Route path="file-manager" element={<AdminFileManager />} />
-        <Route path="settings" element={<AdminSettings />} />
-        <Route path="security" element={<AdminSecurity />} />
-        <Route path="audit" element={<AdminAuditLogs />} />
-      </Route>
-    </Routes>
+    <Suspense fallback={<PageLoader />}>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/medical-id" element={<MedicalIDCard />} />
+        <Route path="/app/*" element={<AppDashboard />} />
+        <Route path="/shared/:token" element={<SharedProfile />} />
+        
+        {/* Admin Routes */}
+        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<AdminOverview />} />
+          <Route path="analytics" element={<AdminAnalytics />} />
+          <Route path="users" element={<AdminUsers />} />
+          <Route path="records" element={<AdminMedicalRecords />} />
+          <Route path="medicine-db" element={<AdminMedicineDB />} />
+          <Route path="diseases" element={<AdminDiseaseDB />} />
+          <Route path="symptoms" element={<AdminSymptoms />} />
+          <Route path="health" element={<AdminHealth />} />
+          <Route path="file-manager" element={<AdminFileManager />} />
+          <Route path="settings" element={<AdminSettings />} />
+          <Route path="security" element={<AdminSecurity />} />
+          <Route path="audit" element={<AdminAuditLogs />} />
+        </Route>
+      </Routes>
+    </Suspense>
   );
 };
 

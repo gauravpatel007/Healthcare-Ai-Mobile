@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import API from '../utils/api';
 import { useLang } from '../contexts/LangContext';
 import {
@@ -461,8 +462,8 @@ const AIFitness = ({ voiceAction, onVoiceActionConsumed }) => {
       </div>
 
       {/* Duration Picker Modal */}
-      {exerciseToLog && (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
+      {exerciseToLog && createPortal(
+        <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm transition-opacity" onClick={() => setExerciseToLog(null)} />
           <div className="relative w-full max-w-sm bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-2xl overflow-hidden flex flex-col transform transition-all">
             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Log {t(exerciseToLog.name)}</h3>
@@ -494,12 +495,13 @@ const AIFitness = ({ voiceAction, onVoiceActionConsumed }) => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* AI Workout Plan Modal */}
-      {selectedDayPlan && (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
+      {selectedDayPlan && createPortal(
+        <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4">
           {/* Backdrop */}
           <div
             className="absolute inset-0 bg-gray-900/60 backdrop-blur-md transition-opacity"
@@ -569,7 +571,8 @@ const AIFitness = ({ voiceAction, onVoiceActionConsumed }) => {
             </div>
 
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

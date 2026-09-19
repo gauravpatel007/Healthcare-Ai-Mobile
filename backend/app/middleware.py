@@ -17,6 +17,30 @@ from app.models.user import BlockedIP
 
 logger = logging.getLogger("lifeos")
 
+# ── In-memory blocked-IP cache (avoids a DB query on every single request) ──
+_blocked_ips_cache: set[str] = set()  # set of blocked IP strings
+_blocked_ips_ts: float = 0.0          # last refresh timestamp
+_BLOCKED_IPS_TTL = 60.0              # refresh every 60 seconds
+
+
+async def _refresh_blocked_ips():
+    """Reload blocked IPs from DB into the in-memory set."""
+    global _blocked_ips_cache, _blocked_ips_ts
+    try:
+        import datetime
+        now = datetime.datetime.utcnow()
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(BlockedIP))
+            all_blocked = result.scalars().all()
+            # Only include non-expired blocks
+            _blocked_ips_cache = {
+                b.ip_address for b in all_blocked
+                if not b.expires_at or b.expires_at.replace(tzinfo=None) >= now
+            }
+        _blocked_ips_ts = time.time()
+    except Exception as e:
+        logger.error(f"Failed to refresh blocked IP cache: {e}")
+
 
 def setup_cors(app: FastAPI) -> None:
     """Configure CORS middleware."""
@@ -50,29 +74,21 @@ async def logging_middleware(request: Request, call_next):
 
 
 async def ip_blocking_middleware(request: Request, call_next):
-    """Block requests from IP addresses in the BlockedIP table."""
+    """Block requests from IP addresses in the BlockedIP table.
+    Uses an in-memory cache refreshed every 60s to avoid per-request DB hits."""
+    global _blocked_ips_ts
     client_ip = request.client.host if request.client else None
     if client_ip:
-        try:
-            async with AsyncSessionLocal() as db:
-                blocked_ip_result = await db.execute(
-                    select(BlockedIP).where(BlockedIP.ip_address == client_ip)
-                )
-                blocked = blocked_ip_result.scalar_one_or_none()
-                if blocked:
-                    import datetime
-                    if blocked.expires_at and blocked.expires_at.replace(tzinfo=None) < datetime.datetime.utcnow():
-                        # expired block, allow
-                        pass
-                    else:
-                        logger.warning(f"Blocked request from IP: {client_ip}")
-                        return JSONResponse(
-                            status_code=403,
-                            content={"detail": "Your IP address has been blocked."}
-                        )
-        except Exception as e:
-            logger.error(f"Error checking blocked IP: {e}")
-            
+        # Refresh cache if stale
+        if time.time() - _blocked_ips_ts > _BLOCKED_IPS_TTL:
+            await _refresh_blocked_ips()
+        if client_ip in _blocked_ips_cache:
+            logger.warning(f"Blocked request from IP: {client_ip}")
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "Your IP address has been blocked."}
+            )
+
     return await call_next(request)
 
 
@@ -89,3 +105,4 @@ def setup_logging() -> None:
     # Suppress noisy third-party loggers
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+

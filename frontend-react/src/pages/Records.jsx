@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import API from '../utils/api';
+import { cachedGet, invalidateCache } from '../utils/apiCache';
 import { toast } from 'react-hot-toast';
 import editIcon from '../../../Icons/edit sign.png';
 import {
@@ -118,7 +119,7 @@ const Records = ({ voiceAction, onVoiceActionConsumed }) => {
 
   const fetchRecords = async () => {
     try {
-      const data = await API.request('/records');
+      const data = await cachedGet(API, '/records');
       setRecords(data);
       setLoading(false);
     } catch (e) {
@@ -129,7 +130,7 @@ const Records = ({ voiceAction, onVoiceActionConsumed }) => {
   useEffect(() => {
     fetchRecords();
     // Fetch family members for the edit modal
-    API.request('/family/members').then(data => {
+    cachedGet(API, '/family/members').then(data => {
       if (Array.isArray(data)) setFamilyMembers(data);
     }).catch(() => { });
   }, []);
@@ -233,10 +234,16 @@ const Records = ({ voiceAction, onVoiceActionConsumed }) => {
 
   const deleteRecord = async (id) => {
     if (window.confirm('Delete this record?')) {
+      const previousRecords = [...records];
+      // Optimistic update
+      setRecords(records.filter(r => r.id !== id));
+      
       try {
         await API.delete(`/records/${id}`);
-        setRecords(records.filter(r => r.id !== id));
+        invalidateCache('/records');
       } catch (e) {
+        // Rollback
+        setRecords(previousRecords);
         toast.error('Failed to delete record');
       }
     }
@@ -252,16 +259,25 @@ const Records = ({ voiceAction, onVoiceActionConsumed }) => {
       toast.error('Title, Category, and Date are required');
       return;
     }
+    
+    const previousRecords = [...records];
+    // Optimistic update
+    setRecords(records.map(r => r.id === editRecord.id ? editRecord : r));
+    setShowEditForm(false);
+    setEditRecord(null);
+    toast.success('Record updated');
+
     try {
       const updated = await API.request(`/records/${editRecord.id}`, {
         method: 'PUT',
         body: editRecord
       });
-      setRecords(records.map(r => r.id === updated.id ? updated : r));
-      setShowEditForm(false);
-      setEditRecord(null);
-      toast.success('Record updated');
+      // Replace with exact server response
+      setRecords(prev => prev.map(r => r.id === updated.id ? updated : r));
+      invalidateCache('/records');
     } catch (e) {
+      // Rollback
+      setRecords(previousRecords);
       toast.error(`Failed to update. Date sent: ${editRecord.date}. Error: ${e.message}`);
     }
   };
@@ -271,6 +287,23 @@ const Records = ({ voiceAction, onVoiceActionConsumed }) => {
       toast.error('Title, Category, and Date are required');
       return;
     }
+    
+    const previousRecords = [...records];
+    const tempId = `temp-${Date.now()}`;
+    const optimisticRecord = {
+      ...newRecord,
+      id: tempId,
+      created_at: new Date().toISOString()
+    };
+    
+    // Optimistic update (note: file won't show instantly, but record details will)
+    setRecords([...records, optimisticRecord]);
+    setShowAddForm(false);
+    setNewRecord({ title: '', category: 'Blood Test', date: new Date().toISOString().split('T')[0], doctor: '', hospital: '', findings: '' });
+    const fileToUpload = selectedFile;
+    setSelectedFile(null);
+    toast.success('Record saved');
+
     const formData = new FormData();
     formData.append('title', newRecord.title);
     formData.append('category', newRecord.category);
@@ -278,19 +311,20 @@ const Records = ({ voiceAction, onVoiceActionConsumed }) => {
     if (newRecord.doctor) formData.append('doctor', newRecord.doctor);
     if (newRecord.hospital) formData.append('hospital', newRecord.hospital);
     if (newRecord.findings) formData.append('findings', newRecord.findings);
-    if (selectedFile) formData.append('file', selectedFile);
+    if (fileToUpload) formData.append('file', fileToUpload);
 
     try {
       const added = await API.request('/records', {
         method: 'POST',
         body: formData
       });
-      setRecords([...records, added]);
-      setShowAddForm(false);
-      setNewRecord({ title: '', category: 'Blood Test', date: new Date().toISOString().split('T')[0], doctor: '', hospital: '', findings: '' });
-      setSelectedFile(null);
-      toast.success('Record saved');
+      // Swap out the temporary record with the real one
+      setRecords(prev => prev.map(r => r.id === tempId ? added : r));
+      invalidateCache('/records');
     } catch (e) {
+      // Rollback
+      setRecords(previousRecords);
+      setShowAddForm(true); // Re-open form
       toast.error('Failed to upload record: ' + (e.message || 'Unknown error'));
     }
   };

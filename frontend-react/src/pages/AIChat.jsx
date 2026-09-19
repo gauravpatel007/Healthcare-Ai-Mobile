@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import API from '../utils/api';
 import { startSpeechRecognition } from '../utils/voice';
 import MedicalDisclaimer from '../components/MedicalDisclaimer';
@@ -51,7 +52,7 @@ const ActionCard = ({ title, value, subtitle, icon: Icon, colorClass, onClick })
 );
 
 const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   useEffect(() => {
     const appContainer = document.querySelector('.app-container');
     const rightPanel = document.querySelector('.right-panel');
@@ -555,9 +556,9 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
       </div>
 
       {/* Daily Tips Modal */}
-      {showTipsModal && (
+      {showTipsModal && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm !mt-0"
+          className="fixed inset-0 z-[100000] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm !mt-0"
           onClick={(e) => { if (e.target === e.currentTarget) setShowTipsModal(false); }}
         >
           <div className="bg-white dark:bg-gray-800 w-full max-w-md rounded-[2.5rem] shadow-2xl border border-gray-100 dark:border-gray-700 transform transition-all h-fit overflow-hidden flex flex-col">
@@ -595,13 +596,14 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Chat History Modal */}
-      {showHistoryModal && (
+      {showHistoryModal && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm !mt-0"
+          className="fixed inset-0 z-[100000] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm !mt-0"
           onClick={(e) => { if (e.target === e.currentTarget) setShowHistoryModal(false); }}
         >
           <div className="bg-white dark:bg-gray-800 w-full max-w-md rounded-[2.5rem] shadow-2xl border border-gray-100 dark:border-gray-700 transform transition-all h-fit overflow-hidden flex flex-col">
@@ -641,7 +643,8 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -153,6 +153,12 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
   };
 
   const triggerSOS = async (skipConfirm = false, isSilent = false) => {
+    const isDemoMode = localStorage.getItem('lifeos_demo_mode') === 'true';
+    if (isDemoMode) {
+      toast.success(t('SOS disabled in Demo Mode.'));
+      return;
+    }
+    
     const shouldSkipConfirm = skipConfirm === true || isSilent === true;
     if (sosLoading) return;
     if (shouldSkipConfirm || confirm(t('Send an SOS alert to your saved emergency contacts? Delivery depends on the notification service. This does not automatically contact local authorities.'))) {

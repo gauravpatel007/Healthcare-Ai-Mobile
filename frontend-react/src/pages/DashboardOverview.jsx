@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import API from '../utils/api';
 import { toast } from 'react-hot-toast';
@@ -40,11 +41,14 @@ const StatCard = ({ title, value, subtitle, icon: Icon, colorClass, onClick }) =
 );
 
 /* ─── Section Header ─────────────────────────────────────────── */
-const SectionHeader = ({ title, subtitle, className = "mb-4" }) => (
-  <div className={`flex items-center gap-3 ${className}`}>
-    <div className="w-1.5 h-6 md:h-8 bg-gradient-to-b from-blue-500 to-indigo-400 rounded-full"></div>
+const SectionHeader = ({ title, subtitle, className = "mb-4", onClick }) => (
+  <div
+    onClick={onClick}
+    className={`flex items-center gap-3 ${className} ${onClick ? 'cursor-pointer select-none group' : ''}`}
+  >
+    <div className="w-1.5 h-6 md:h-8 bg-gradient-to-b from-blue-500 to-indigo-400 rounded-full transition-transform group-hover:scale-y-110"></div>
     <div>
-      <h2 className="text-lg md:text-xl font-extrabold text-gray-900 dark:text-gray-100 tracking-tight">{title}</h2>
+      <h2 className="text-lg md:text-xl font-extrabold text-gray-900 dark:text-gray-100 tracking-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{title}</h2>
       {subtitle && <p className="text-gray-500 dark:text-gray-400 text-xs md:text-sm font-medium">{subtitle}</p>}
     </div>
   </div>
@@ -190,16 +194,19 @@ const DashboardOverview = ({ currentUser, voiceAction, onVoiceActionConsumed }) 
 
   useEffect(() => {
     const fetchDashboardData = async () => {
+      // Import cache utilities for stale-while-revalidate
+      const { cachedGet } = await import('../utils/apiCache');
       try {
-        const [d, records, meds, apts, medLogs] = await Promise.all([
-          API.get('/dashboard/summary').catch(() => null),
-          API.get('/records').catch(() => []),
-          API.get('/medicines').catch(() => []),
-          API.get('/appointments').catch(() => []),
-          API.get('/medicines/today-logs').catch(() => [])
+        const [d, records, meds, apts, medLogs, hData] = await Promise.all([
+          cachedGet(API, '/dashboard/summary', 60_000, setDashboardSummary).catch(() => null),
+          cachedGet(API, '/records', 60_000, r => setRecentRecords(r ? r.slice(0, 3) : [])).catch(() => []),
+          cachedGet(API, '/medicines', 60_000, m => setMyMeds(m ? m.filter(x => x.is_active) : [])).catch(() => []),
+          cachedGet(API, '/appointments', 60_000, setAppointments).catch(() => []),
+          cachedGet(API, '/medicines/today-logs', 30_000, l => setTodayMedLogs(l || [])).catch(() => []),
+          cachedGet(API, '/trackers/health-data', 60_000, setHealthData).catch(() => ({}))
         ]);
         setDashboardSummary(d);
-        setHealthData({});
+        setHealthData(hData || {});
         setFitnessStats({ steps: 0, calories_burned: 0, step_goal: 10000 });
         setNutritionPlan({ tdee: 2200, protein_goal_grams: 84, carbs_goal_grams: 200, fat_goal_grams: 60 });
         setRecentRecords(records ? records.slice(0, 3) : []);
@@ -726,16 +733,16 @@ const DashboardOverview = ({ currentUser, voiceAction, onVoiceActionConsumed }) 
                   if (!todayDoses.length) return <p className="text-xs font-medium text-gray-400 py-2">No active medications for today.</p>;
 
                   return todayDoses.map(d => (
-                    <MedicineDoseCard 
-                      key={d.id} 
-                      d={d} 
-                      view="today" 
-                      busy={busy} 
-                      readOnly={Boolean(reminderData.compatibility)} 
-                      s={s} 
-                      action={action} 
-                      setDialog={setDialog} 
-                      setReason={setReason} 
+                    <MedicineDoseCard
+                      key={d.id}
+                      d={d}
+                      view="today"
+                      busy={busy}
+                      readOnly={Boolean(reminderData.compatibility)}
+                      s={s}
+                      action={action}
+                      setDialog={setDialog}
+                      setReason={setReason}
                     />
                   ));
                 })()}
@@ -752,18 +759,34 @@ const DashboardOverview = ({ currentUser, voiceAction, onVoiceActionConsumed }) 
           {/* Recent Activity Card */}
           <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 shadow-sm border border-gray-100 dark:border-gray-700">
             <div className="flex justify-between items-center mb-4">
-              <SectionHeader title={t('recent_activity') || 'Recent Activity'} />
+              <SectionHeader
+                title={t('recent_activity') || 'Recent Activity'}
+                onClick={() => navigate('/app/records')}
+              />
+              <button
+                type="button"
+                onClick={() => navigate('/app/records')}
+                className="text-xs font-bold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 flex items-center gap-1 hover:underline cursor-pointer"
+              >
+                {/* {t('view_all') || 'View all'} */}
+                {/* <ArrowRight className="w-3.5 h-3.5" /> */}
+              </button>
             </div>
             <div className="space-y-3">
               {recentRecords.length > 0 ? recentRecords.map(r => (
-                <div key={r.id} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-900/50 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors">
-                  <div className="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                <div
+                  key={r.id}
+                  onClick={() => navigate('/app/records')}
+                  className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-900/50 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors group"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
                     <FileText className="w-5 h-5" />
                   </div>
-                  <div className="overflow-hidden">
-                    <div className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{r.title}</div>
+                  <div className="overflow-hidden flex-1">
+                    <div className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{r.title}</div>
                     <div className="text-xs font-medium text-gray-500">{r.date}</div>
                   </div>
+                  <ArrowRight className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100 -translate-x-1 group-hover:translate-x-0 transition-all shrink-0" />
                 </div>
               )) : (
                 <p className="text-xs font-medium text-gray-400 py-2">No recent records.</p>
@@ -776,9 +799,9 @@ const DashboardOverview = ({ currentUser, voiceAction, onVoiceActionConsumed }) 
       </div>
 
       {/* ── Modal for Adding Parameter ────────────────────────────── */}
-      {showParamModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={(e) => { if (e.target === e.currentTarget) setShowParamModal(false); }}>
-          <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-8 w-full max-w-md shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+      {showParamModal && createPortal(
+        <div className="fixed inset-0 z-[100000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={(e) => { if (e.target === e.currentTarget) setShowParamModal(false); }}>
+          <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-8 w-full max-w-md shadow-2xl animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-extrabold text-gray-900 dark:text-white">Log Health Metric</h3>
               <button onClick={() => setShowParamModal(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 transition-colors text-gray-500">✕</button>
@@ -834,19 +857,20 @@ const DashboardOverview = ({ currentUser, voiceAction, onVoiceActionConsumed }) 
               {savingParam ? 'Saving...' : 'Save Parameter'}
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      <MedicineActionDialog 
-        dialog={dialog} 
-        busy={busy} 
-        reason={reason} 
-        setReason={setReason} 
-        quantity={quantity} 
-        setQuantity={setQuantity} 
-        action={action} 
-        setDialog={setDialog} 
-        run={runDialogAction} 
+      <MedicineActionDialog
+        dialog={dialog}
+        busy={busy}
+        reason={reason}
+        setReason={setReason}
+        quantity={quantity}
+        setQuantity={setQuantity}
+        action={action}
+        setDialog={setDialog}
+        run={runDialogAction}
       />
     </div>
   );

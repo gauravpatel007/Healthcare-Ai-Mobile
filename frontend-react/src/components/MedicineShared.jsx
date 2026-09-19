@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { Check, Clock, SkipForward } from 'lucide-react';
 import { useLang } from '../contexts/LangContext';
 import API from '../utils/api';
@@ -52,9 +53,9 @@ export function MedicineActionDialog({ dialog, busy, reason, setReason, quantity
   
   if (!dialog) return null;
 
-  return (
-    <div className="fixed inset-0 z-[100000] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-3" onClick={e => { if (e.target === e.currentTarget && !busy) setDialog(null); }}>
-      <div role="dialog" aria-modal="true" aria-label={t(dialog.type === 'refill' ? 'Record refill' : dialog.type === 'skip' ? 'Skip dose' : 'Snooze reminder')} className={`${cardClasses} w-full max-w-md mb-3 space-y-4`}>
+  return createPortal(
+    <div className="fixed inset-0 z-[100000] flex items-end md:items-center justify-center bg-gray-900/60 backdrop-blur-sm p-0 md:p-4 animate-in fade-in duration-200" onClick={e => { if (e.target === e.currentTarget && !busy) setDialog(null); }}>
+      <div role="dialog" aria-modal="true" aria-label={t(dialog.type === 'refill' ? 'Record refill' : dialog.type === 'skip' ? 'Skip dose' : 'Snooze reminder')} className={`${cardClasses} w-full md:max-w-md mb-0 md:mb-3 space-y-4 rounded-t-3xl md:rounded-3xl animate-in slide-in-from-bottom-full md:slide-in-from-bottom-0 md:zoom-in-95 duration-200 pb-[env(safe-area-inset-bottom)] md:pb-6`}>
         <h3 className="text-lg font-bold">{t(dialog.type === 'refill' ? 'Record refill' : dialog.type === 'skip' ? 'Skip dose' : 'Snooze reminder')}</h3>
         <p className="text-sm text-gray-500">{dialog.dose?.name || dialog.medicine?.name}</p>
         
@@ -78,13 +79,14 @@ export function MedicineActionDialog({ dialog, busy, reason, setReason, quantity
             <button disabled={busy} className={`${buttonClasses} bg-blue-600 text-white w-full`} onClick={() => dialog.type === 'skip' ? action(dialog.dose, 'skipped', { reason }) : run(async () => {
               if (!dialog.action_id) dialog.action_id = crypto.randomUUID();
               await API.post(`/reminders/medicines/${dialog.medicine.id}/refill`, { action_id: dialog.action_id, quantity: Number(quantity) }); 
-              await refreshReminders(); 
+              refreshReminders(); // Fire and forget
               setDialog(null);
-            })}>{t('Save')}</button>
+            })}>{busy ? t('Saving...') : t('Save')}</button>
           </>
         )}
         <button disabled={busy} className={`${buttonClasses} w-full text-gray-500`} onClick={() => setDialog(null)}>{t('Cancel')}</button>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

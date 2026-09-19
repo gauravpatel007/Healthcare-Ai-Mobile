@@ -46,14 +46,23 @@ async def list_records(
         query = query.where(MedicalRecord.family_member_id == family_member_id)
     else:
         query = query.where(MedicalRecord.family_member_id.is_(None))
+
+    # DB-level search using ILIKE (much faster than Python filtering)
+    if search:
+        from sqlalchemy import or_
+        q = f"%{search}%"
+        query = query.where(
+            or_(
+                MedicalRecord.title.ilike(q),
+                MedicalRecord.doctor.ilike(q),
+                MedicalRecord.hospital.ilike(q),
+            )
+        )
+
     query = query.order_by(MedicalRecord.created_at.desc())
 
     result = await db.execute(query)
     records = result.scalars().all()
-
-    if search:
-        q = search.lower()
-        records = [r for r in records if q in (r.title or "").lower() or q in (r.doctor or "").lower() or q in (r.hospital or "").lower()]
 
     return records
 

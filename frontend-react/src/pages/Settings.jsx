@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'react-hot-toast';
 import API from '../utils/api';
+import { cachedGet, invalidateCache } from '../utils/apiCache';
 import { useUnit } from '../contexts/UnitContext';
 import { useLang } from '../contexts/LangContext';
 import { usePersistentTab } from '../hooks/usePersistentTab';
@@ -155,10 +156,10 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
   const fetchProfile = async () => {
     try {
       const [data, authMe, contacts, history] = await Promise.all([
-        API.get('/users/profile'),
-        API.get('/auth/me').catch(() => null),
-        API.get('/emergency/contacts').catch(() => []),
-        API.get('/users/security/login-history').catch(() => null)
+        cachedGet(API, '/users/profile'),
+        cachedGet(API, '/auth/me').catch(() => null),
+        cachedGet(API, '/emergency/contacts').catch(() => []),
+        cachedGet(API, '/users/security/login-history').catch(() => null)
       ]);
       if (data) {
         const c1 = contacts && contacts.length > 0 ? contacts[0] : null;
@@ -1056,6 +1057,28 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
             </div>
 
             <div className="space-y-8">
+              {/* Jarvis AI Assistant */}
+              <div className="border-b border-gray-100 dark:border-gray-700/50 pb-6">
+                <h4 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">🤖 {t('Jarvis AI Assistant')}</h4>
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('Enable Jarvis Voice Assistant')}</span>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" className="sr-only peer" checked={profile.notification_preferences?.jarvis_enabled ?? false} onChange={(e) => {
+                        const newPrefs = {
+                          ...profile.notification_preferences,
+                          jarvis_enabled: e.target.checked
+                        };
+                        setProfile(p => ({ ...p, notification_preferences: newPrefs }));
+                        API.put('/users/profile', { notification_preferences: newPrefs }).catch(() => toast.error('Failed to save preference'));
+                        window.dispatchEvent(new CustomEvent('profile-updated', { detail: { notification_preferences: newPrefs } }));
+                      }} />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
               {/* Medicine Reminders */}
               <div className="border-b border-gray-100 dark:border-gray-700/50 pb-6">
                 <h4 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">💊 {t('Medicine Reminders')}</h4>

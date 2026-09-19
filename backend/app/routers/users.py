@@ -2,8 +2,11 @@
 LifeOS Backend — User Profile Router
 """
 
-from fastapi import APIRouter, Depends
+# pyrefly: ignore [missing-import]
+from fastapi import APIRouter, Depends, File, UploadFile
+# pyrefly: ignore [missing-import]
 from sqlalchemy import select
+# pyrefly: ignore [missing-import]
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -20,49 +23,6 @@ router = APIRouter(prefix="/users", tags=["Users"])
 @router.get("/profile", response_model=UserProfileResponse)
 async def get_profile(user_id: CurrentUserId, db: AsyncSession = Depends(get_db)):
     """Get current user's profile."""
-    from sqlalchemy import text
-    try:
-        await db.execute(text("ALTER TABLE user_profiles ADD COLUMN step_goal INTEGER NOT NULL DEFAULT 10000;"))
-        await db.commit()
-    except Exception:
-        await db.rollback()
-        
-    try:
-        await db.execute(text("ALTER TABLE user_profiles ADD COLUMN target_weight FLOAT;"))
-        await db.commit()
-    except Exception:
-        await db.rollback()
-
-    try:
-        await db.execute(text("ALTER TABLE user_profiles ADD COLUMN target_weight_timeline VARCHAR(100);"))
-        await db.commit()
-    except Exception:
-        await db.rollback()
-
-    try:
-        await db.execute(text("ALTER TABLE user_profiles ADD COLUMN calorie_goal INTEGER;"))
-        await db.commit()
-    except Exception:
-        await db.rollback()
-
-    try:
-        await db.execute(text("ALTER TABLE user_profiles ADD COLUMN burn_calorie_goal INTEGER NOT NULL DEFAULT 500;"))
-        await db.commit()
-    except Exception:
-        await db.rollback()
-
-    try:
-        await db.execute(text("ALTER TABLE user_profiles ADD COLUMN measurement_unit VARCHAR(10) NOT NULL DEFAULT 'metric';"))
-        await db.commit()
-    except Exception:
-        await db.rollback()
-        
-    try:
-        await db.execute(text("ALTER TABLE user_profiles ADD COLUMN notification_preferences JSON NOT NULL DEFAULT '{}';"))
-        await db.commit()
-    except Exception:
-        await db.rollback()
-        
     result = await db.execute(select(UserProfile).where(UserProfile.user_id == user_id))
     profile = result.scalar_one_or_none()
     if not profile:
@@ -125,6 +85,7 @@ async def update_profile(
     # Auto-save new conditions to DiseaseLibrary
     new_conditions = update_data.get("conditions")
     if new_conditions:
+        # pyrefly: ignore [missing-import]
         from sqlalchemy import func
         for condition_name in new_conditions:
             lib_query = select(DiseaseLibrary).where(func.lower(DiseaseLibrary.name) == condition_name.lower())
@@ -142,11 +103,17 @@ async def update_profile(
 async def export_data(user_id: CurrentUserId, db: AsyncSession = Depends(get_db)):
     """Export all user data as JSON."""
     try:
+        # pyrefly: ignore [missing-import]
         from fastapi.encoders import jsonable_encoder
+        # pyrefly: ignore [missing-import]
         from app.models.medical_record import MedicalRecord
+        # pyrefly: ignore [missing-import]
         from app.models.medicine import Medicine
+        # pyrefly: ignore [missing-import]
         from app.models.appointment import Appointment
+        # pyrefly: ignore [missing-import]
         from app.models.emergency import EmergencyContact
+        # pyrefly: ignore [missing-import]
         from app.models.family import FamilyMember, Vaccination
         from app.models.expense import MedicalExpense
 
@@ -182,6 +149,7 @@ async def export_data(user_id: CurrentUserId, db: AsyncSession = Depends(get_db)
         import logging
         logger = logging.getLogger("lifeos.users")
         logger.error(f"Export Error: {str(e)}\n{traceback.format_exc()}")
+        # pyrefly: ignore [missing-import]
         from fastapi import HTTPException
         raise HTTPException(status_code=500, detail=f"Export Error: {str(e)}")
 
@@ -237,9 +205,10 @@ async def toggle_login_alerts(user_id: CurrentUserId, db: AsyncSession = Depends
 async def upload_avatar(
     user_id: CurrentUserId,
     db: AsyncSession = Depends(get_db),
-    file: __import__("fastapi").UploadFile = __import__("fastapi").File(...)
+    file: UploadFile = File(...)
 ):
     """Upload and set the user's avatar image."""
+    # pyrefly: ignore [missing-import]
     import shutil
     import os
     import time
@@ -258,6 +227,7 @@ async def upload_avatar(
     # Validate extension
     ext = file.filename.split('.')[-1].lower() if '.' in file.filename else ''
     if ext not in ['jpg', 'jpeg', 'png', 'gif', 'webp']:
+        # pyrefly: ignore [missing-import]
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="Invalid image format. Allowed: jpg, png, gif, webp")
         
@@ -303,6 +273,7 @@ async def upload_avatar(
     return profile
 
 
+# pyrefly: ignore [missing-import]
 from pydantic import BaseModel
 
 class DeviceTokenUpdate(BaseModel):
@@ -313,6 +284,7 @@ async def update_device_token(
     data: DeviceTokenUpdate, user_id: CurrentUserId, db: AsyncSession = Depends(get_db)
 ):
     """Register or update the user's push notification device token."""
+    # pyrefly: ignore [missing-import]
     from sqlalchemy import text
     try:
         await db.execute(text("ALTER TABLE user_profiles ADD COLUMN push_device_token VARCHAR(255);"))
@@ -336,6 +308,7 @@ async def test_push_notification(
     user_id: CurrentUserId, db: AsyncSession = Depends(get_db)
 ):
     """Send a test push notification to the user's registered device."""
+    # pyrefly: ignore [missing-import]
     from fastapi import HTTPException
     import traceback
     

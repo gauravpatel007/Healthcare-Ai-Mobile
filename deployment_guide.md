@@ -49,9 +49,8 @@ newgrp docker
 You need to clone your repository to the AWS server. 
 ```bash
 # Clone the repository (replace with your actual git URL)
-git clone https://github.com/gauravpatel007/Healthcare-Ai-Mobile.git
-
 # Enter the project directory
+git clone https://github.com/gauravpatel007/Healthcare-Ai-Mobile.git
 cd Healthcare-Ai-Mobile
 ```
 

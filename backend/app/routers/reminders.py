@@ -1,8 +1,12 @@
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, Depends, HTTPException, Query
+# pyrefly: ignore [missing-import]
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import select
+# pyrefly: ignore [missing-import]
+from sqlalchemy import select, update
+# pyrefly: ignore [missing-import]
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import CurrentUserId
@@ -191,3 +195,16 @@ async def read_notice(notice_id: str, user_id: CurrentUserId, db: AsyncSession =
     notice.read = True
     await db.commit()
     return {"success": True}
+
+
+@router.post("/notifications/read-all")
+@router.delete("/notifications")
+async def clear_all_notices(user_id: CurrentUserId, db: AsyncSession = Depends(get_db)):
+    await db.execute(
+        update(ReminderNotice)
+        .where(ReminderNotice.user_id == user_id, ReminderNotice.read == False)
+        .values(read=True)
+    )
+    await db.commit()
+    return {"success": True}
+

@@ -124,13 +124,13 @@ export async function recordDose(dose, status, options = {}) {
     snoozed_until: status === 'snoozed' ? new Date(Date.now() + action.minutes * 60000).toISOString() : null } : d) };
   localStorage.setItem(CACHE, JSON.stringify(data));
   update({ data, pending: state.pending + 1 });
-  await refreshReminders();
+  refreshReminders(); // Fire and forget so UI doesn't hang
 }
 
 export async function discardAction(id) {
   localStorage.setItem(QUEUE, JSON.stringify(parse(QUEUE, []).filter(a => a.action_id !== id)));
   if (nativeReminders) await Native.acknowledge({ ids: [id], doses: state.data?.doses || [] });
-  await refreshReminders();
+  refreshReminders(); // Fire and forget
 }
 
 export async function saveReminderSettings(patch) {
@@ -147,12 +147,16 @@ export async function enableReminderNotifications() {
     if (!permission.notifications) throw new Error('Allow LifeOS notifications in Android settings.');
     await saveReminderSettings({ enabled: true, delivery: 'device', device_id: deviceId() });
   } else {
-    const OneSignal = (await import('react-onesignal')).default;
-    await OneSignal.Notifications.requestPermission();
-    const token = OneSignal.User.PushSubscription.id;
-    if (!token) throw new Error('Push registration is not ready. Allow notifications and try again.');
-    await API.put('/users/me/device-token', { token });
-    await saveReminderSettings({ enabled: true, delivery: 'server', device_id: null });
+    const OneSignal = typeof window !== 'undefined' ? window.OneSignal : null;
+    if (OneSignal?.Notifications?.requestPermission) {
+      await OneSignal.Notifications.requestPermission();
+      const token = OneSignal.User?.PushSubscription?.id;
+      if (!token) throw new Error('Push registration is not ready. Allow notifications and try again.');
+      await API.put('/users/me/device-token', { token });
+      await saveReminderSettings({ enabled: true, delivery: 'server', device_id: null });
+    } else {
+      throw new Error('Push notifications are currently supported on the Android mobile app.');
+    }
   }
 }
 export const openAlarmSettings = () => Native.openAlarmSettings();

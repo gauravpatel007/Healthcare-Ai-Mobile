@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import API from '../utils/api';
 import { toast } from 'react-hot-toast';
 import { Moon, Scale, Watch, Activity, HeartPulse, Footprints, Flame, Trophy } from 'lucide-react';
@@ -594,8 +595,8 @@ const Trackers = ({ voiceAction, onVoiceActionConsumed }) => {
       )}
 
       {/* Fitbit Connection Modal */}
-      {showFitbitModal && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 animate-in zoom-in-95 duration-200" onClick={(e) => { if (e.target === e.currentTarget) setShowFitbitModal(false) }}>
+      {showFitbitModal && createPortal(
+        <div className="fixed inset-0 z-[100000] flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 animate-in zoom-in-95 duration-200" onClick={(e) => { if (e.target === e.currentTarget) setShowFitbitModal(false) }}>
           <div className="bg-white dark:bg-gray-800 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col">
             <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 flex justify-between items-center shrink-0">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -636,7 +637,8 @@ const Trackers = ({ voiceAction, onVoiceActionConsumed }) => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ══════ GAMIFICATION TAB ══════ */}

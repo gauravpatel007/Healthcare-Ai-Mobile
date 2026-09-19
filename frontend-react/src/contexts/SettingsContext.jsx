@@ -5,15 +5,37 @@ const SettingsContext = createContext();
 
 export const useSettings = () => useContext(SettingsContext);
 
+const CACHE_KEY = 'lifeos_settings_cache';
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function getCachedSettings() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw);
+    // Return cached data even if stale — caller does background refresh
+    return { data, isStale: Date.now() - ts > CACHE_TTL_MS };
+  } catch { return null; }
+}
+
+function saveCachedSettings(data) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ data, ts: Date.now() }));
+  } catch { /* quota exceeded or private mode — ignore */ }
+}
+
 export const SettingsProvider = ({ children }) => {
-  const [settings, setSettings] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // Initialize from cache immediately — no loading spinner needed
+  const cached = getCachedSettings();
+  const [settings, setSettings] = useState(cached?.data || null);
+  const [loading, setLoading] = useState(!cached?.data); // only loading if no cache
 
   const fetchSettings = async () => {
     try {
       const res = await api.getAdminSettings();
       if (res && res.data) {
         setSettings(res.data);
+        saveCachedSettings(res.data);
       }
     } catch (err) {
       console.error("Failed to fetch global settings:", err);
@@ -23,6 +45,7 @@ export const SettingsProvider = ({ children }) => {
   };
 
   useEffect(() => {
+    // Always fetch fresh settings in background
     fetchSettings();
   }, []);
 
@@ -83,3 +106,4 @@ export const SettingsProvider = ({ children }) => {
     </SettingsContext.Provider>
   );
 };
+
