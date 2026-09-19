@@ -14,8 +14,8 @@ def send_push_notification(player_id: str, title: str, message: str):
     Send a push notification to a specific user via OneSignal.
     """
     settings = get_settings()
-    app_id = settings.ONESIGNAL_APP_ID
-    rest_api_key = settings.ONESIGNAL_REST_API_KEY
+    app_id = settings.ONESIGNAL_APP_ID.strip('"').strip("'") if settings.ONESIGNAL_APP_ID else ""
+    rest_api_key = settings.ONESIGNAL_REST_API_KEY.strip('"').strip("'") if settings.ONESIGNAL_REST_API_KEY else ""
     
     if not app_id or not rest_api_key:
         logger.warning("OneSignal keys not configured. Skipping push notification.")

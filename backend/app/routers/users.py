@@ -299,9 +299,19 @@ async def update_device_token(
         raise NotFoundException("Profile")
         
     profile.push_device_token = data.token
+    
+    # Also auto-enable reminder notifications
+    from app.models.reminder import ReminderSettings
+    settings = await db.get(ReminderSettings, user_id)
+    if not settings:
+        settings = ReminderSettings(user_id=user_id, enabled=True)
+        db.add(settings)
+    else:
+        settings.enabled = True
+        
     await db.commit()
     
-    return {"success": True, "message": "Device token registered"}
+    return {"success": True, "message": "Device token registered and notifications enabled"}
 
 @router.post("/me/notifications/clear")
 async def clear_notifications(user_id: CurrentUserId, db: AsyncSession = Depends(get_db)):

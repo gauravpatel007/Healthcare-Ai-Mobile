@@ -125,6 +125,10 @@ export function refreshReminders() {
       }
       update({ data, error: '', loading: false, offline: false, pending: waiting.length, rejected });
       window.dispatchEvent(new Event('medicine-reminders-updated'));
+      
+      if (typeof window !== 'undefined' && window._registerOneSignalToken) {
+        window._registerOneSignalToken();
+      }
     } catch (e) {
       if (e.status === 404 && epoch === generation) {
         backendAvailable = false;

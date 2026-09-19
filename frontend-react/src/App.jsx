@@ -128,24 +128,37 @@ const AppRoutes = () => {
           // Helper function to register token
           const registerToken = (playerId) => {
             if (!playerId) return;
-            const token = localStorage.getItem('token');
+            const token = localStorage.getItem('lifeos_access_token');
             if (token) {
               import('./utils/api').then(({ default: API }) => {
                 API.put('/users/me/device-token', { token: playerId })
+                  .then(() => console.log('Successfully registered device token with backend'))
                   .catch(err => console.error("Failed to register device token", err));
               });
+            } else {
+              // Not logged in yet. Listen for login event or wait and retry
+              console.log('No auth token yet, waiting to register device token...');
             }
           };
 
+          // Expose globally so login/auth logic can trigger this after successful login
+          window._registerOneSignalToken = () => {
+             if (OneSignal.User?.pushSubscription?.id) {
+               registerToken(OneSignal.User.pushSubscription.id);
+             }
+          };
+
           // Try to register token immediately on startup (for returning users)
-          if (OneSignal.User.pushSubscription.id) {
-            registerToken(OneSignal.User.pushSubscription.id);
-          } else {
-            // Also listen for changes (when user first grants permission, the ID will populate async)
-            OneSignal.User.pushSubscription.addEventListener('change', (subscription) => {
-              registerToken(subscription.current.id);
-            });
-          }
+          setTimeout(() => {
+            if (OneSignal.User?.pushSubscription?.id) {
+              registerToken(OneSignal.User.pushSubscription.id);
+            }
+          }, 2000); // Wait for initAuth to potentially finish
+
+          // Also listen for changes (when user first grants permission, the ID will populate async)
+          OneSignal.User.pushSubscription.addEventListener('change', (subscription) => {
+            registerToken(subscription.current.id);
+          });
         } catch (err) {
           console.error("Native OneSignal initialization failed", err);
         }
