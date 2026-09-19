@@ -4,8 +4,10 @@ Loads environment variables using Pydantic Settings.
 """
 
 from functools import lru_cache
+# pyrefly: ignore [missing-import]
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
+# pyrefly: ignore [missing-import]
 from pydantic import field_validator
 import os
 
