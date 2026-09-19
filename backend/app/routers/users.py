@@ -301,13 +301,9 @@ async def update_device_token(
     profile.push_device_token = data.token
     
     # Also auto-enable reminder notifications
-    from app.models.reminder import ReminderSettings
-    settings = await db.get(ReminderSettings, user_id)
-    if not settings:
-        settings = ReminderSettings(user_id=user_id, enabled=True)
-        db.add(settings)
-    else:
-        settings.enabled = True
+    from app.services.reminders import settings_for
+    settings = await settings_for(db, user_id, lock=False)
+    settings.enabled = True
         
     await db.commit()
     
