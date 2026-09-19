@@ -3,6 +3,14 @@ import { useSyncExternalStore } from 'react';
 import API from './api';
 import { legacyReminderPreview } from './reminderCompatibility';
 
+// Timeout wrapper — prevents fetch from hanging indefinitely (e.g. ECONNREFUSED on mobile)
+function withTimeout(promise, ms = 8000) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Request timed out')), ms))
+  ]);
+}
+
 export const nativeReminders = Capacitor.getPlatform() === 'android';
 const Native = registerPlugin('MedicineReminders');
 const namespace = location.pathname.startsWith('/qa/') ? 'lifeos_qa_medicine_reminder' : 'lifeos_medicine_reminder';
@@ -56,27 +64,31 @@ export function refreshReminders() {
       if (backendAvailable === null) {
         try {
           if (typeof API.supportsReminders === 'function') {
-            const supported = await API.supportsReminders();
+            const supported = await withTimeout(API.supportsReminders(), 5000);
             if (supported === false) backendAvailable = false;
           }
         } catch {
-          // If check fails, default to trying
+          // If check fails or times out, default to trying
         }
       }
       if (backendAvailable === false) {
-        await compatibilityPreview();
+        await withTimeout(compatibilityPreview(), 8000);
         return;
       }
       let data;
       try {
-        data = await API.get(`/reminders?timezone=${encodeURIComponent(localZone())}`);
+        data = await withTimeout(API.get(`/reminders?timezone=${encodeURIComponent(localZone())}`), 8000);
         backendAvailable = true;
       } catch (err) {
         console.warn('Direct /reminders fetch failed:', err);
         if (err.status === 404) {
           backendAvailable = false;
         }
-        await compatibilityPreview();
+        try {
+          await withTimeout(compatibilityPreview(), 8000);
+        } catch (fallbackErr) {
+          update({ error: fallbackErr.message || 'Backend unreachable', loading: false, offline: true });
+        }
         return;
       }
       if (epoch !== generation) return;

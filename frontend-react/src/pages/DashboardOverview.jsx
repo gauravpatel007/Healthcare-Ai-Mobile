@@ -719,33 +719,55 @@ const DashboardOverview = ({ currentUser, voiceAction, onVoiceActionConsumed }) 
               </div>
               <div className="space-y-4 pr-2">
                 {(() => {
-                  if (reminderError) return <p className="text-xs font-medium text-red-500 py-2">Backend unavailable. Please ensure the server is running.</p>;
-                  if (!reminderData || !reminderData.doses) return <p className="text-xs font-medium text-gray-400 py-2">Loading...</p>;
-                  const s = reminderData.settings;
-                  const today = new Intl.DateTimeFormat('en-CA', { timeZone: s.timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-                  const now = Date.now();
-                  const doses = reminderData.doses.map(d => {
-                    if (!['upcoming', 'due', 'pending', 'snoozed', 'missed'].includes(d.status)) return d;
-                    const due = new Date(d.snoozed_until || d.scheduled_at).getTime();
-                    return { ...d, status: now > due + s.grace_minutes * 60000 ? 'missed' : due <= now ? 'due' : d.snoozed_until ? 'snoozed' : 'upcoming' };
-                  });
-                  const todayDoses = doses.filter(d => d.date === today).sort((a, b) => b.scheduled_at.localeCompare(a.scheduled_at));
+                  // If reminder data is available and has doses, show the dose cards
+                  if (reminderData && reminderData.doses) {
+                    const s = reminderData.settings;
+                    const today = new Intl.DateTimeFormat('en-CA', { timeZone: s.timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+                    const now = Date.now();
+                    const doses = reminderData.doses.map(d => {
+                      if (!['upcoming', 'due', 'pending', 'snoozed', 'missed'].includes(d.status)) return d;
+                      const due = new Date(d.snoozed_until || d.scheduled_at).getTime();
+                      return { ...d, status: now > due + s.grace_minutes * 60000 ? 'missed' : due <= now ? 'due' : d.snoozed_until ? 'snoozed' : 'upcoming' };
+                    });
+                    const todayDoses = doses.filter(d => d.date === today).sort((a, b) => b.scheduled_at.localeCompare(a.scheduled_at));
 
-                  if (!todayDoses.length) return <p className="text-xs font-medium text-gray-400 py-2">No active medications for today.</p>;
+                    if (!todayDoses.length) return <p className="text-xs font-medium text-gray-400 py-2">No active medications for today.</p>;
 
-                  return todayDoses.map(d => (
-                    <MedicineDoseCard
-                      key={d.id}
-                      d={d}
-                      view="today"
-                      busy={busy}
-                      readOnly={Boolean(reminderData.compatibility)}
-                      s={s}
-                      action={action}
-                      setDialog={setDialog}
-                      setReason={setReason}
-                    />
-                  ));
+                    return todayDoses.map(d => (
+                      <MedicineDoseCard
+                        key={d.id}
+                        d={d}
+                        view="today"
+                        busy={busy}
+                        readOnly={Boolean(reminderData.compatibility)}
+                        s={s}
+                        action={action}
+                        setDialog={setDialog}
+                        setReason={setReason}
+                      />
+                    ));
+                  }
+
+                  // Fallback: show simple medicine list from myMeds (always loaded separately)
+                  if (myMeds && myMeds.length > 0) {
+                    return myMeds.map(m => (
+                      <div key={m.id} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                        <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                          <Pill className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1 overflow-hidden">
+                          <h4 className="font-bold text-gray-900 dark:text-gray-100 truncate text-sm">{m.name}</h4>
+                          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 truncate">
+                            {m.dosage} • {(m.times || []).join(', ')}
+                          </p>
+                        </div>
+                      </div>
+                    ));
+                  }
+
+                  // Nothing at all
+                  if (reminderError) return <p className="text-xs font-medium text-red-500 py-2">Could not load reminders. Check your connection.</p>;
+                  return <p className="text-xs font-medium text-gray-400 py-2">Loading...</p>;
                 })()}
               </div>
             </div>

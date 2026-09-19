@@ -47,7 +47,7 @@ const UserNotificationsDropdown = () => {
   const fetchNotifications = async () => {
     try {
       const results = await Promise.allSettled([API.getUserNotifications(),
-      reminderApiAvailable() ? API.get('/reminders/notifications') : Promise.resolve([])]);
+      API.get('/reminders/notifications').catch(() => [])]);
       const data = results.flatMap(r => r.status === 'fulfilled' ? (r.value || []) : [])
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
       if (data) {
