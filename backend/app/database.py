@@ -107,6 +107,22 @@ async def init_db():
                 await conn.run_sync(Base.metadata.create_all)
             except Exception as e:
                 logger.warning(f"Table reflection / creation warning during init_db: {e}")
+                
+        # Run a separate transaction just for reminder tables to ensure they exist
+        async with engine.begin() as conn:
+            try:
+                from app.models.reminder import ReminderSettings, MedicineDose, ReminderAction, ReminderNotice
+                await conn.run_sync(
+                    Base.metadata.create_all, 
+                    tables=[
+                        ReminderSettings.__table__, 
+                        MedicineDose.__table__,
+                        ReminderAction.__table__,
+                        ReminderNotice.__table__
+                    ]
+                )
+            except Exception as rem_err:
+                logger.warning(f"Reminder tables creation warning: {rem_err}")
 
             # pyrefly: ignore [missing-import]
             from sqlalchemy import text
