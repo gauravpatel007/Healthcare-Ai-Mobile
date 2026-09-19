@@ -200,9 +200,10 @@ export const openAlarmSettings = () => Native.openAlarmSettings();
 export const openNotificationSettings = () => Native.openNotificationSettings();
 export async function testReminderNotification() {
   if (nativeReminders) {
-    const status = await Native.test();
-    if (!status.notifications) throw new Error('Notifications are blocked in Android settings.');
-  } else await API.post('/users/me/test-push', {});
+    const registered = await window._registerOneSignalToken?.();
+    if (!registered) throw new Error('Allow LifeOS notifications and sign in, then try again.');
+  }
+  return API.post('/users/me/test-push', {});
 }
 
 export async function clearReminderSession() {

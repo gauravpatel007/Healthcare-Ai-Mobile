@@ -139,6 +139,7 @@ const API = {
       localStorage.removeItem('lifeos_is_authenticated');
       NativePreferences.remove('lifeos_is_authenticated');
     }
+    window.dispatchEvent(new Event('lifeos-auth-changed'));
   },
 
   async logout(emailToRemove = null) {

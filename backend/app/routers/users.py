@@ -278,36 +278,43 @@ from pydantic import BaseModel
 
 class DeviceTokenUpdate(BaseModel):
     token: str
+    timezone: str | None = None
 
 @router.put("/me/device-token")
 async def update_device_token(
     data: DeviceTokenUpdate, user_id: CurrentUserId, db: AsyncSession = Depends(get_db)
 ):
-    """Register or update the user's push notification device token."""
-    # pyrefly: ignore [missing-import]
-    from sqlalchemy import text
-    try:
-        await db.execute(text("ALTER TABLE user_profiles ADD COLUMN push_device_token VARCHAR(255);"))
-        await db.commit()
-    except Exception:
-        await db.rollback()
-
-    result = await db.execute(select(UserProfile).where(UserProfile.user_id == user_id))
-    profile = result.scalar_one_or_none()
-    if not profile:
-        from app.exceptions import NotFoundException
-        raise NotFoundException("Profile")
-        
-    profile.push_device_token = data.token
-    
-    # Also auto-enable reminder notifications
+    """Associate the current phone with its signed-in account."""
+    from fastapi import HTTPException
+    from sqlalchemy import update
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
     from app.services.reminders import settings_for
-    settings = await settings_for(db, user_id, lock=False)
-    settings.enabled = True
-        
+    from app.models.reminder import MedicineDose
+    if not data.token or len(data.token) > 255:
+        raise HTTPException(422, "Invalid subscription ID")
+    if data.timezone:
+        try:
+            ZoneInfo(data.timezone)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise HTTPException(422, "Invalid timezone")
+    settings = await settings_for(db, user_id, data.timezone or "UTC")
+    profile = (await db.execute(select(UserProfile).where(UserProfile.user_id == user_id))).scalar_one_or_none()
+    if not profile:
+        raise NotFoundException("Profile")
+    changed = profile.push_device_token != data.token
+    # A shared phone must not keep receiving another account's reminders.
+    await db.execute(update(UserProfile).where(UserProfile.push_device_token == data.token,
+        UserProfile.user_id != user_id).values(push_device_token=None))
+    profile.push_device_token = data.token
+    if data.timezone:
+        settings.timezone = data.timezone
+    # Preserve an explicit notification opt-out. New settings default to enabled.
+    if changed:
+        await db.execute(update(MedicineDose).where(MedicineDose.user_id == user_id,
+            MedicineDose.status.in_(["pending", "snoozed"]), MedicineDose.notified_at.is_(None)
+        ).values(push_attempts=0))
     await db.commit()
-    
-    return {"success": True, "message": "Device token registered and notifications enabled"}
+    return {"success": True, "message": "Phone registered for notifications"}
 
 @router.post("/me/notifications/clear")
 async def clear_notifications(user_id: CurrentUserId, db: AsyncSession = Depends(get_db)):
@@ -326,69 +333,17 @@ async def clear_notifications(user_id: CurrentUserId, db: AsyncSession = Depends
     raise NotFoundException("Profile")
 
 @router.post("/me/test-push")
-async def test_push_notification(
-    user_id: CurrentUserId, db: AsyncSession = Depends(get_db)
-):
-    """Send a test push notification to the user's registered device."""
-    # pyrefly: ignore [missing-import]
+async def test_push_notification(user_id: CurrentUserId, db: AsyncSession = Depends(get_db)):
+    """Exercise the same remote push path used by scheduled medicines."""
+    import asyncio
     from fastapi import HTTPException
-    import traceback
-    
-    try:
-        result = await db.execute(select(UserProfile).where(UserProfile.user_id == user_id))
-        profile = result.scalar_one_or_none()
-        
-        if not profile or not profile.push_device_token:
-            raise HTTPException(status_code=400, detail="No push device token found. Please subscribe first.")
-        
-        token = profile.push_device_token
-        
-        # Inline the push notification logic here for better error visibility
-        import urllib.request
-        import json as json_lib
-        from app.config import get_settings
-        
-        settings = get_settings()
-        app_id = settings.ONESIGNAL_APP_ID.strip('"').strip("'")
-        rest_api_key = settings.ONESIGNAL_REST_API_KEY.strip('"').strip("'")
-        
-        if not app_id or not rest_api_key:
-            raise HTTPException(
-                status_code=500, 
-                detail=f"OneSignal not configured. app_id='{app_id}', key_prefix='{rest_api_key[:20] if rest_api_key else 'EMPTY'}'"
-            )
-        
-        url = "https://onesignal.com/api/v1/notifications"
-        payload = {
-            "app_id": app_id,
-            "target_channel": "push",
-            "include_subscription_ids": [token],
-            "headings": {"en": "Test Notification 🚀"},
-            "contents": {"en": "Your push notifications are working perfectly!"},
-        }
-        
-        req = urllib.request.Request(
-            url,
-            data=json_lib.dumps(payload).encode(),
-            headers={
-                "Content-Type": "application/json; charset=utf-8",
-                "Authorization": f"Basic {rest_api_key}"
-            },
-            method="POST"
-        )
-        
-        with urllib.request.urlopen(req) as response:
-            res_data = json_lib.loads(response.read())
-            return {"success": True, "message": "Test notification sent", "onesignal_response": res_data}
-            
-    except HTTPException:
-        raise
-    except Exception as e:
-        error_body = ""
-        if hasattr(e, 'read'):
-            try:
-                error_body = e.read().decode()
-            except Exception:
-                pass
-        full_error = f"{str(e)} | Body: {error_body}" if error_body else str(e)
-        raise HTTPException(status_code=500, detail=f"Push error: {full_error}")
+    from app.utils.push import send_push_notification
+    profile = (await db.execute(select(UserProfile).where(UserProfile.user_id == user_id))).scalar_one_or_none()
+    if not profile or not profile.push_device_token:
+        raise HTTPException(400, "Open LifeOS on your phone and allow notifications first.")
+    success, message = await asyncio.to_thread(send_push_notification, profile.push_device_token,
+        "LifeOS reminder test", "Test only: medicine reminders can appear here while LifeOS is closed.",
+        data={"href": "/app/medicine?tab=reminders", "type": "reminder_test"}, ttl=300)
+    if not success:
+        raise HTTPException(502, message)
+    return {"success": True, "message": "Test push accepted. Check your phone notifications."}

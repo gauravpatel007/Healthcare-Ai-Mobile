@@ -9,13 +9,13 @@ from app.config import get_settings
 
 logger = logging.getLogger("lifeos.push")
 
-def send_push_notification(player_id: str, title: str, message: str):
+def send_push_notification(player_id: str, title: str, message: str, *, data=None, ttl=7200):
     """
     Send a push notification to a specific user via OneSignal.
     """
     settings = get_settings()
-    app_id = settings.ONESIGNAL_APP_ID.strip('"').strip("'") if settings.ONESIGNAL_APP_ID else ""
-    rest_api_key = settings.ONESIGNAL_REST_API_KEY.strip('"').strip("'") if settings.ONESIGNAL_REST_API_KEY else ""
+    app_id = settings.ONESIGNAL_APP_ID.strip().strip('"').strip("'")
+    rest_api_key = settings.ONESIGNAL_REST_API_KEY.strip().strip('"').strip("'")
     
     if not app_id or not rest_api_key:
         logger.warning("OneSignal keys not configured. Skipping push notification.")
@@ -24,7 +24,7 @@ def send_push_notification(player_id: str, title: str, message: str):
     if not player_id:
         return False, "Missing player_id/device token"
         
-    url = "https://onesignal.com/api/v1/notifications"
+    url = "https://api.onesignal.com/notifications"
     
     payload = {
         "app_id": app_id,
@@ -32,6 +32,9 @@ def send_push_notification(player_id: str, title: str, message: str):
         "include_subscription_ids": [player_id],
         "headings": {"en": title},
         "contents": {"en": message},
+        "priority": 10,
+        "ttl": max(0, int(ttl)),
+        "data": data or {},
     }
     
     req = urllib.request.Request(
@@ -48,8 +51,9 @@ def send_push_notification(player_id: str, title: str, message: str):
         with urllib.request.urlopen(req, timeout=10) as response:
             res_data = json.loads(response.read())
             if not res_data.get("id"):
-                return False, "Push provider did not accept the notification"
-            logger.info(f"Push notification sent successfully: {res_data}")
+                logger.warning("Push rejected: %s", res_data.get("errors", "No recipients"))
+                return False, "Phone subscription is no longer active. Open LifeOS, allow notifications and retry."
+            logger.info("Push accepted by OneSignal: %s", res_data["id"])
             return True, "Sent"
     except Exception as e:
         logger.error(f"Failed to send push notification: {e}")

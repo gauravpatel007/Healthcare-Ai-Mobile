@@ -8,6 +8,8 @@ import { Toaster } from 'react-hot-toast'
 import { Capacitor } from '@capacitor/core'
 import OneSignal from 'onesignal-cordova-plugin'
 import { startReminderNavigation } from './utils/reminders'
+import API from './utils/api'
+import { createPushRegistration } from './utils/pushRegistration'
 
 // Lazy-loaded pages — each becomes a separate JS chunk loaded on demand
 const LandingPage = React.lazy(() => import('./pages/LandingPage'));
@@ -105,74 +107,46 @@ const AppRoutes = () => {
     }
   }, [isMaintenance, isAdminRoute, isRoot, navigate]);
 
-  // OneSignal Push Notifications Setup
+  // Keep registration independent of loading the medicine screen.
   useEffect(() => {
-    const initOneSignal = async () => {
-      const appId = "b59262d3-8500-4aa1-a8be-4d87675cdd9e";
-      
-      if (Capacitor.isNativePlatform()) {
-        try {
-          // Initialize OneSignal (v5 SDK API)
-          OneSignal.initialize(appId);
-          
-          // Request push notification permission
-          OneSignal.Notifications.requestPermission(true).then((accepted) => {
-            console.log("User accepted notifications: " + accepted);
-          });
-          
-          // Set notification handler
-          OneSignal.Notifications.addEventListener('click', (event) => {
-            console.log('notificationOpenedCallback: ' + JSON.stringify(event));
-          });
-
-          // Helper function to register token
-          const registerToken = (playerId) => {
-            if (!playerId) return;
-            const token = localStorage.getItem('lifeos_access_token');
-            if (token) {
-              import('./utils/api').then(({ default: API }) => {
-                API.put('/users/me/device-token', { token: playerId })
-                  .then(() => console.log('Successfully registered device token with backend'))
-                  .catch(err => console.error("Failed to register device token", err));
-              });
-            } else {
-              // Not logged in yet. Listen for login event or wait and retry
-              console.log('No auth token yet, waiting to register device token...');
-            }
-          };
-
-          // Expose globally so login/auth logic can trigger this after successful login
-          window._registerOneSignalToken = () => {
-             if (OneSignal.User?.pushSubscription?.id) {
-               registerToken(OneSignal.User.pushSubscription.id);
-             }
-          };
-
-          // Try to register token immediately on startup (for returning users)
-          setTimeout(() => {
-            if (OneSignal.User?.pushSubscription?.id) {
-              registerToken(OneSignal.User.pushSubscription.id);
-            }
-          }, 2000); // Wait for initAuth to potentially finish
-
-          // Also listen for changes (when user first grants permission, the ID will populate async)
-          OneSignal.User.pushSubscription.addEventListener('change', (subscription) => {
-            registerToken(subscription.current.id);
-          });
-        } catch (err) {
-          console.error("Native OneSignal initialization failed", err);
-        }
-      } else {
-        // Fallback for Web Push (PWA/Browser) - NOTE: react-onesignal was uninstalled
-        // but if reinstalled, it can be used here. For now, doing nothing on web.
-        console.log("Running in browser, skipping native push notifications.");
+    if (!Capacitor.isNativePlatform()) return;
+    let stopped = false;
+    OneSignal.initialize("b59262d3-8500-4aa1-a8be-4d87675cdd9e");
+    const subscription = OneSignal.User.pushSubscription;
+    const register = createPushRegistration(API, subscription,
+      () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+    const sync = () => register().catch(err => {
+      console.warn('Push registration will retry:', err.message);
+      return false;
+    });
+    const click = event => {
+      if (event.notification?.additionalData?.href === '/app/medicine?tab=reminders') {
+        navigate(API.isAuthenticated() ? '/app/medicine?tab=reminders' : '/?login=true');
       }
     };
-    initOneSignal();
-  }, []);
-
-
-
+    const resume = () => { if (!document.hidden) sync(); };
+    subscription.addEventListener('change', sync);
+    OneSignal.Notifications.addEventListener('click', click);
+    OneSignal.Notifications.addEventListener('permissionChange', sync);
+    window.addEventListener('lifeos-auth-changed', sync);
+    window.addEventListener('online', sync);
+    document.addEventListener('visibilitychange', resume);
+    window._registerOneSignalToken = sync;
+    API.initAuth().then(() => { if (!stopped) sync(); });
+    OneSignal.Notifications.requestPermission(true).then(() => { if (!stopped) sync(); }).catch(console.warn);
+    const retry = setInterval(sync, 30000);
+    return () => {
+      stopped = true;
+      clearInterval(retry);
+      subscription.removeEventListener('change', sync);
+      OneSignal.Notifications.removeEventListener('click', click);
+      OneSignal.Notifications.removeEventListener('permissionChange', sync);
+      window.removeEventListener('lifeos-auth-changed', sync);
+      window.removeEventListener('online', sync);
+      document.removeEventListener('visibilitychange', resume);
+      if (window._registerOneSignalToken === sync) delete window._registerOneSignalToken;
+    };
+  }, [navigate]);
 
   // If maintenance mode is active, not on an admin route, and not on root
   if (isMaintenance && !isAdminRoute && !isRoot) {
