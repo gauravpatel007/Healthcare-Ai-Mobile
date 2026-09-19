@@ -93,9 +93,9 @@ const AdminLayout = () => {
     <div className={adminTheme === 'dark' ? 'dark' : ''} style={{colorScheme: adminTheme}} data-theme={adminTheme}>
     <div className="fixed inset-0 z-50 flex bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
       
-      {/* Desktop Sidebar (Hidden in favor of top/bottom nav for all sizes) */}
+      {/* Desktop Sidebar */}
       <aside 
-        className={`hidden ${
+        className={`hidden md:flex ${
           isSidebarOpen ? 'w-64' : 'w-20'
         } transition-all duration-300 ease-in-out bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex-col justify-between shrink-0`}
       >
@@ -186,7 +186,9 @@ const AdminLayout = () => {
         </header>
 
         {/* Mobile Secondary Nav */}
-        <AdminTopNav items={topNavItems} checkIsActive={checkIsActive} topNavRef={topNavRef} />
+        <div className="md:hidden">
+          <AdminTopNav items={topNavItems} checkIsActive={checkIsActive} topNavRef={topNavRef} />
+        </div>
 
         {/* Page Content */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 pb-16 md:pb-6 scroll-smooth z-10 relative">
@@ -194,7 +196,9 @@ const AdminLayout = () => {
         </div>
 
         {/* Mobile Primary Nav */}
-        <AdminBottomNav items={bottomNavItems} checkIsActive={checkIsActive} />
+        <div className="md:hidden">
+          <AdminBottomNav items={bottomNavItems} checkIsActive={checkIsActive} />
+        </div>
         
       </main>
     </div>
