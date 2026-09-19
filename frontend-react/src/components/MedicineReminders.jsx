@@ -39,7 +39,7 @@ export default function MedicineReminders() {
   const todayDoses = doses.filter(d => d.date === today);
   const shown = doses.filter(d => (view === 'today' ? d.date === today : d.date <= today)
     && (filter === 'all' || d.status === filter) && (medicine === 'all' || d.medicine_id === medicine)
-    && (!day || d.date === day)).sort((a, b) => view === 'today' ? a.scheduled_at.localeCompare(b.scheduled_at) : b.scheduled_at.localeCompare(a.scheduled_at));
+    && (!day || d.date === day)).sort((a, b) => b.scheduled_at.localeCompare(a.scheduled_at));
   const tracked = data.medicines.filter(m => m.is_active && ['tablet', 'capsule'].includes(m.type));
   const isThisDevice = s.delivery === 'device' && s.device_id === deviceId();
   const action = (d, status, opts) => run(async () => { await recordDose(d, status, opts); setDialog(null); });

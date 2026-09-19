@@ -729,7 +729,7 @@ const DashboardOverview = ({ currentUser, voiceAction, onVoiceActionConsumed }) 
                     const due = new Date(d.snoozed_until || d.scheduled_at).getTime();
                     return { ...d, status: now > due + s.grace_minutes * 60000 ? 'missed' : due <= now ? 'due' : d.snoozed_until ? 'snoozed' : 'upcoming' };
                   });
-                  const todayDoses = doses.filter(d => d.date === today).sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at));
+                  const todayDoses = doses.filter(d => d.date === today).sort((a, b) => b.scheduled_at.localeCompare(a.scheduled_at));
 
                   if (!todayDoses.length) return <p className="text-xs font-medium text-gray-400 py-2">No active medications for today.</p>;
 

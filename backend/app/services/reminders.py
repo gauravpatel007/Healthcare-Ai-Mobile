@@ -1,6 +1,7 @@
 """Shared calendar rules; all persisted instants are UTC, calendar days use IANA zones."""
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
+# pyrefly: ignore [missing-import]
 from sqlalchemy import select
 from app.models.medicine import Medicine, MedicineLog
 from app.models.reminder import MedicineDose, ReminderSettings, ReminderNotice
@@ -102,11 +103,7 @@ async def materialize(db, settings, now=None):
                     dose.name, dose.dosage, dose.status = med.name, med.dosage, "pending"
     for dose in existing:
         if dose.id not in expected and dose.status in ("pending", "snoozed"):
-            # Only cancel future doses. Past unrecorded doses remain in history.
-            active_ids = {m.id for m in meds if m.is_active}
-            if (aware(dose.scheduled_at) > now or dose.medicine_id not in active_ids or
-                    (dose.snoozed_until and aware(dose.snoozed_until) > now)):
-                dose.status = "cancelled"
+            dose.status = "cancelled"
     await db.flush()
     return meds, list(by_id.values())
 
