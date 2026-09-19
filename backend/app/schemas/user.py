@@ -2,7 +2,7 @@
 LifeOS Backend — User & Profile Schemas
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class UserProfileResponse(BaseModel):
@@ -31,6 +31,13 @@ class UserProfileResponse(BaseModel):
     push_device_token: str | None = None
 
     model_config = {"from_attributes": True}
+
+    @field_validator("organ_preferences", mode="before")
+    @classmethod
+    def normalize_legacy_preferences(cls, value):
+        # Profiles created before this field was added can contain SQL NULL.
+        # Normalize the response without rewriting any saved profile data.
+        return {} if value is None else value
 
 
 class UserProfileUpdate(BaseModel):

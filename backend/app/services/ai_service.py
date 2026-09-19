@@ -177,11 +177,10 @@ async def _get_best_model(client) -> str:
         
         # Priority 2: Known reliable Groq models
         preferred_models = [
+            "openai/gpt-oss-120b",
+            "openai/gpt-oss-20b",
             "llama-3.3-70b-versatile",
-            "llama3-70b-8192",
-            "llama3-8b-8192",
-            "mixtral-8x7b-32768",
-            "gemma2-9b-it",
+            "llama-3.1-8b-instant",
         ]
         for preferred in preferred_models:
             if preferred in model_ids:
@@ -189,11 +188,8 @@ async def _get_best_model(client) -> str:
                 logger.info("Using preferred fallback model: %s", _dynamic_model)
                 return _dynamic_model
                 
-        # If no preferred model found but there are models, pick the first one
-        if model_ids:
-            _dynamic_model = model_ids[0]
-            logger.info("Using first available model: %s", _dynamic_model)
-            return _dynamic_model
+        # The catalogue also contains speech/ transcription models. Its first
+        # entry is not necessarily compatible with chat completions.
             
     except Exception as e:
         logger.warning("Failed to fetch dynamic models: %s", e)

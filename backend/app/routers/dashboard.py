@@ -3,7 +3,6 @@ LifeOS Backend — Dashboard Router
 Aggregated health dashboard data.
 """
 
-import asyncio
 from datetime import date
 
 from fastapi import APIRouter, Depends
@@ -25,7 +24,7 @@ router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
 @router.get("/summary", response_model=DashboardSummary)
 async def get_dashboard_summary(user_id: CurrentUserId, db: AsyncSession = Depends(get_db)):
-    """Get aggregated dashboard data.  All queries run in parallel."""
+    """Get aggregated dashboard data using the request's database session."""
     # Build all queries up front
     user_query = (
         select(User, UserProfile)
@@ -43,14 +42,12 @@ async def get_dashboard_summary(user_id: CurrentUserId, db: AsyncSession = Depen
     records_query = select(func.count(MedicalRecord.id)).where(MedicalRecord.user_id == user_id)
     family_query = select(FamilyMember).where(FamilyMember.user_id == user_id)
 
-    # Execute all 5 queries in parallel
-    user_r, meds_r, apts_r, records_r, family_r = await asyncio.gather(
-        db.execute(user_query),
-        db.execute(meds_query),
-        db.execute(apts_query),
-        db.execute(records_query),
-        db.execute(family_query),
-    )
+    # An AsyncSession owns one transaction and cannot run concurrent queries.
+    user_r = await db.execute(user_query)
+    meds_r = await db.execute(meds_query)
+    apts_r = await db.execute(apts_query)
+    records_r = await db.execute(records_query)
+    family_r = await db.execute(family_query)
 
     # Process results
     row = user_r.first()
@@ -73,7 +70,11 @@ async def get_dashboard_summary(user_id: CurrentUserId, db: AsyncSession = Depen
     family = family_r.scalars().all()
 
     # Health score
-    health_score = calculate_health_score(bmi, len(meds), len(apts))
+    water = 0
+    health_score = calculate_health_score(
+        bmi=bmi, water_glasses=water,
+        active_medicines=len(meds), upcoming_appointments=len(apts),
+    )
 
     # Build reminders from medicines
     reminders = [
@@ -93,9 +94,6 @@ async def get_dashboard_summary(user_id: CurrentUserId, db: AsyncSession = Depen
         {"name": f.name, "avatar": f.avatar, "conditions": f.conditions or []}
         for f in family[:3]
     ]
-
-    # Water intake (Defaulting to 0 for now as there's no water tracking table)
-    water = 0
 
     return DashboardSummary(
         health_score=health_score,
