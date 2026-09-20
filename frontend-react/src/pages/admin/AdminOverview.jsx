@@ -237,7 +237,7 @@ const AdminOverview = () => {
           const maxBarVal = Math.max(...displayAI.map(d => d.count), ...displayLogins.map(d => d.count), 1);
           const barData = displayAI.length > 0 ? displayAI : displayLogins;
           return (
-            <div className="w-full overflow-x-auto pb-4 pt-2">
+            <div className="w-full overflow-x-auto pb-4 pt-12">
               <div className={`h-72 flex items-end gap-2 px-4 relative ${rangeN === 30 ? 'min-w-[800px]' : 'w-full'}`}>
                 <div className="absolute inset-0 flex flex-col justify-between py-4 pointer-events-none">
                   {[1,2,3,4,5].map(i => <div key={i} className="w-full border-t border-dashed border-gray-200 dark:border-gray-700/20"></div>)}
@@ -374,7 +374,7 @@ const AdminOverview = () => {
         </div>
 
         {/* Chart */}
-        <div className="w-full overflow-x-auto pb-4 pt-2">
+        <div className="w-full overflow-x-auto pb-4 pt-12">
           <div className={`h-72 flex items-end gap-2 px-4 relative ${parseInt(chart2Range) === 30 ? 'min-w-[800px]' : 'w-full'}`}>
             {/* Grid lines */}
             <div className="absolute inset-0 flex flex-col justify-between py-4 pointer-events-none">
@@ -389,11 +389,12 @@ const AdminOverview = () => {
               return displayData2.length > 0 ? displayData2.map((d, i) => {
                 const pct = currentMaxVal > 0 ? Math.max((d.count / currentMaxVal) * 100, 3) : 3;
                 const dayLabel = new Date(d.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' });
+                const fullDayLabel = new Date(d.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
                 return (
                 <div key={i} className="flex-1 min-w-[20px] flex flex-col justify-end group relative z-10 h-full">
                   {/* Tooltip */}
                   <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-lg z-20">
-                    {d.count}
+                    {d.count} — {fullDayLabel}
                   </div>
                   <div className="w-full bg-indigo-100 rounded-t-xl relative overflow-hidden transition-all duration-500 group-hover:bg-indigo-200" style={{ height: '100%' }}>
                     <div 

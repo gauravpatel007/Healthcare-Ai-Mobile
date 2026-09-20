@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { Capacitor } from '@capacitor/core';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'react-hot-toast';
 import API from '../utils/api';
@@ -13,6 +16,7 @@ import {
   Globe, Ruler
 } from 'lucide-react';
 import CustomSelect from '../components/ui/CustomSelect';
+import SwipeTabContainer from '../components/SwipeTabContainer';
 
 const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
   const { unit, setUnit, displayWeight, displayHeight, weightUnit } = useUnit();
@@ -427,7 +431,7 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
     }
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     const headers = [t('Field'), t('Value')];
     const rows = [
       [t('Name'), profile.name],
@@ -446,17 +450,37 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
       [t('Secondary ICE Phone'), profile.ice2_phone],
     ];
 
-    let csvContent = "data:text/csv;charset=utf-8,"
-      + headers.join(",") + "\n"
+    let csvContent = headers.join(",") + "\n"
       + rows.map(e => e.map(item => `"${(item || '').toString().replace(/"/g, '""')}"`).join(",")).join("\n");
 
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "Healthcare_Profile.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      if (Capacitor.isNativePlatform()) {
+        const fileName = `Healthcare_Profile_${Date.now()}.csv`;
+        const result = await Filesystem.writeFile({
+          path: fileName,
+          data: csvContent,
+          directory: Directory.Cache,
+          encoding: 'utf8'
+        });
+        await Share.share({
+          title: 'Healthcare Profile',
+          text: 'Here is my healthcare profile data.',
+          url: result.uri,
+          dialogTitle: 'Share or Save CSV'
+        });
+      } else {
+        const encodedUri = encodeURI("data:text/csv;charset=utf-8," + csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "Healthcare_Profile.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error(t('Failed to export CSV'));
+    }
   };
 
   const loadScript = (src) => new Promise((resolve, reject) => {
@@ -515,7 +539,23 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
         styles: { fontSize: 11, cellPadding: 5 }
       });
 
-      doc.save('Healthcare_Profile.pdf');
+      if (Capacitor.isNativePlatform()) {
+        const base64Pdf = doc.output('datauristring').split(',')[1];
+        const fileName = `Healthcare_Profile_${Date.now()}.pdf`;
+        const result = await Filesystem.writeFile({
+          path: fileName,
+          data: base64Pdf,
+          directory: Directory.Cache,
+        });
+        await Share.share({
+          title: 'Healthcare Profile',
+          text: 'Here is my healthcare profile PDF.',
+          url: result.uri,
+          dialogTitle: 'Share or Save PDF'
+        });
+      } else {
+        doc.save('Healthcare_Profile.pdf');
+      }
     } catch (err) {
       console.error(err);
       toast.error(t('Failed to generate PDF'));
@@ -610,9 +650,14 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
       </div>
 
       {/* Tab Content */}
-      {activeTab === 'profile' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="flex flex-col gap-8">
+      <SwipeTabContainer 
+        tabs={['profile', 'security', 'advanced', 'notifications']} 
+        activeTab={activeTab} 
+        onTabChange={setActiveTab}
+      >
+        {activeTab === 'profile' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="flex flex-col gap-8">
 
             {/* Personal Information */}
             <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
@@ -1329,6 +1374,7 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
           </div>
         </div>
       )}
+      </SwipeTabContainer>
 
       {/* Login History Modal Overlay */}
       {showAllLoginsModal && createPortal(

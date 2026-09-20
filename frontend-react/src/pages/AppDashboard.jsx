@@ -6,6 +6,7 @@ import API from '../utils/api';
 import { startReminderSync } from '../utils/reminders';
 import { toast } from 'react-hot-toast';
 import { useLang } from '../contexts/LangContext';
+import { useSwipeGesture } from '../hooks/useSwipeGesture';
 
 // Create a motion-enabled Link component
 const MotionLink = motion.create(Link);
@@ -267,6 +268,51 @@ const AppDashboard = () => {
       setVoiceAction(action);
     }, 300);
   };
+
+  const topNavItemsArray = [...overviewItems, ...aiCareItems];
+  
+  const handleAppSwipeLeft = () => {
+    if (showFeedbackModal) return;
+    const isTopGroup = topNavItemsArray.some(i => checkIsActive(i.path));
+    const isBottomGroup = careItems.some(i => checkIsActive(i.path));
+    
+    if (isTopGroup) {
+      const currentIndex = topNavItemsArray.findIndex(i => checkIsActive(i.path));
+      if (currentIndex !== -1 && currentIndex < topNavItemsArray.length - 1) navigate(topNavItemsArray[currentIndex + 1].path);
+    } else if (isBottomGroup) {
+      const currentIndex = careItems.findIndex(i => checkIsActive(i.path));
+      if (currentIndex !== -1 && currentIndex < careItems.length - 1) navigate(careItems[currentIndex + 1].path);
+    }
+  };
+
+  const handleAppSwipeRight = () => {
+    if (showFeedbackModal) return;
+    const isTopGroup = topNavItemsArray.some(i => checkIsActive(i.path));
+    const isBottomGroup = careItems.some(i => checkIsActive(i.path));
+    
+    if (isTopGroup) {
+      const currentIndex = topNavItemsArray.findIndex(i => checkIsActive(i.path));
+      if (currentIndex > 0) navigate(topNavItemsArray[currentIndex - 1].path);
+    } else if (isBottomGroup) {
+      const currentIndex = careItems.findIndex(i => checkIsActive(i.path));
+      if (currentIndex > 0) navigate(careItems[currentIndex - 1].path);
+    }
+  };
+
+  useSwipeGesture({
+    onSwipeLeft: handleAppSwipeLeft,
+    onSwipeRight: handleAppSwipeRight,
+    threshold: 60
+  });
+
+  useEffect(() => {
+    const handleNestedBounds = (e) => {
+      if (e.detail === 'left') handleAppSwipeLeft();
+      if (e.detail === 'right') handleAppSwipeRight();
+    };
+    window.addEventListener('nested-swipe-bounds', handleNestedBounds);
+    return () => window.removeEventListener('nested-swipe-bounds', handleNestedBounds);
+  }, [location.pathname]); // Dependency needed so handlers have fresh state
 
   const renderNavItems = (items) => (
     items.map(item => {

@@ -33,6 +33,7 @@ import {
   Bell
 } from 'lucide-react';
 import CustomSelect from '../components/ui/CustomSelect';
+import SwipeTabContainer from '../components/SwipeTabContainer';
 
 const normalizedTimes = medicine => {
   if (medicine.frequency === 'as_needed') return [];
@@ -582,7 +583,7 @@ const Medicine = ({ voiceAction, onVoiceActionConsumed }) => {
           </button>
         </div>
       </div>
-      <div role="tablist" aria-label={t('Medicine sections')} className="grid grid-cols-2 gap-1.5 p-1.5 bg-gray-100 dark:bg-gray-800 rounded-2xl border border-gray-200/50 dark:border-gray-700">
+      <div role="tablist" data-swipe-nested="true" aria-label={t('Medicine sections')} className="grid grid-cols-2 gap-1.5 p-1.5 bg-gray-100 dark:bg-gray-800 rounded-2xl border border-gray-200/50 dark:border-gray-700">
         {[["medicines", Pill, "Medicines"], ["reminders", Bell, "Reminders"]].map(([id, Icon, label]) => (
           <button key={id} id={`medicine-tab-${id}`} role="tab" aria-selected={activeTab === id} aria-controls={`medicine-panel-${id}`}
             onClick={() => { const next = new URLSearchParams(searchParams); next.set('tab', id); setSearchParams(next, { replace: true }); }}
@@ -591,6 +592,11 @@ const Medicine = ({ voiceAction, onVoiceActionConsumed }) => {
           </button>
         ))}
       </div>
+      <SwipeTabContainer
+        tabs={['medicines', 'reminders']}
+        activeTab={activeTab}
+        onTabChange={(id) => { const next = new URLSearchParams(searchParams); next.set('tab', id); setSearchParams(next, { replace: true }); }}
+      >
       {activeTab === 'reminders' ? <div role="tabpanel" id="medicine-panel-reminders" aria-labelledby="medicine-tab-reminders"><MedicineReminders /></div> :
       <div role="tabpanel" id="medicine-panel-medicines" aria-labelledby="medicine-tab-medicines" className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -763,6 +769,7 @@ const Medicine = ({ voiceAction, onVoiceActionConsumed }) => {
       )}
 
       </div>}
+      </SwipeTabContainer>
 
       {showAddForm && createPortal(
         <div className="fixed inset-0 z-[100000] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => { if (e.target === e.currentTarget) setShowAddForm(false) }}>

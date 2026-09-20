@@ -590,9 +590,9 @@ const LoginModal = ({ show, onClose }) => {
         {mode === 'login' && (
           <form onSubmit={handleLogin}>
             <div style={{ marginBottom: '20px' }}>
-              <label style={labelStyle}>Email Address</label>
+              <label htmlFor="login-email" style={labelStyle}>Email Address</label>
               <input
-                type="text" required value={email}
+                id="login-email" name="email" type="email" inputMode="email" autoComplete="username" required value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
                 style={inputStyle}
@@ -602,11 +602,12 @@ const LoginModal = ({ show, onClose }) => {
             </div>
             <div style={{ marginBottom: '20px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                <label style={{ ...labelStyle, marginBottom: 0 }}>Password</label>
+                <label htmlFor="login-password" style={{ ...labelStyle, marginBottom: 0 }}>Password</label>
                 <a href="#" onClick={switchToForgot} style={forgotLinkStyle}>Forgot password?</a>
               </div>
               <div style={{ position: 'relative' }}>
                 <input
+                  id="login-password" name="password" autoComplete="current-password"
                   type={showPassword ? "text" : "password"} required value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
@@ -651,8 +652,9 @@ const LoginModal = ({ show, onClose }) => {
         {mode === 'signup' && (
           <form onSubmit={handleSignUp}>
             <div style={{ marginBottom: '20px' }}>
-              <label style={labelStyle}>Full Name</label>
+              <label htmlFor="signup-name" style={labelStyle}>Full Name</label>
               <input
+                id="signup-name" name="name" autoComplete="name"
                 type="text" required value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="John Doe"
@@ -662,9 +664,9 @@ const LoginModal = ({ show, onClose }) => {
               />
             </div>
             <div style={{ marginBottom: '20px' }}>
-              <label style={labelStyle}>Email Address</label>
+              <label htmlFor="signup-email" style={labelStyle}>Email Address</label>
               <input
-                type="text" required value={email}
+                id="signup-email" name="email" type="email" inputMode="email" autoComplete="username" required value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
                 style={inputStyle}
@@ -673,9 +675,10 @@ const LoginModal = ({ show, onClose }) => {
               />
             </div>
             <div style={{ marginBottom: '20px' }}>
-              <label style={labelStyle}>Password</label>
+              <label htmlFor="signup-password" style={labelStyle}>Password</label>
               <div style={{ position: 'relative' }}>
                 <input
+                  id="signup-password" name="password" autoComplete="new-password"
                   type={showPassword ? "text" : "password"} required value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Create a password"

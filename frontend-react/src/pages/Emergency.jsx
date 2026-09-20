@@ -681,11 +681,16 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
             </div>
 
             {locationError && (
-              <div className="mb-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl flex items-start gap-3">
-                <AlertTriangle className="text-amber-500 shrink-0 w-5 h-5 mt-0.5" />
-                <p className="text-sm text-amber-800 dark:text-amber-200">
-                  <strong>{t('Sample data shown.')}</strong> {t('Please allow location access to see real nearby hospitals.')}
-                </p>
+              <div className="mb-4 space-y-3">
+                <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl flex items-start gap-3">
+                  <AlertTriangle className="text-amber-500 shrink-0 w-5 h-5 mt-0.5" />
+                  <p className="text-sm text-amber-800 dark:text-amber-200">
+                    <strong>{t('Live Location Unavailable.')}</strong> {t('Browsers block location access on non-secure (HTTP) connections. Showing sample data.')}
+                  </p>
+                </div>
+                <a href="https://www.google.com/maps/search/Hospitals+near+me/" target="_blank" rel="noopener noreferrer" className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-sm transition-colors">
+                  <MapPin size={18} /> {t('Search Hospitals Near Me on Google Maps')}
+                </a>
               </div>
             )}
 
