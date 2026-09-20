@@ -59,6 +59,8 @@ const MaintenanceScreen = ({ showLogoutMsg }) => (
   </div>
 );
 
+const EmergencyInvitation = React.lazy(() => import('./pages/EmergencyInvitation'));
+
 const AppRoutes = () => {
   const { settings, loading } = useSettings();
   const location = useLocation();
@@ -120,6 +122,10 @@ const AppRoutes = () => {
       return false;
     });
     const click = event => {
+      if (event.notification?.additionalData?.href === '/emergency-invitation') {
+        navigate('/emergency-invitation');
+        return;
+      }
       if (event.notification?.additionalData?.href === '/app/medicine?tab=reminders') {
         navigate(API.isAuthenticated() ? '/app/medicine?tab=reminders' : '/?login=true');
       }
@@ -168,6 +174,7 @@ const AppRoutes = () => {
         <Route path="/medical-id" element={<MedicalIDCard />} />
         <Route path="/app/*" element={<AppDashboard />} />
         <Route path="/shared/:token" element={<SharedProfile />} />
+        <Route path="/emergency-invitation" element={<EmergencyInvitation />} />
         
         {/* Admin Routes */}
         <Route path="/admin/login" element={<AdminLogin />} />

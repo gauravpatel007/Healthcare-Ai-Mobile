@@ -1,5 +1,7 @@
 import asyncio
+# pyrefly: ignore [missing-import]
 from sqlalchemy.ext.asyncio import create_async_engine
+# pyrefly: ignore [missing-import]
 from sqlalchemy import text
 
 DATABASE_URL = "postgresql+asyncpg://postgres:1234@localhost:5432/lifeos_db"

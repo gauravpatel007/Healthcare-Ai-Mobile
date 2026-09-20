@@ -12,6 +12,11 @@ export function useSwipeGesture({
 
   useEffect(() => {
     const handleTouchStart = (e) => {
+      // Check if Swipe Navigation is enabled in Settings (default true)
+      if (localStorage.getItem('jarvisSwipeEnabled') === 'false') {
+        return;
+      }
+
       const target = e.target;
 
       // If this is an outer app gesture, ignore touches starting inside an inner swipe container

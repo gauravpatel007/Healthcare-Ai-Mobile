@@ -1,11 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import API from '../utils/api';
+import { invitationReturnPath } from '../utils/emergencyInvitations';
 import { GoogleAuth, isNativeApp } from '../utils/nativeAuth';
 import { useSettings } from '../contexts/SettingsContext';
 
 const GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID || '749609290729-7p9u9ujo98odpldasobtvqascmvejumb.apps.googleusercontent.com').replace(/['"]/g, '').trim();
 
-const LoginModal = ({ show, onClose }) => {
+const LoginModal = ({ show, onClose, returnTo }) => {
+  const invitationReturn = invitationReturnPath(returnTo);
   const { settings } = useSettings();
   const isMaintenance = settings?.maintenance_mode === 'true' || settings?.maintenance_mode === true;
 
@@ -155,7 +157,7 @@ const LoginModal = ({ show, onClose }) => {
           localStorage.setItem('admin_logged_in', 'true');
           window.location.href = '/admin';
         } else {
-          window.location.href = '/app';
+          window.location.href = invitationReturn || '/app';
         }
       }
     } catch (err) {
@@ -181,7 +183,7 @@ const LoginModal = ({ show, onClose }) => {
       if (tokens?.refresh_token) API.setRefreshToken(tokens.refresh_token);
       API.setAuthenticated(true);
       await API.saveCurrentAccount(response.data?.refresh_token);
-      window.location.href = '/app';
+      window.location.href = invitationReturn || '/app';
     } catch (err) {
       setError(err.message || 'Invalid 2FA code.');
     } finally {
@@ -204,7 +206,7 @@ const LoginModal = ({ show, onClose }) => {
       } else {
         API.setAuthenticated(true);
         await API.saveCurrentAccount(response.data?.refresh_token);
-        window.location.href = '/app';
+        window.location.href = invitationReturn || '/app';
       }
     } catch (err) {
       setError(err.message === 'Failed to fetch'
@@ -226,7 +228,7 @@ const LoginModal = ({ show, onClose }) => {
       });
       API.setAuthenticated(true);
       await API.saveCurrentAccount(response.data?.refresh_token);
-      window.location.href = '/app';
+      window.location.href = invitationReturn || '/app';
     } catch (err) {
       setError(err.message || 'Invalid verification code.');
     } finally {
@@ -358,7 +360,7 @@ const LoginModal = ({ show, onClose }) => {
           localStorage.setItem('admin_logged_in', 'true');
           window.location.href = '/admin';
         } else {
-          window.location.href = '/app';
+          window.location.href = invitationReturn || '/app';
         }
       }
     } catch (err) {
@@ -470,7 +472,7 @@ const LoginModal = ({ show, onClose }) => {
 
         API.setAuthenticated(true);
         await API.saveCurrentAccount(refreshToken);
-        window.location.href = '/app';
+        window.location.href = invitationReturn || '/app';
       }
     } catch (err) {
       setError(err.message || 'Biometric login failed.');

@@ -23,10 +23,12 @@ from app.schemas.emergency import (
     EmergencyContactCreate, EmergencyContactResponse, EmergencyContactUpdate,
     QRHealthData, SOSAlertResponse, SOSAlertRequest, OrganPreferencesUpdate, OrganSuitabilityRequest, OrganMatchRequest, SOSAudioClipResponse
 )
-from app.utils.email import send_sos_email, send_sos_sms_twilio, send_sos_call_twilio, send_sos_whatsapp_twilio
+from app.routers.emergency_consent import router as consent_router, contact_response, reset_consent
+from app.services.emergency_alerts import dispatch_consented_sos
 import asyncio
 
 router = APIRouter(prefix="/emergency", tags=["Emergency"])
+router.include_router(consent_router)
 
 
 async def audio_clip_response(clip):
@@ -48,7 +50,7 @@ async def list_contacts(user_id: CurrentUserId, db: AsyncSession = Depends(get_d
     result = await db.execute(
         select(EmergencyContact).where(EmergencyContact.user_id == user_id)
     )
-    return result.scalars().all()
+    return [await contact_response(contact, db) for contact in result.scalars().all()]
 
 
 @router.post("/contacts", response_model=EmergencyContactResponse, status_code=201)
@@ -57,7 +59,7 @@ async def create_contact(data: EmergencyContactCreate, user_id: CurrentUserId, d
     db.add(contact)
     await db.flush()
     await db.refresh(contact)
-    return contact
+    return await contact_response(contact, db)
 
 
 @router.put("/contacts/{contact_id}", response_model=EmergencyContactResponse)
@@ -70,11 +72,14 @@ async def update_contact(
     contact = result.scalar_one_or_none()
     if not contact:
         raise NotFoundException("Emergency contact", contact_id)
-    for key, value in data.model_dump(exclude_unset=True).items():
+    changes = data.model_dump(exclude_unset=True)
+    if any(key in changes and changes[key] != getattr(contact, key) for key in ("name", "phone", "email")):
+        await reset_consent(contact.id, db)
+    for key, value in changes.items():
         setattr(contact, key, value)
     await db.flush()
     await db.refresh(contact)
-    return contact
+    return await contact_response(contact, db)
 
 
 @router.delete("/contacts/{contact_id}")
@@ -91,98 +96,8 @@ async def delete_contact(contact_id: str, user_id: CurrentUserId, db: AsyncSessi
 
 @router.post("/sos", response_model=SOSAlertResponse)
 async def trigger_sos(request: SOSAlertRequest, user_id: CurrentUserId, db: AsyncSession = Depends(get_db)):
-    """Trigger SOS emergency alert."""
-    import logging
-    logger = logging.getLogger("lifeos.emergency")
-
-    try:
-        contacts_r = await db.execute(
-            select(EmergencyContact).where(EmergencyContact.user_id == user_id)
-        )
-        contacts = contacts_r.scalars().all()
-        
-        profile_r = await db.execute(select(UserProfile).where(UserProfile.user_id == user_id))
-        profile = profile_r.scalar_one_or_none()
-        user_name = profile.name if profile else "LifeOS User"
-        
-        # Log the SOS event FIRST — this is the critical action
-        sos_log = SOSLog(user_id=user_id, is_silent=request.is_silent)
-        db.add(sos_log)
-        await db.commit()
-        
-        emails = [c.email for c in contacts if getattr(c, 'email', None)]
-        phone_numbers = [c.phone for c in contacts if c.phone]
-        
-        location_url = None
-        if request.latitude is not None and request.longitude is not None:
-            location_url = f"https://www.google.com/maps?q={request.latitude},{request.longitude}"
-                
-        # Attempt notifications as best-effort (don't block success on these)
-        actions_taken = []
-        accepted_count = 0
-        tasks = []
-        if emails:
-            tasks.append(asyncio.to_thread(send_sos_email, emails, user_name, location_url))
-        
-        if profile and profile.push_device_token:
-            from app.utils.push import send_push_notification
-            tasks.append(asyncio.to_thread(
-                send_push_notification, 
-                profile.push_device_token, 
-                "🚨 SOS Activated", 
-                "Your emergency contacts have been notified with your location."
-            ))
-
-        if phone_numbers:
-            # Fetch Custom Audio Clip URL
-            audio_url = None
-            clip_r = await db.execute(select(SOSAudioClip).where(SOSAudioClip.user_id == user_id))
-            clip = clip_r.scalar_one_or_none()
-            if clip:
-                settings = get_settings()
-                from app.utils.twilio_support import public_audio_url
-                audio_url = public_audio_url(settings.PUBLIC_API_URL, clip.file_path)
-                if not audio_url:
-                    logger.warning("Custom SOS audio has no public origin; using spoken alert")
-                
-            tasks.append(asyncio.to_thread(send_sos_call_twilio, phone_numbers, user_name, location_url, audio_url))
-            # tasks.append(asyncio.to_thread(send_sos_whatsapp_twilio, phone_numbers, user_name, location_url)) # Disabled per user request
-        if tasks:
-            try:
-                results = await asyncio.gather(*tasks, return_exceptions=True)
-                for i, result in enumerate(results):
-                    if isinstance(result, Exception):
-                        err = f"SOS notification task {i} exception: {result}"
-                        logger.error(err)
-                        actions_taken.append("SOS notification failed. Please call your contact directly.")
-                    elif isinstance(result, tuple) and len(result) == 2:
-                        success, msg = result
-                        accepted_count += int(bool(success))
-                        if success:
-                            actions_taken.append(msg)
-                        else:
-                            logger.warning(f"Notification failed (hidden from UI): {msg}")
-                    elif result:
-                        accepted_count += 1
-                        actions_taken.append("Notification request accepted")
-                    else:
-                        logger.warning("Notification failed silently (hidden from UI)")
-            except Exception as notify_err:
-                logger.error(f"SOS notification dispatch error: {notify_err}")
-        
-        if not actions_taken:
-            actions_taken.append("SOS logged. Notifications could not be delivered — please call your emergency contact directly.")
-        
-        return SOSAlertResponse(
-            success=accepted_count > 0,
-            message="Notification requests submitted; delivery is not confirmed." if accepted_count else "SOS recorded, but notifications failed. Please call your contact directly.",
-            actions=actions_taken,
-        )
-    except Exception as e:
-        import logging as _log
-        _log.getLogger("lifeos.emergency").error(f"SOS endpoint error: {e}", exc_info=True)
-        # Never expose traceback to frontend
-        return SOSAlertResponse(success=False, message="An internal error occurred. Please call emergency services directly.", actions=[])
+    """Only accepted accounts receive app/email alerts; link consent never enables calls."""
+    return await dispatch_consented_sos(request, user_id, db)
 
 
 @router.get("/qr-data", response_model=QRHealthData)

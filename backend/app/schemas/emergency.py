@@ -35,6 +35,9 @@ class EmergencyContactResponse(BaseModel):
     is_primary: bool
     created_at: datetime
     updated_at: datetime
+    consent_status: str = "pending"
+    consent_accepted_at: datetime | None = None
+    accepted_by: str | None = None
 
     model_config = {"from_attributes": True}
 

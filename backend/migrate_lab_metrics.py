@@ -1,5 +1,6 @@
 import os
 import sys
+# pyrefly: ignore [missing-import]
 from sqlalchemy import text
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))

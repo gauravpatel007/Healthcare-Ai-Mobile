@@ -90,7 +90,10 @@ const UserNotificationsDropdown = () => {
 
   const markAsRead = async (notif) => {
     const id = notif.id;
-    if (notif.href) {
+    if (notif.type === 'SOS') {
+      navigate('/emergency-invitation');
+      setIsOpen(false);
+    } else if (notif.href) {
       try { await API.post(`/reminders/notifications/${encodeURIComponent(id)}/read`, {}); }
       catch { return; }
       navigate(notif.href);

@@ -3,6 +3,10 @@ export function sosResult(response, { locationAvailable } = {}) {
   const locationWarning = locationAvailable === false
     ? ' Location unavailable; no Maps link was included. Allow location access to share it.' : '';
   const actions = Array.isArray(data.actions) ? data.actions.filter(action => typeof action === 'string') : [];
+  if (actions.some(action => action.startsWith('In-app alerts saved:'))) {
+    return { ok: Boolean(data.success) && !locationWarning && !actions.some(action => /could not be delivered/i.test(action)),
+      message: actions.join('\n') + '\nCall directly if help is urgent.' + locationWarning };
+  }
   if (actions.some(action => /20003|\b401\b|authenticate|authentication failed/i.test(action))) {
     // Extract only safe counts from legacy responses that can contain raw URLs.
     const accepted = actions.map(action => action.match(/^(SMS|Call) requests accepted: \d+\./)?.[0]).filter(Boolean);

@@ -5,6 +5,7 @@ import { useLang } from '../contexts/LangContext';
 import API from '../utils/api';
 import { sosResult } from '../utils/sosResult';
 import { getSosLocation } from '../utils/sosLocation';
+import { watchNearbyHospitals, hospitalDirections, hospitalHoursToday, hospitalPhones } from '../utils/nearbyHospitals';
 import toast from 'react-hot-toast';
 import {
   AlertTriangle, Phone, Activity, HeartPulse, Plus, X, Edit2, Trash2,
@@ -13,6 +14,7 @@ import {
 import OrganDonorModal from '../components/OrganDonorModal';
 import OrganNetworkModal from '../components/OrganNetworkModal';
 import HealthIDCard from '../components/HealthIDCard';
+import EmergencyContactInvite from '../components/EmergencyContactInvite';
 
 const PREDEFINED_FIRST_AID = {
   'Burns': "1. Cool the burn under cold running water for at least 10 minutes.\n2. Remove clothing or jewelry near the burned area unless it's stuck to the skin.\n3. Cover the burn loosely with a clean, non-stick dressing or plastic wrap.\n4. Do not apply ice, butter, or ointments to a severe burn.\n5. Seek medical attention for large, deep, or facial burns.\n\n**DISCLAIMER:** This is a quick reference guide. It does not replace professional medical advice. Always call emergency services immediately in a critical situation.",
@@ -69,9 +71,10 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
 
   // Nearby Hospitals State
   const [realHospitals, setRealHospitals] = useState([]);
-  const [isLocating, setIsLocating] = useState(false);
+  const [isLocating, setIsLocating] = useState(true);
   const [locationError, setLocationError] = useState(null);
   const [selectedHospital, setSelectedHospital] = useState(null);
+  const [hospitalLocationAttempt, setHospitalLocationAttempt] = useState(0);
 
   // Listen for voice actions (handled after triggerSOS is defined)
   const voiceActionHandled = React.useRef(false);
@@ -102,6 +105,19 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
 
   useEffect(() => {
     fetchData();
+  }, []);
+
+  useEffect(() => {
+    const refreshConsent = () => {
+      if (document.visibilityState === 'hidden') return;
+      API.get('/emergency/contacts').then(setContacts).catch(() => {});
+    };
+    window.addEventListener('focus', refreshConsent);
+    document.addEventListener('visibilitychange', refreshConsent);
+    return () => {
+      window.removeEventListener('focus', refreshConsent);
+      document.removeEventListener('visibilitychange', refreshConsent);
+    };
   }, []);
 
   const activeSessionRef = React.useRef(null);
@@ -161,7 +177,7 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
     
     const shouldSkipConfirm = skipConfirm === true || isSilent === true;
     if (sosLoading) return;
-    if (shouldSkipConfirm || confirm(t('Send an SOS alert to your saved emergency contacts? Delivery depends on the notification service. This does not automatically contact local authorities.'))) {
+    if (shouldSkipConfirm || confirm(t('Send an SOS app/email alert to contacts who accepted your invitation? Automated calls/SMS are disabled. This does not contact local authorities.'))) {
       try {
         setSosLoading(true);
         if (!isSilent) setSosStatus(null);
@@ -338,96 +354,15 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
     }
   };
 
-  const calculateDistance = (lat1, lon1, lat2, lon2) => {
-    const R = 6371; // Radius of the earth in km
-    const dLat = (lat2 - lat1) * (Math.PI / 180);
-    const dLon = (lon2 - lon1) * (Math.PI / 180);
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c; // Distance in km
-  };
+  const requestLocationAndFetch = () => setHospitalLocationAttempt(attempt => attempt + 1);
 
-  const fetchRealHospitals = async (lat, lon) => {
-    try {
-      const query = `
-        [out:json];
-        (
-          node["amenity"="hospital"](around:5000, ${lat}, ${lon});
-          node["amenity"="clinic"](around:5000, ${lat}, ${lon});
-          node["amenity"="pharmacy"](around:5000, ${lat}, ${lon});
-        );
-        out 5;
-      `;
-      const response = await fetch('https://overpass-api.de/api/interpreter', {
-        method: 'POST',
-        body: query
-      });
-      const data = await response.json();
-
-      const hospitals = data.elements.map(el => {
-        const dist = calculateDistance(lat, lon, el.lat, el.lon);
-        let type = 'Hospital';
-        let icon = <Activity size={24} />;
-        if (el.tags.amenity === 'clinic') { type = 'Clinic'; icon = <HeartPulse size={24} />; }
-        if (el.tags.amenity === 'pharmacy') { type = 'Pharmacy'; icon = <Droplet size={24} />; }
-
-        return {
-          name: el.tags.name || `Unnamed ${type}`,
-          distance: `${dist.toFixed(1)} km`,
-          type: t(type),
-          phone: el.tags.phone || 'N/A',
-          timing: el.tags.opening_hours || null,
-          icon,
-          rawDist: dist,
-          lat: el.lat,
-          lon: el.lon
-        };
-      }).sort((a, b) => a.rawDist - b.rawDist);
-
-      setRealHospitals(hospitals);
-      setLocationError(null);
-    } catch (err) {
-      console.error("Failed to fetch hospitals from Overpass API:", err);
-      setLocationError("Failed to load live data.");
-    } finally {
-      setIsLocating(false);
-    }
-  };
-
-  const requestLocationAndFetch = () => {
-    setIsLocating(true);
-    setLocationError(null);
-    if (!navigator.geolocation) {
-      setLocationError("Geolocation is not supported by your browser.");
-      setIsLocating(false);
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        fetchRealHospitals(pos.coords.latitude, pos.coords.longitude);
-      },
-      (err) => {
-        console.error("Geolocation error:", err);
-        setLocationError("Location permission denied or unavailable.");
-        setIsLocating(false);
-      },
-      { timeout: 10000 }
-    );
-  };
-
-  useEffect(() => {
-    requestLocationAndFetch();
-  }, []);
-
-  const getNearbyHospitals = () => [
-    { name: 'Apollo Hospital', distance: '2.3 km', type: t('Multi-specialty'), phone: '1066', timing: '24/7', icon: <Activity size={24} />, lat: 28.6139, lon: 77.2090 },
-    { name: 'City Blood Bank', distance: '1.5 km', type: t('Blood Bank'), phone: '104', timing: '9:00 AM - 6:00 PM', icon: <Droplet size={24} />, lat: 28.6140, lon: 77.2100 },
-    { name: 'LifeCare Pharmacy', distance: '0.8 km', type: t('Pharmacy'), phone: '1800-123', timing: '24/7', icon: <HeartPulse size={24} />, lat: 28.6150, lon: 77.2110 },
-    { name: 'Ambulance Service', distance: t('On Call'), type: t('Emergency'), phone: '108', timing: '24/7', icon: <AlertTriangle size={24} />, lat: 28.6160, lon: 77.2120 }
-  ];
+  useEffect(() => watchNearbyHospitals(({ hospitals, loading, error }) => {
+    setRealHospitals(hospitals);
+    setIsLocating(loading);
+    setLocationError(error);
+    // Close details if the facility is no longer among the current nearby results.
+    setSelectedHospital(selected => selected ? hospitals.find(h => h.id === selected.id) || null : null);
+  }), [hospitalLocationAttempt]);
 
   const healthIDText = profile ? `${t('EMERGENCY MEDICAL ID')}\n${t('Name')}: ${profile.name || t('Unknown')}\n${t('Blood Type')}: ${profile.blood_type || t('Unknown')}\n${t('Age')}: ${profile.age || '?'} | ${t('Gender')}: ${profile.gender || t('Unknown')}\n${t('Allergies')}: ${profile.allergies?.join(', ') || t('None')}\n${t('Conditions')}: ${profile.conditions?.join(', ') || t('None')}\n${t('Emergency Contact')}: ${contacts && contacts.length > 0 ? `${contacts[0].name} - ${contacts[0].phone}` : t('None')}` : '';
   const qrUrl = `https://quickchart.io/qr?size=300&margin=0&text=${encodeURIComponent(healthIDText)}`;
@@ -565,7 +500,7 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
           <div className="mt-8 text-center relative z-10">
             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{t('Emergency Assistance')}</h3>
             <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto text-sm leading-relaxed mb-4">
-              {t('SOS requests notifications to your saved contacts. Location requires permission. If help is urgent, call directly.')}
+              {t('SOS sends app/email alerts only to accepted contacts. Location requires permission. If help is urgent, call directly.')}
             </p>
             {/* [ARCHIVED] Selected voice message display */}
             {sosStatus && <p role="status" className="my-3 whitespace-pre-line text-sm font-semibold">{t(sosStatus.message)}</p>}
@@ -631,22 +566,26 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
               </button>
             </div>
 
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">{t('Share an invitation in WhatsApp. Only accepted contacts receive SOS app/email alerts. Automated calls/SMS are disabled.')}</p>
+            <button onClick={() => navigate('/emergency-invitation')} className="text-sm text-blue-600 dark:text-blue-400 mb-4">{t('My received SOS alerts & consent')}</button>
+
             <div className="space-y-4">
               {contacts.map(c => (
-                <div key={c.id} className="p-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center justify-between hover:shadow-md hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-all group">
-                  <div className="flex items-center gap-4">
+                <div key={c.id} className="p-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:shadow-md hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-all group">
+                  <div className="flex items-start gap-4 min-w-0 w-full sm:flex-1">
                     <div className="w-12 h-12 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
                       <span className="font-bold text-lg">{c.name.charAt(0).toUpperCase()}</span>
                     </div>
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <h4 className="font-bold text-gray-900 dark:text-white text-lg">{c.name}</h4>
                       <div className="flex flex-wrap items-center gap-2 mt-1">
                         <span className="px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 whitespace-nowrap">{c.relation}</span>
                         <span className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">{c.phone}</span>
                       </div>
+                      <EmergencyContactInvite key={`${c.id}:${c.phone}:${c.email}:${c.consent_status}`} contact={c} />
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                  <div className="flex items-center gap-2 self-end sm:self-auto opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                     <button onClick={() => openEditModal(c)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
                       <Edit2 size={18} />
                     </button>
@@ -685,7 +624,7 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
                 <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl flex items-start gap-3">
                   <AlertTriangle className="text-amber-500 shrink-0 w-5 h-5 mt-0.5" />
                   <p className="text-sm text-amber-800 dark:text-amber-200">
-                    <strong>{t('Live Location Unavailable.')}</strong> {t('Browsers block location access on non-secure (HTTP) connections. Showing sample data.')}
+                    {t(locationError)}
                   </p>
                 </div>
                 <a href="https://www.google.com/maps/search/Hospitals+near+me/" target="_blank" rel="noopener noreferrer" className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-sm transition-colors">
@@ -694,6 +633,11 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
               </div>
             )}
 
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+              {t('Within 10 km • Straight-line distances • Map coverage may be incomplete.')} {' '}
+              <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a>
+            </p>
+
             {isLocating ? (
               <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-8 flex flex-col items-center justify-center text-gray-500 dark:text-gray-400">
                 <div className="w-8 h-8 border-4 border-red-500 border-t-transparent rounded-full animate-spin mb-3"></div>
@@ -701,20 +645,22 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
               </div>
             ) : (
               <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
-                {(realHospitals.length > 0 ? realHospitals : getNearbyHospitals()).length === 0 ? (
+                {realHospitals.length === 0 ? (
                   <div className="p-6 text-center text-gray-500 dark:text-gray-400">
-                    {t('No facilities found nearby.')}
+                    {t(locationError ? 'Nearby hospitals could not be loaded.' : 'No hospitals or clinics mapped within 10 km of your location.')}
                   </div>
                 ) : (
-                  (realHospitals.length > 0 ? realHospitals : getNearbyHospitals()).map((h, i, arr) => (
-                    <div key={i} onClick={() => setSelectedHospital(h)} className={`flex items-center justify-between p-4 transition-colors hover:bg-red-50 dark:hover:bg-red-900/10 cursor-pointer ${i !== arr.length - 1 ? 'border-b border-gray-50 dark:border-gray-700/50' : ''}`}>
+                  realHospitals.map((h, i, arr) => (
+                    <div key={h.id} onClick={() => setSelectedHospital(h)} className={`flex items-center justify-between p-4 transition-colors hover:bg-red-50 dark:hover:bg-red-900/10 cursor-pointer ${i !== arr.length - 1 ? 'border-b border-gray-50 dark:border-gray-700/50' : ''}`}>
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 rounded-xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center text-xl shrink-0 text-red-500">
-                          {h.icon}
+                          {h.type === 'Clinic' ? <HeartPulse size={24} /> : <Activity size={24} />}
                         </div>
                         <div>
                           <h4 className="font-bold text-gray-900 dark:text-white line-clamp-1 pr-2">{h.name}</h4>
                           <p className="text-sm text-gray-500 dark:text-gray-400">{h.distance} • {t(h.type)}</p>
+                          {h.address && <p className="text-sm text-gray-500 dark:text-gray-400">{h.address}</p>}
+                          <a href={hospitalDirections(h)} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="text-sm text-blue-600 dark:text-blue-400 font-semibold">{t('Directions / Open in Maps')}</a>
                         </div>
                       </div>
                       {h.phone && h.phone !== 'N/A' && (
@@ -795,12 +741,13 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
 
               <div>
                 <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('Phone')}</label>
-                <input type="tel" value={modalData.phone} onChange={e => setModalData({ ...modalData, phone: e.target.value })} placeholder="+1 (555) 000-0000" className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
+                <input type="tel" value={modalData.phone} onChange={e => setModalData({ ...modalData, phone: e.target.value })} placeholder="+91 98765 43210" className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('Email (Optional)')}</label>
+                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('Contact login email (Optional)')}</label>
                 <input type="email" value={modalData.email} onChange={e => setModalData({ ...modalData, email: e.target.value })} placeholder="contact@example.com" className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
+                <p className="text-xs text-gray-500 mt-1">{t('If supplied, only this email account can accept. SOS emails go to the accepting account only after it opts in.')}</p>
               </div>
 
               <div>
@@ -887,10 +834,10 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
               </button>
             </div>
 
-            <div className="p-6">
+            <div className="p-6 overflow-y-auto" style={{ maxHeight: '60vh' }}>
               <div className="flex items-center gap-4 mb-6">
                 <div className="w-12 h-12 rounded-xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center text-2xl shrink-0 text-red-500">
-                  {selectedHospital.icon}
+                  {selectedHospital.type === 'Clinic' ? <HeartPulse size={24} /> : <Activity size={24} />}
                 </div>
                 <div>
                   <p className="text-gray-500 dark:text-gray-400 font-medium">{t('Type')}</p>
@@ -899,23 +846,33 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
                 <div className="ml-auto text-right">
                   <p className="text-gray-500 dark:text-gray-400 font-medium">{t('Distance')}</p>
                   <p className="font-bold text-gray-900 dark:text-white">{selectedHospital.distance}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('Straight-line distance')}</p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                {selectedHospital.phone && selectedHospital.phone !== 'N/A' && (
-                  <a href={`tel:${selectedHospital.phone}`} className="col-span-2 sm:col-span-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                    <Phone size={18} /> Call {selectedHospital.phone}
-                  </a>
-                )}
-                {selectedHospital.timing && (
-                  <div className="col-span-2 sm:col-span-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold border border-gray-200 dark:border-gray-600">
-                    <Clock size={18} /> {selectedHospital.timing}
-                  </div>
-                )}
+              {selectedHospital.address && <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">{selectedHospital.address}</p>}
+
+              <div className="space-y-4 mb-6">
+                <div>
+                  <p className="font-bold text-gray-900 dark:text-white flex items-center gap-2"><Clock size={18} /> {t("Today's hours")}</p>
+                  <p className="text-sm text-gray-700 dark:text-gray-300">{t(hospitalHoursToday(selectedHospital.timing))}</p>
+                  {selectedHospital.timing && <p className="text-xs text-gray-500 dark:text-gray-400">{t('Published schedule')}: {selectedHospital.timing}</p>}
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('Uses your device’s local day. Call to confirm holiday hours and doctor availability.')}</p>
+                </div>
+                <div>
+                  <p className="font-bold text-gray-900 dark:text-white flex items-center gap-2"><Phone size={18} /> {t('Hospital phone')}</p>
+                  {hospitalPhones(selectedHospital.phone).length ? hospitalPhones(selectedHospital.phone).map(phone => (
+                    <a key={phone.dial} href={`tel:${phone.dial}`} className="block text-sm text-blue-600 dark:text-blue-400 py-1">{phone.label}</a>
+                  )) : <p className="text-sm text-gray-500 dark:text-gray-400">{t('Phone number not listed')}</p>}
+                </div>
+                <div>
+                  <p className="font-bold text-gray-900 dark:text-white flex items-center gap-2"><User size={18} /> {t('Doctors')}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{t('Doctor names are not available from this map source. Contact the hospital or check its website for the current doctor list.')}</p>
+                  {selectedHospital.website && <a href={selectedHospital.website} target="_blank" rel="noopener noreferrer" className="inline-block text-sm text-blue-600 dark:text-blue-400 font-semibold py-2">{t('Hospital website')}</a>}
+                </div>
               </div>
 
-              {selectedHospital.lat && selectedHospital.lon && (
+              {Number.isFinite(selectedHospital.lat) && Number.isFinite(selectedHospital.lon) && (
                 <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 mb-6 bg-gray-100 dark:bg-gray-800" style={{ height: '200px' }}>
                   <iframe
                     width="100%"
@@ -930,9 +887,9 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
             </div>
 
             <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex flex-wrap justify-end gap-3">
-              {selectedHospital.lat && selectedHospital.lon && (
-                <a href={`https://www.google.com/maps/search/?api=1&query=${selectedHospital.lat},${selectedHospital.lon}`} target="_blank" rel="noopener noreferrer" className="flex-1 text-center px-6 py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-colors flex items-center justify-center gap-2">
-                  <MapPin size={18} /> {t('Open in Google Maps')}
+              {Number.isFinite(selectedHospital.lat) && Number.isFinite(selectedHospital.lon) && (
+                <a href={`https://www.google.com/maps/dir/?api=1&destination=${selectedHospital.lat},${selectedHospital.lon}&travelmode=driving`} target="_blank" rel="noopener noreferrer" className="flex-1 text-center px-6 py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-colors flex items-center justify-center gap-2">
+                  <MapPin size={18} /> {t('Directions / Open in Maps')}
                 </a>
               )}
             </div>

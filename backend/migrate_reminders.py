@@ -11,6 +11,7 @@ async def main():
     async with engine.begin() as conn:
         await conn.run_sync(lambda sync: Base.metadata.create_all(sync, tables=[
             ReminderSettings.__table__, MedicineDose.__table__, ReminderAction.__table__, ReminderNotice.__table__]))
+        # pyrefly: ignore [missing-import]
         from sqlalchemy import text
         await conn.execute(text("ALTER TABLE medicine_reminder_notices ADD COLUMN IF NOT EXISTS push_sent BOOLEAN NOT NULL DEFAULT FALSE"))
         await conn.execute(text("ALTER TABLE medicine_reminder_notices ADD COLUMN IF NOT EXISTS push_attempts INTEGER NOT NULL DEFAULT 0"))
