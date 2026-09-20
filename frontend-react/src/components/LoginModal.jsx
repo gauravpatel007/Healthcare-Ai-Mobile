@@ -255,7 +255,7 @@ const LoginModal = ({ show, onClose }) => {
     setError('');
     setLoading(true);
     try {
-      const res = await API.request('/auth/forgot-password', {
+      await API.request('/auth/forgot-password', {
         method: 'POST',
         body: { email: forgotEmail },
       });

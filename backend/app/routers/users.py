@@ -154,6 +154,47 @@ async def export_data(user_id: CurrentUserId, db: AsyncSession = Depends(get_db)
         raise HTTPException(status_code=500, detail=f"Export Error: {str(e)}")
 
 
+@router.delete("/reset-data")
+async def reset_data(user_id: CurrentUserId, db: AsyncSession = Depends(get_db)):
+    """Reset all user data except the profile/account."""
+    try:
+        from app.models.medical_record import MedicalRecord
+        from app.models.medicine import Medicine
+        from app.models.appointment import Appointment
+        from app.models.emergency import EmergencyContact
+        from app.models.family import FamilyMember, Vaccination
+        from app.models.expense import MedicalExpense
+        from app.models.health_tracker import HealthEntry
+        from app.models.chat import ChatMessage
+        from app.models.reminder import MedicineDose, ReminderAction, ReminderNotice
+        # pyrefly: ignore [missing-import]
+        from sqlalchemy import delete
+        
+        await db.execute(delete(MedicalRecord).where(MedicalRecord.user_id == user_id))
+        await db.execute(delete(Medicine).where(Medicine.user_id == user_id))
+        await db.execute(delete(Appointment).where(Appointment.user_id == user_id))
+        await db.execute(delete(EmergencyContact).where(EmergencyContact.user_id == user_id))
+        await db.execute(delete(FamilyMember).where(FamilyMember.user_id == user_id))
+        await db.execute(delete(Vaccination).where(Vaccination.user_id == user_id))
+        await db.execute(delete(MedicalExpense).where(MedicalExpense.user_id == user_id))
+        await db.execute(delete(HealthEntry).where(HealthEntry.user_id == user_id))
+        await db.execute(delete(ChatMessage).where(ChatMessage.user_id == user_id))
+        await db.execute(delete(MedicineDose).where(MedicineDose.user_id == user_id))
+        await db.execute(delete(ReminderAction).where(ReminderAction.user_id == user_id))
+        await db.execute(delete(ReminderNotice).where(ReminderNotice.user_id == user_id))
+        
+        await db.commit()
+        return {"success": True, "message": "All data reset successfully."}
+    except Exception as e:
+        import traceback
+        import logging
+        logger = logging.getLogger("lifeos.users")
+        logger.error(f"Reset Data Error: {str(e)}\n{traceback.format_exc()}")
+        # pyrefly: ignore [missing-import]
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=f"Reset Data Error: {str(e)}")
+
+
 @router.get("/security/login-history")
 async def get_login_history(user_id: CurrentUserId, db: AsyncSession = Depends(get_db)):
     """Get the 5 most recent login events."""
@@ -285,7 +326,9 @@ async def update_device_token(
     data: DeviceTokenUpdate, user_id: CurrentUserId, db: AsyncSession = Depends(get_db)
 ):
     """Associate the current phone with its signed-in account."""
+    # pyrefly: ignore [missing-import]
     from fastapi import HTTPException
+    # pyrefly: ignore [missing-import]
     from sqlalchemy import update
     from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
     from app.services.reminders import settings_for
@@ -336,6 +379,7 @@ async def clear_notifications(user_id: CurrentUserId, db: AsyncSession = Depends
 async def test_push_notification(user_id: CurrentUserId, db: AsyncSession = Depends(get_db)):
     """Exercise the same remote push path used by scheduled medicines."""
     import asyncio
+    # pyrefly: ignore [missing-import]
     from fastapi import HTTPException
     from app.utils.push import send_push_notification
     profile = (await db.execute(select(UserProfile).where(UserProfile.user_id == user_id))).scalar_one_or_none()

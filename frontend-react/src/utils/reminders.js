@@ -181,8 +181,8 @@ export async function enableReminderNotifications() {
     } catch (e) {
       console.warn('Native notification enable failed:', e);
     }
-    // Always use server push since native local notifications aren't implemented
-    await saveReminderSettings({ enabled: true, delivery: 'server', device_id: deviceId() });
+    // Use on-device AlarmManager scheduling for reliable time-exact notifications
+    await saveReminderSettings({ enabled: true, delivery: 'device', device_id: deviceId() });
   } else {
     const OneSignal = typeof window !== 'undefined' ? window.OneSignal : null;
     if (OneSignal?.Notifications?.requestPermission) {

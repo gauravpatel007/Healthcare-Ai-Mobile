@@ -41,7 +41,9 @@ public final class MedicineAlarmStore {
         return allowed;
     }
     static boolean exact(Context c) {
-        return Build.VERSION.SDK_INT < 31 || c.getSystemService(AlarmManager.class).canScheduleExactAlarms();
+        if (Build.VERSION.SDK_INT < 31) return true;
+        AlarmManager am = c.getSystemService(AlarmManager.class);
+        return am != null && am.canScheduleExactAlarms();
     }
     static PendingIntent broadcast(Context c, String slot, JSONObject payload, String action) {
         Intent i = new Intent(c, MedicineAlarmReceiver.class).setAction(action)
@@ -120,7 +122,10 @@ public final class MedicineAlarmStore {
                         JSONObject event = new JSONObject().put("dose_id", key).put("medicine_id", medId)
                             .put("name", rule.getString("name")).put("dosage", rule.optString("dosage"))
                             .put("user_id", config.getString("user_id")).put("scheduled_at", due);
-                        schedule(c, "rule:" + medId + ":" + clock, event, Math.max(now + 1000, due), slots);
+                        if (due > now) {
+                            schedule(c, "rule:" + medId + ":" + clock, event, due, slots);
+                        }
+                        // Past-due: do NOT schedule; UI already marks these as "missed"
                         break;
                     }
                 }
@@ -133,7 +138,9 @@ public final class MedicineAlarmStore {
                 if (due < now - config.optInt("grace_minutes", 120) * 60000L) continue;
                 if (delivered.optLong("snooze:" + key) == due) continue;
                 JSONObject event = new JSONObject(state.toString()).put("dose_id", key).put("is_snooze", true);
-                schedule(c, "snooze:" + key, event, Math.max(now + 1000, due), slots);
+                if (due > now) {
+                    schedule(c, "snooze:" + key, event, due, slots);
+                }
             }
             prefs(c).edit().putString("slots", slots.toString()).commit();
         } catch (Exception e) {

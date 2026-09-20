@@ -6,8 +6,11 @@ Register, login, token refresh, and logout endpoints.
 import logging
 import asyncio
 
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, Depends
+# pyrefly: ignore [missing-import]
 from sqlalchemy import select
+# pyrefly: ignore [missing-import]
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -23,7 +26,9 @@ from app.schemas.auth import (
     WebAuthnRegisterBeginRequest, WebAuthnRegisterFinishRequest,
     WebAuthnLoginBeginRequest, WebAuthnLoginFinishRequest
 )
+# pyrefly: ignore [missing-import]
 from webauthn import generate_registration_options, verify_registration_response, generate_authentication_options, verify_authentication_response
+# pyrefly: ignore [missing-import]
 from webauthn.helpers.structs import RegistrationCredential, AuthenticationCredential, AuthenticatorSelectionCriteria, UserVerificationRequirement, AuthenticatorAttachment
 import math
 import json
@@ -35,8 +40,11 @@ from app.utils.email import send_verification_email
 from app.config import get_settings
 import secrets
 import string
+# pyrefly: ignore [missing-import]
 import pyotp
+# pyrefly: ignore [missing-import]
 from datetime import datetime, timedelta, timezone
+# pyrefly: ignore [missing-import]
 from fastapi import Request, Response, BackgroundTasks
 
 logger = logging.getLogger("lifeos.auth")
@@ -58,6 +66,7 @@ def get_webauthn_origin_and_rp_id(request: Request):
 
 async def enforce_password_policy(password: str, db: AsyncSession):
     from app.models.admin import SystemSetting
+    # pyrefly: ignore [missing-import]
     from fastapi import HTTPException
     import json
     res = await db.execute(select(SystemSetting).where(SystemSetting.key == "password_policy"))
@@ -231,13 +240,16 @@ async def google_auth(data: GoogleLoginRequest, request: Request, response: Resp
     idinfo = None
     try:
         try:
+            # pyrefly: ignore [missing-import]
             from google.oauth2 import id_token
+            # pyrefly: ignore [missing-import]
             from google.auth.transport import requests
             idinfo = id_token.verify_oauth2_token(
                 data.credential, requests.Request(), client_id, clock_skew_in_seconds=30
             )
         except Exception as verify_err:
             logger.warning(f"google.oauth2 verification failed: {verify_err}. Trying Google tokeninfo API...")
+            # pyrefly: ignore [missing-import]
             import httpx
             async with httpx.AsyncClient(timeout=10.0) as client:
                 token_resp = await client.get(f"https://oauth2.googleapis.com/tokeninfo?id_token={data.credential}")
@@ -348,10 +360,22 @@ async def forgot_password(data: ForgotPasswordRequest, db: AsyncSession = Depend
     db.add(token_record)
     await db.commit()
     
-    # Send actual email in background
-    asyncio.create_task(asyncio.to_thread(send_verification_email, data.email, code))
+    # Send actual email
+    success = await asyncio.to_thread(send_verification_email, data.email, code)
     
-    return AuthResponse(message="If an account exists, a verification code has been sent.")
+    from app.config import get_settings
+    settings = get_settings()
+    
+    if not success and not settings.DEBUG:
+        # pyrefly: ignore [missing-import]
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail="Failed to send verification email. Check SMTP configuration.")
+        
+    msg = "If an account exists, a verification code has been sent."
+    if settings.DEBUG or not success:
+        msg += f" (DEV Fallback Code: {code})"
+        
+    return AuthResponse(message=msg)
 
 
 @router.post("/reset-password", response_model=AuthResponse)

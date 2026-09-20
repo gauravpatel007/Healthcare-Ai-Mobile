@@ -153,6 +153,18 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
     }
   };
 
+  const handleResetData = async () => {
+    if (!window.confirm(t('Are you sure you want to reset all data?'))) return;
+    try {
+      await API.delete('/users/reset-data');
+      toast.success(t('All data reset successfully!'));
+      window.location.reload();
+    } catch (e) {
+      const errorMsg = e.response?.data?.detail || e.message || 'Unknown error';
+      toast.error(`Failed to reset data: ${errorMsg}`);
+    }
+  };
+
   const fetchProfile = async () => {
     try {
       const [data, authMe, contacts, history] = await Promise.all([
@@ -403,6 +415,9 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
       const contacts = await API.get('/emergency/contacts').catch(() => []);
       setIce1Id(contacts && contacts.length > 0 ? contacts[0].id : null);
       setIce2Id(contacts && contacts.length > 1 ? contacts[1].id : null);
+
+      invalidateCache('/users/profile');
+      invalidateCache('/emergency/contacts');
 
       localStorage.setItem('lifeos_profile_updated', Date.now());
 
@@ -766,7 +781,7 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
                   <Download size={18} /> {t('Export Excel')}
                 </button>
               </div>
-              <button onClick={() => confirm(t('Are you sure you want to reset all data?'))} className="w-full py-3 rounded-xl font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors border border-red-100 dark:border-red-900/50 mb-6">
+              <button onClick={handleResetData} className="w-full py-3 rounded-xl font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors border border-red-100 dark:border-red-900/50 mb-6">
                 {t('Reset All Data')}
               </button>
 
