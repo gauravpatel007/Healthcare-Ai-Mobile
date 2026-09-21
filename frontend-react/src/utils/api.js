@@ -271,9 +271,9 @@ const API = {
       let response = await fetch(url, config);
 
       if (response.status === 401 && !options._retry) {
-        if (!url.includes('/auth/login') && !url.includes('/auth/register') && !url.includes('/auth/face-login') && !url.includes('/auth/google') && !url.includes('/auth/login/2fa')) {
+        if (!url.includes('/auth/login') && !url.includes('/auth/register') && !url.includes('/auth/face-login') && !url.includes('/auth/google') && !url.includes('/auth/login/2fa') && !url.includes('/auth/demo')) {
           config._retry = true;
-          
+
           if (!isRefreshing) {
             isRefreshing = true;
             this.refreshToken().then(refreshed => {
@@ -281,7 +281,7 @@ const API = {
               onRefreshed(refreshed);
             });
           }
-          
+
           const refreshed = await new Promise(resolve => {
             subscribeTokenRefresh(resolve);
           });

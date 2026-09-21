@@ -288,11 +288,8 @@ const Trackers = ({ voiceAction, onVoiceActionConsumed }) => {
   const qualityEmojis = ['😫', '😔', '😐', '🙂', '😴'];
 
   if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="flex flex-col items-center gap-4">
-        <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
-        <p className="text-sm font-bold text-gray-500 dark:text-gray-400">Loading Trackers...</p>
-      </div>
+    <div className="flex justify-center items-center h-64">
+      <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
     </div>
   );
 

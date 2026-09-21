@@ -393,7 +393,7 @@ const AppDashboard = () => {
         <div className="fixed top-3 left-3 right-3 md:left-1/2 md:right-auto md:-translate-x-1/2 md:w-[600px] bg-gradient-to-r from-[#2F80ED] to-[#56CCF2] text-white text-xs md:text-sm font-medium py-2 pl-4 pr-2.5 rounded-2xl flex justify-between items-center z-[100] shadow-lg shadow-blue-500/25 border border-white/20">
           <div className="flex items-center gap-2.5">
             <span className="text-lg">✨</span>
-            <span className="truncate tracking-wide font-semibold">Demo Mode —  gaurav@lifeos.com  </span>
+            <span className="truncate tracking-wide font-semibold">Guest Demo Mode (24h Session)</span>
           </div>
           <button onClick={handleLogout} className="bg-black/15 hover:bg-black/25 backdrop-blur-md text-white px-4 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0">
             Exit Demo

@@ -131,6 +131,7 @@ async def init_db():
                 await conn.execute(text("ALTER TABLE medicine_reminder_notices ADD COLUMN IF NOT EXISTS push_attempts INTEGER NOT NULL DEFAULT 0"))
                 await conn.execute(text("ALTER TABLE emergency_contacts ADD COLUMN IF NOT EXISTS email VARCHAR(255);"))
                 await conn.execute(text("ALTER TABLE emergency_contacts ADD COLUMN IF NOT EXISTS carrier VARCHAR(50);"))
+                await conn.execute(text("ALTER TABLE emergency_contacts ADD COLUMN IF NOT EXISTS telegram_chat_id BIGINT;"))
                 await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT TRUE;"))
                 await conn.execute(text("UPDATE users SET is_verified = TRUE WHERE is_verified IS NULL;"))
                 await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_secret VARCHAR(32);"))

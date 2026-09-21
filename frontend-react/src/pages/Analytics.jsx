@@ -665,9 +665,8 @@ const Analytics = ({ voiceAction, onVoiceActionConsumed }) => {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 gap-4">
+      <div className="flex justify-center items-center h-64">
         <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
-        <p className="text-gray-500 dark:text-gray-400 font-medium">{t('loading') || 'Loading Analytics...'}</p>
       </div>
     );
   }

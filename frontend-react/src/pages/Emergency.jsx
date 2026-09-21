@@ -412,7 +412,11 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
     }
   };
 
-  if (loading && !profile) return <div className="empty-state"><span className="spinner"></span> {t('Loading Emergency System...')}</div>;
+  if (loading && !profile) return (
+    <div className="flex justify-center items-center h-64">
+      <div className="w-10 h-10 border-4 border-red-200 border-t-red-600 rounded-full animate-spin"></div>
+    </div>
+  );
   if (!profile) return <div className="empty-state">{t('Failed to load Emergency Data')}</div>;
 
   return (
@@ -586,30 +590,39 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
             <div className="space-y-4">
               {contacts.map(c => (
                 <div key={c.id} className="p-4 sm:p-5 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-4">
-                  <div className="flex items-start gap-4 min-w-0 w-full sm:flex-1">
-                    <div className="w-12 h-12 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-                      <span className="font-bold text-lg">{c.name.charAt(0).toUpperCase()}</span>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <h4 className="font-bold text-gray-900 dark:text-white text-lg">{c.name}</h4>
-                      <div className="flex flex-wrap items-center gap-2 mt-1">
-                        <span className="px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 whitespace-nowrap">{c.relation}</span>
-                        <span className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">{c.phone}</span>
+                  <div className="flex items-center justify-between gap-2.5 min-w-0 w-full">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="w-11 h-11 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                        <span className="font-bold text-base">{c.name.charAt(0).toUpperCase()}</span>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h4 className="font-bold text-gray-900 dark:text-white text-[16px] sm:text-[17px] truncate">{c.name}</h4>
+                          {c.relation && (
+                            <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 whitespace-nowrap shrink-0">
+                              {c.relation}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[13px] text-gray-500 dark:text-gray-400 mt-0.5 whitespace-nowrap truncate">
+                          {c.phone}
+                        </p>
                       </div>
                     </div>
+
+                    <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+                      <button aria-label={`Edit ${c.name}`} title="Edit contact" onClick={() => openEditModal(c)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
+                        <Edit2 size={17} />
+                      </button>
+                      <button aria-label={`Remove ${c.name}`} title="Remove contact" onClick={() => deleteContact(c.id)} className="p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-500 hover:text-red-500 transition-colors">
+                        <Trash2 size={17} />
+                      </button>
+                      <a href={`tel:${c.phone}`} className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 font-bold hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors text-xs sm:text-sm">
+                        <Phone size={15} /> {t('Call')}
+                      </a>
+                    </div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button aria-label={`Edit ${c.name}`} title="Edit contact" onClick={() => openEditModal(c)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
-                      <Edit2 size={18} />
-                    </button>
-                    <button aria-label={`Remove ${c.name}`} title="Remove contact" onClick={() => deleteContact(c.id)} className="p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-500 hover:text-red-500 transition-colors">
-                      <Trash2 size={18} />
-                    </button>
-                    <a href={`tel:${c.phone}`} className="ml-2 flex items-center gap-2 px-4 py-2 rounded-full bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 font-bold hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors">
-                      <Phone size={16} /> {t('Call')}
-                    </a>
-                  </div>
-                  <EmergencyTelegramVerification contact={c} />
+                  <EmergencyTelegramVerification contact={c} onUpdated={fetchData} />
                 </div>
               ))}
               {contacts.length === 0 && (
@@ -759,7 +772,7 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('Contact login email (Optional)')}</label>
+                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('Contact login email')}</label>
                 <input type="email" value={modalData.email} onChange={e => setModalData({ ...modalData, email: e.target.value })} placeholder="contact@example.com" className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
                 <p className="text-xs text-gray-500 mt-1">{t('If supplied, only this email account can accept. SOS emails go to the accepting account only after it opts in.')}</p>
               </div>

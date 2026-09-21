@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import CurrentUserId
 from app.exceptions import ConflictException, UnauthorizedException
-from app.models.user import User, UserProfile, PasswordResetToken, EmailVerificationToken
+from app.models.user import User, UserProfile, PasswordResetToken, EmailVerificationToken, LoginHistory
 from app.schemas.auth import (
     AuthResponse, LoginRequest, GoogleLoginRequest, ForgotPasswordRequest,
     ResetPasswordRequest, RefreshRequest, RegisterRequest,
@@ -218,6 +218,76 @@ async def login(data: LoginRequest, request: Request, response: Response, backgr
             access_token=access_token,
             refresh_token=refresh_token,
             expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        ),
+    )
+
+
+@router.post("/demo", response_model=AuthResponse)
+async def demo_login(request: Request, response: Response, db: AsyncSession = Depends(get_db)):
+    """Log in to a private ephemeral demo mode account."""
+    # pyrefly: ignore [missing-import]
+    from sqlalchemy import delete, func
+    from app.services.demo import clone_demo_user_data
+    from app.database import generate_uuid
+
+    # 1. Clean up old demo accounts created more than 24 hours ago
+    try:
+        yesterday = datetime.now(timezone.utc) - timedelta(hours=24)
+        await db.execute(delete(User).where(User.email.like("demo_guest_%"), User.created_at < yesterday))
+        await db.commit()
+    except Exception as e:
+        logger.error(f"Failed to cleanup old demo accounts: {e}")
+        await db.rollback()
+
+    # 2. Get the master demo user (try gaurav@lifeos.com, fallback to first user)
+    result = await db.execute(select(User).where(func.lower(User.email) == "gaurav@lifeos.com"))
+    template_user = result.scalar_one_or_none()
+    if not template_user:
+        result = await db.execute(select(User).where(User.is_active == True).order_by(User.created_at.asc()))
+        template_user = result.scalars().first()
+        
+    demo_id = generate_uuid()
+    demo_email = f"demo_guest_{demo_id[:8]}@lifeos.com"
+    hashed_pwd = template_user.hashed_password if template_user else hash_password("demo12345")
+
+    # 3. Create the ephemeral user
+    new_user = User(
+        id=demo_id,
+        email=demo_email,
+        hashed_password=hashed_pwd,
+        role="patient",
+        is_verified=True,
+    )
+    db.add(new_user)
+    await db.flush()
+    
+    # 4. Clone data
+    if template_user:
+        try:
+            await clone_demo_user_data(db, template_user.id, new_user.id)
+        except Exception as e:
+            logger.error(f"Error cloning demo user data: {e}")
+    else:
+        profile = UserProfile(id=generate_uuid(), user_id=new_user.id, name="Demo User")
+        db.add(profile)
+        await db.commit()
+    
+    # 5. Generate tokens (explicitly 24h expiry)
+    access_token = create_access_token(new_user.id, new_user.role, expires_delta=timedelta(hours=24))
+    refresh_token = create_refresh_token(new_user.id, token_version=new_user.token_version)
+    
+    settings = get_settings()
+    response.set_cookie(key="lifeos_access_token", value=access_token, httponly=True, samesite="lax", max_age=24 * 60 * 60)
+    response.set_cookie(key="lifeos_refresh_token", value=refresh_token, httponly=True, samesite="lax", max_age=24 * 60 * 60)
+    
+    logger.info("Created ephemeral demo session: %s", demo_email)
+    
+    return AuthResponse(
+        message="Demo login successful",
+        data=TokenResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_in=24 * 60 * 60,
         ),
     )
 
@@ -579,17 +649,33 @@ async def switch_account(data: RefreshRequest, request: Request, response: Respo
 
 
 @router.post("/logout")
-async def logout(response: Response, request: Request):
-    """Logout (client should discard tokens)."""
+async def logout(response: Response, request: Request, db: AsyncSession = Depends(get_db)):
+    """Logout (client should discard tokens) and wipe ephemeral demo users."""
     user_id = "unknown"
     try:
         token = request.cookies.get("lifeos_access_token")
+        if not token:
+            auth_header = request.headers.get("Authorization")
+            if auth_header and auth_header.startswith("Bearer "):
+                token = auth_header.split(" ")[1]
+
         if token:
             from app.utils.security import decode_access_token
             payload = decode_access_token(token)
             user_id = payload.get("sub", "unknown")
-    except Exception:
-        pass
+            
+        if user_id != "unknown":
+            user_res = await db.execute(select(User).where(User.id == user_id))
+            user = user_res.scalar_one_or_none()
+            if user and user.email.startswith("demo_guest_"):
+                # pyrefly: ignore [missing-import]
+                from sqlalchemy import delete
+                await db.execute(delete(User).where(User.id == user_id))
+                await db.commit()
+                logger.info("Wiped ephemeral demo user: %s", user.email)
+    except Exception as e:
+        logger.error(f"Failed to wipe demo user on logout: {e}")
+        await db.rollback()
         
     response.delete_cookie("lifeos_access_token")
     response.delete_cookie("lifeos_refresh_token")

@@ -12,14 +12,16 @@ const LandingPage = () => {
   const navigate = useNavigate();
   const { settings } = useSettings();
 
-  // Watch Demo: log in as the sample account without showing the login modal
+  // Watch Demo: log in directly without showing the login modal
   const handleWatchDemo = async () => {
     if (demoLoading) return;
     setDemoLoading(true);
     try {
-      const response = await API.request('/auth/login', {
+      API.clearTokens();
+      localStorage.removeItem('lifeos_demo_mode');
+
+      const response = await API.request('/auth/demo', {
         method: 'POST',
-        body: { email: 'gaurav@lifeos.com', password: 'password123' },
       });
       const tokenData = response?.data || response;
       if (tokenData?.access_token) API.setToken(tokenData.access_token);
@@ -29,9 +31,23 @@ const LandingPage = () => {
       localStorage.setItem('lifeos_demo_mode', 'true');
       window.location.href = '/app';
     } catch (err) {
-      console.error('Demo login failed:', err);
-      // Fallback: open normal login modal
-      setShowLogin(true);
+      console.error('Demo login failed, falling back to direct credentials:', err);
+      try {
+        const fallbackRes = await API.request('/auth/login', {
+          method: 'POST',
+          body: { email: 'gaurav@lifeos.com', password: 'password123' },
+        });
+        const fallbackData = fallbackRes?.data || fallbackRes;
+        if (fallbackData?.access_token) API.setToken(fallbackData.access_token);
+        if (fallbackData?.refresh_token) API.setRefreshToken(fallbackData.refresh_token);
+        API.setAuthenticated(true);
+        await API.saveCurrentAccount(fallbackData?.refresh_token);
+        localStorage.setItem('lifeos_demo_mode', 'true');
+        window.location.href = '/app';
+      } catch (fallbackErr) {
+        console.error('All demo login attempts failed:', fallbackErr);
+        setShowLogin(true);
+      }
     } finally {
       setDemoLoading(false);
     }
@@ -559,9 +575,9 @@ const LandingPage = () => {
                       <span key={j} className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
                     ))}
                   </div>
-                  <span className="font-bold text-slate-800 dark:text-slate-200">5.0 / 5.0 rating</span>
+                  {/* <span className="font-bold text-slate-800 dark:text-slate-200">5.0 / 5.0 rating</span>
                   <span className="text-slate-400 dark:text-slate-500">•</span>
-                  <span className="text-slate-500 dark:text-slate-400 font-medium">Verified community feedback</span>
+                  <span className="text-slate-500 dark:text-slate-400 font-medium">Verified community feedback</span> */}
                 </div>
               </div>
 

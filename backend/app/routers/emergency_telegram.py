@@ -2,8 +2,11 @@
 import secrets
 from datetime import datetime, timedelta, timezone
 
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+# pyrefly: ignore [missing-import]
 from sqlalchemy import select
+# pyrefly: ignore [missing-import]
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -38,6 +41,28 @@ async def create_verification(contact_id: str, user_id: CurrentUserId, response:
     await db.flush()
     audit("issued", contact)
     return {"verification_url": verification_url(token), "expires_at": contact.verification_expires_at}
+
+
+@router.delete("/contacts/{contact_id}/telegram-verification")
+async def delete_verification(contact_id: str, user_id: CurrentUserId, db: AsyncSession = Depends(get_db)):
+    contact = (await db.execute(select(EmergencyContact).where(
+        EmergencyContact.id == contact_id, EmergencyContact.user_id == user_id
+    ).with_for_update())).scalar_one_or_none()
+    
+    if not contact:
+        raise HTTPException(404, "Contact not found")
+        
+    contact.verification_status = "pending"
+    contact.telegram_verified = False
+    contact.verified_at = None
+    contact.verification_token_hash = None
+    contact.verification_expires_at = None
+    contact.verification_requested_at = None
+    contact.verification_attempts = 0
+    contact.telegram_chat_id = None
+    
+    await db.commit()
+    return {"success": True, "message": "Phone verification disconnected successfully."}
 
 
 def authenticate_telegram(secret: str | None = Header(default=None, alias="X-Telegram-Bot-Api-Secret-Token")):

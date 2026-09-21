@@ -38,7 +38,7 @@ const SwipeTabContainer = ({ tabs, activeTab, onTabChange, children }) => {
   useSwipeGesture({
     onSwipeLeft: handleSwipeLeft,
     onSwipeRight: handleSwipeRight,
-    threshold: 60,
+    threshold: 40,
     targetRef: containerRef,
     isNested: true
   });
@@ -47,19 +47,28 @@ const SwipeTabContainer = ({ tabs, activeTab, onTabChange, children }) => {
     enter: (direction) => {
       return {
         x: direction > 0 ? '100%' : '-100%',
-        opacity: 0
+        rotateY: direction > 0 ? 45 : -45,
+        opacity: 0,
+        scale: 0.9,
+        filter: 'blur(2px)'
       };
     },
     center: {
       zIndex: 1,
       x: 0,
-      opacity: 1
+      rotateY: 0,
+      opacity: 1,
+      scale: 1,
+      filter: 'blur(0px)'
     },
     exit: (direction) => {
       return {
         zIndex: 0,
         x: direction < 0 ? '100%' : '-100%',
-        opacity: 0
+        rotateY: direction < 0 ? 45 : -45,
+        opacity: 0,
+        scale: 0.9,
+        filter: 'blur(2px)'
       };
     }
   };
@@ -69,8 +78,9 @@ const SwipeTabContainer = ({ tabs, activeTab, onTabChange, children }) => {
       ref={containerRef}
       data-swipe-nested="true"
       className="relative overflow-hidden w-full h-full min-h-[400px]"
+      style={{ perspective: '1200px' }}
     >
-      <AnimatePresence initial={false} custom={direction} mode="wait">
+      <AnimatePresence initial={false} custom={direction} mode="popLayout">
         <motion.div
           key={activeTab}
           custom={direction}
@@ -79,8 +89,11 @@ const SwipeTabContainer = ({ tabs, activeTab, onTabChange, children }) => {
           animate="center"
           exit="exit"
           transition={{
-            x: { type: 'spring', stiffness: 380, damping: 30 },
-            opacity: { duration: 0.2 }
+            x: { type: 'spring', stiffness: 400, damping: 32 },
+            opacity: { duration: 0.2 },
+            scale: { type: 'spring', stiffness: 400, damping: 32 },
+            rotateY: { type: 'spring', stiffness: 400, damping: 32 },
+            filter: { duration: 0.2 }
           }}
           className="w-full h-full"
         >

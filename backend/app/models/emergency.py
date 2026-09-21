@@ -27,6 +27,7 @@ class EmergencyContact(Base, TimestampMixin):
     is_primary: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     verification_status: Mapped[str] = mapped_column(String(20), default="pending", server_default="pending", nullable=False)
     telegram_verified: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    telegram_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     verification_token_hash: Mapped[str | None] = mapped_column(String(64), unique=True, index=True, nullable=True)
     verification_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

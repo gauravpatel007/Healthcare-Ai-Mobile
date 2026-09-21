@@ -330,7 +330,11 @@ const Records = ({ voiceAction, onVoiceActionConsumed }) => {
     }
   };
 
-  if (loading) return <div className="empty-state"><span className="spinner"></span> {t("Loading Records...")}</div>;
+  if (loading) return (
+    <div className="flex justify-center items-center h-64">
+      <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+    </div>
+  );
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6 pb-20">

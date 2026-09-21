@@ -5,7 +5,9 @@ import re
 import secrets
 from datetime import datetime, timedelta, timezone
 
+# pyrefly: ignore [missing-import]
 from fastapi import HTTPException
+# pyrefly: ignore [missing-import]
 from sqlalchemy import select
 
 from app.config import get_settings
@@ -18,7 +20,7 @@ MAX_TOKEN_ATTEMPTS = 5
 MAX_CHAT_MESSAGES = 30
 INVALID_LINK = "This verification link has expired, was replaced, or is no longer available. Ask the LifeOS user to resend verification."
 MISMATCH = "❌ Phone number does not match the emergency contact number registered in LifeOS. Verification failed."
-SUCCESS = "✅ Your phone number has been verified successfully. You are now an emergency contact for this LifeOS user."
+SUCCESS = "✅ Your phone number has been verified successfully. You are now an emergency contact for this LifeOS user.\n\ntype /disconnect to Disconnect or remove your number from user's Emergency"
 WELCOME = ("LifeOS Emergency Contact Verification\n\nOpen the personal verification link shared by the LifeOS user who added you. "
            "The link identifies their request. Typing /start alone cannot identify who invited you. "
            "Ask them to use Share via WhatsApp or Copy Link in Emergency Contacts.")
@@ -108,8 +110,10 @@ async def handle_update(payload, db):
     now = datetime.now(timezone.utc)
     # Upsert before locking also serializes the very first concurrent requests.
     if db.bind.dialect.name == "postgresql":
+        # pyrefly: ignore [missing-import]
         from sqlalchemy.dialects.postgresql import insert
     else:
+        # pyrefly: ignore [missing-import]
         from sqlalchemy.dialects.sqlite import insert
     await db.execute(insert(TelegramVerificationSession).values(
         telegram_user_id=actor, last_message_id=0, attempts=0, window_started_at=now
@@ -130,6 +134,34 @@ async def handle_update(payload, db):
     session.attempts += 1
 
     text = message.get("text", "")
+    is_disconnect = False
+    if isinstance(text, str):
+        t_clean = text.strip().lower()
+        if t_clean in ("/disconnect", "disconnect") or t_clean.startswith("/disconnect@") or t_clean.startswith("/disconnect "):
+            is_disconnect = True
+
+    if is_disconnect:
+        contacts = (await db.execute(select(EmergencyContact).where(
+            EmergencyContact.telegram_chat_id == actor
+        ).with_for_update())).scalars().all()
+        if not contacts:
+            return reply(actor, "Your phone number is not currently registered as an emergency contact for any LifeOS user.")
+        
+        for c in contacts:
+            c.verification_status = "pending"
+            c.telegram_verified = False
+            c.verified_at = None
+            c.verification_token_hash = None
+            c.verification_expires_at = None
+            c.verification_requested_at = None
+            c.verification_attempts = 0
+            c.telegram_chat_id = None
+            
+        session.token_hash = None
+        session.confirmed_at = None
+        audit("disconnected", contacts[0] if contacts else None)
+        return reply(actor, "✅ Your phone number is disconnected ! You have been removed from the emergency contacts.")
+
     if isinstance(text, str) and text.startswith("/start"):
         session.confirmed_at = None
         bare_start = re.fullmatch(r"/start(?:@[A-Za-z0-9_]+)?", text.strip())
@@ -200,6 +232,7 @@ async def handle_update(payload, db):
         return reply(actor, MISMATCH, request_contact=contact.verification_status == "pending")
     contact.verification_status = "verified"
     contact.telegram_verified = True
+    contact.telegram_chat_id = actor
     contact.verified_at = now
     contact.verification_token_hash = None
     contact.verification_expires_at = None

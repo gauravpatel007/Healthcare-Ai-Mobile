@@ -46,7 +46,7 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
     ice1_name: '', ice1_rel: '', ice1_phone: '',
     ice2_name: '', ice2_rel: '', ice2_phone: ''
   });
-  
+
   // Contacts
   const [ice1Id, setIce1Id] = useState(null);
   const [ice2Id, setIce2Id] = useState(null);
@@ -215,7 +215,7 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
 
   useEffect(() => {
     fetchProfile();
-    
+
     const handleStorageChange = (e) => {
       if (e.key === 'lifeos_profile_updated') {
         fetchProfile();
@@ -233,7 +233,7 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
   }, []);
 
   // ─── Biometric Setup Functions ────────────────────────
-  
+
   const handleOpenFaceSetup = async () => {
     setFaceSetupOpen(true);
     setFaceCaptureStatus('loading');
@@ -279,31 +279,31 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
 
   const handleCaptureFace = async () => {
     if (!videoRef.current || faceCaptureStatus !== 'scanning') return;
-    
+
     setFaceCaptureStatus('loading');
-    
+
     try {
       const detection = await window.faceapi.detectSingleFace(videoRef.current, new window.faceapi.TinyFaceDetectorOptions())
         .withFaceLandmarks()
         .withFaceDescriptor();
-        
+
       if (!detection) {
         toast.error(t('No face detected. Please ensure your face is clearly visible.'));
         setFaceCaptureStatus('scanning');
         return;
       }
-      
+
       const descriptor = Array.from(detection.descriptor);
       await API.post('/auth/face/setup', { descriptor });
-      
+
       setFaceCaptureStatus('success');
       setFaceLoginEnabled(true);
       toast.success(t('Biometric login configured successfully!'));
-      
+
       setTimeout(() => {
         handleCloseFaceSetup();
       }, 2000);
-      
+
     } catch (err) {
       console.error(err);
       setFaceCaptureStatus('error');
@@ -410,7 +410,7 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
       if (payload.calorie_goal) {
         localStorage.setItem(`lifeos_calorie_goal_${profile.user_id}`, payload.calorie_goal.toString());
       }
-      
+
       await Promise.all([
         API.put('/users/profile', payload),
         saveContact(ice1Id, profile.ice1_name, profile.ice1_phone, profile.ice1_rel),
@@ -590,10 +590,10 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
     <div className="w-full max-w-7xl mx-auto space-y-6 pb-20 relative">
       {showZoom && profile.avatar_url && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setShowZoom(false)}>
-          <img 
-            src={API.getImageUrl(profile.avatar_url)} 
-            alt="Avatar Zoom" 
-            className="max-w-[90vw] max-h-[90vh] rounded-3xl object-contain shadow-2xl" 
+          <img
+            src={API.getImageUrl(profile.avatar_url)}
+            alt="Avatar Zoom"
+            className="max-w-[90vw] max-h-[90vh] rounded-3xl object-contain shadow-2xl"
             onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name || 'User')}&background=random`; }}
           />
           <div className="absolute top-6 right-8 text-white text-4xl font-light hover:text-gray-300 transition-colors">&times;</div>
@@ -617,7 +617,7 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
       </div>
 
       {/* Tabs */}
-      <div 
+      <div
         className="grid grid-cols-4 md:flex md:flex-wrap items-center bg-gray-50 dark:bg-gray-900/50 p-1 sm:p-1.5 rounded-2xl border border-gray-100 dark:border-gray-700 w-full overflow-hidden no-scrollbar gap-1"
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       >
@@ -652,521 +652,543 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
       </div>
 
       {/* Tab Content */}
-      <SwipeTabContainer 
-        tabs={['profile', 'security', 'advanced', 'notifications']} 
-        activeTab={activeTab} 
+      <SwipeTabContainer
+        tabs={['profile', 'security', 'advanced', 'notifications']}
+        activeTab={activeTab}
         onTabChange={setActiveTab}
       >
         {activeTab === 'profile' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="flex flex-col gap-8">
 
-            {/* Personal Information */}
-            <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
-                <User className="text-blue-500" /> {t('Personal Information')}
-              </h3>
+              {/* Personal Information */}
+              <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+                  <User className="text-blue-500" /> {t('Personal Information')}
+                </h3>
 
-              <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-6 mb-8 p-6 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-700/50">
-                <div
-                  className="relative w-24 h-24 rounded-full overflow-hidden bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center text-3xl font-bold cursor-pointer border-4 border-white dark:border-gray-800 shadow-md"
-                  onClick={() => profile.avatar_url && setShowZoom(true)}
-                >
-                  {profile.avatar_url ? (
-                    <img 
-                      src={API.getImageUrl(profile.avatar_url)} 
-                      alt="Avatar" 
-                      className="w-full h-full object-cover" 
-                      onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name || 'User')}&background=random`; }}
-                    />
-                  ) : (
-                    profile.name?.charAt(0).toUpperCase() || 'U'
-                  )}
-                </div>
-                <div className="flex flex-col gap-2">
-                  <div className="font-bold text-gray-900 dark:text-white text-lg">{t('Profile Picture')}</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">{t('Click picture to zoom, or upload new')}</div>
-                  <div className="flex justify-center sm:justify-start gap-3 mt-2">
-                    <label className="inline-flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-4 py-2 rounded-xl text-sm font-semibold text-gray-700 dark:text-gray-200 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm">
-                      <ImageIcon size={16} /> {t('Upload')}
-                      <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
-                    </label>
-                    {profile.avatar_url && (
-                      <button
-                        onClick={handleAvatarRemove}
-                        className="inline-flex items-center gap-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 px-4 py-2 rounded-xl text-sm font-semibold cursor-pointer hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
-                      >
-                        <Trash2 size={16} /> {t('Remove')}
-                      </button>
+                <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-6 mb-8 p-6 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-700/50">
+                  <div
+                    className="relative w-24 h-24 rounded-full overflow-hidden bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center text-3xl font-bold cursor-pointer border-4 border-white dark:border-gray-800 shadow-md"
+                    onClick={() => profile.avatar_url && setShowZoom(true)}
+                  >
+                    {profile.avatar_url ? (
+                      <img
+                        src={API.getImageUrl(profile.avatar_url)}
+                        alt="Avatar"
+                        className="w-full h-full object-cover"
+                        onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name || 'User')}&background=random`; }}
+                      />
+                    ) : (
+                      profile.name?.charAt(0).toUpperCase() || 'U'
                     )}
                   </div>
-                </div>
-              </div>
-
-              <div className="mb-5">
-                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('Full Name')}</label>
-                <input type="text" name="name" value={profile.name} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('Age')}</label>
-                  <input type="number" name="age" value={profile.age} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('Gender')}</label>
-                  <CustomSelect
-                    name="gender"
-                    value={profile.gender || ''}
-                    onChange={handleChange}
-                    options={[
-                      { value: "Male", label: t('Male') },
-                      { value: "Female", label: t('Female') },
-                      { value: "Other", label: t('Other') }
-                    ]}
-                    className="!bg-gray-50 dark:!bg-gray-900 border border-gray-200 dark:border-gray-700 !font-normal !py-3 !shadow-none !text-gray-900 dark:!text-white !text-base"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Emergency Contacts */}
-            <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
-                <HeartPulse className="text-red-500" /> {t('Emergency Contacts (ICE)')}
-              </h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div>
-                  <input type="text" name="ice1_name" placeholder={t('Name')} value={profile.ice1_name} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
-                </div>
-                <div>
-                  <input type="text" name="ice1_rel" placeholder={t('Relationship')} value={profile.ice1_rel} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
-                </div>
-              </div>
-              <div className="mb-4">
-                <input type="tel" name="ice1_phone" placeholder={t('Phone Number')} value={profile.ice1_phone} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
-              </div>
-
-              {showSecondaryContact && (
-                <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-700">
-                  <div className="flex justify-between items-center mb-4">
-                    <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t('Secondary Contact')}</h4>
-                    <button onClick={() => { setShowSecondaryContact(false); setProfile(p => ({ ...p, ice2_name: '', ice2_rel: '', ice2_phone: '' })); }} className="text-red-500 hover:text-red-600 text-sm font-semibold flex items-center gap-1 transition-colors">
-                      <X size={14} /> {t('Remove')}
-                    </button>
+                  <div className="flex flex-col gap-2">
+                    <div className="font-bold text-gray-900 dark:text-white text-lg">{t('Profile Picture')}</div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">{t('Click picture to zoom, or upload new')}</div>
+                    <div className="flex justify-center sm:justify-start gap-3 mt-2">
+                      <label className="inline-flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-4 py-2 rounded-xl text-sm font-semibold text-gray-700 dark:text-gray-200 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm">
+                        <ImageIcon size={16} /> {t('Upload')}
+                        <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+                      </label>
+                      {profile.avatar_url && (
+                        <button
+                          onClick={handleAvatarRemove}
+                          className="inline-flex items-center gap-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 px-4 py-2 rounded-xl text-sm font-semibold cursor-pointer hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+                        >
+                          <Trash2 size={16} /> {t('Remove')}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <input type="text" name="ice2_name" placeholder={t('Name')} value={profile.ice2_name} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
-                    </div>
-                    <div>
-                      <input type="text" name="ice2_rel" placeholder={t('Relationship')} value={profile.ice2_rel} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
-                    </div>
+                </div>
+
+                <div className="mb-5">
+                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('Full Name')}</label>
+                  <input type="text" name="name" value={profile.name} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('Age')}</label>
+                    <input type="number" name="age" value={profile.age} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
                   </div>
                   <div>
-                    <input type="tel" name="ice2_phone" placeholder={t('Phone Number')} value={profile.ice2_phone} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
+                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('Gender')}</label>
+                    <CustomSelect
+                      name="gender"
+                      value={profile.gender || ''}
+                      onChange={handleChange}
+                      options={[
+                        { value: "Male", label: t('Male') },
+                        { value: "Female", label: t('Female') },
+                        { value: "Other", label: t('Other') }
+                      ]}
+                      className="!bg-gray-50 dark:!bg-gray-900 border border-gray-200 dark:border-gray-700 !font-normal !py-3 !shadow-none !text-gray-900 dark:!text-white !text-base"
+                    />
                   </div>
                 </div>
-              )}
-
-              {!showSecondaryContact && (
-                <button onClick={() => setShowSecondaryContact(true)} className="mt-4 w-full py-3 rounded-xl border border-dashed border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 font-semibold flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                  <Plus size={18} /> {t('Add another contact')}
-                </button>
-              )}
-            </div>
-
-          </div>
-
-          <div className="flex flex-col gap-8 h-full">
-
-            {/* Medical Profile */}
-            <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
-                <Activity className="text-rose-500" /> {t('Medical Profile')}
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('weight')} ({weightUnit})</label>
-                  <input type="number" name="weight" value={profile.weight ? (unit === 'imperial' ? (profile.weight * 2.20462).toFixed(1) : profile.weight) : ''} onChange={(e) => handleChange({ target: { name: 'weight', value: unit === 'imperial' && e.target.value ? parseFloat(e.target.value) / 2.20462 : e.target.value } })} className="w-full px-3 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('height')} ({unit === 'imperial' ? 'inches' : 'cm'})</label>
-                  <input type="number" name="height" value={profile.height ? (unit === 'imperial' ? (profile.height / 2.54).toFixed(1) : profile.height) : ''} onChange={(e) => handleChange({ target: { name: 'height', value: unit === 'imperial' && e.target.value ? parseFloat(e.target.value) * 2.54 : e.target.value } })} className="w-full px-3 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('Blood Type')}</label>
-                  <CustomSelect
-                    name="blood_type"
-                    value={profile.blood_type || ''}
-                    onChange={handleChange}
-                    options={['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(b => ({ value: b, label: b }))}
-                    className="!bg-gray-50 dark:!bg-gray-900 border border-gray-200 dark:border-gray-700 !font-normal !py-3 !shadow-none !text-gray-900 dark:!text-white !text-base"
-                  />
-                </div>
-              </div>
-              <div className="mb-5">
-                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('Allergies (comma separated)')}</label>
-                <input type="text" name="allergies" value={profile.allergies} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('Medical Conditions')}</label>
-                <input type="text" name="conditions" value={profile.conditions} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
-              </div>
-            </div>
-
-            {/* Data Management & Save */}
-            <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
-                <FileText className="text-indigo-500" /> {t('Data Management')}
-              </h3>
-              <div className="flex flex-col sm:flex-row gap-4 mb-4">
-                <button onClick={handleExportPDF} className="flex-1 flex items-center justify-center gap-2 py-3 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white rounded-xl font-semibold hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors border border-gray-200 dark:border-gray-600">
-                  <Download size={18} /> {t('Export PDF')}
-                </button>
-                <button onClick={handleExportExcel} className="flex-1 flex items-center justify-center gap-2 py-3 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white rounded-xl font-semibold hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors border border-gray-200 dark:border-gray-600">
-                  <Download size={18} /> {t('Export Excel')}
-                </button>
-              </div>
-              <button onClick={handleResetData} className="w-full py-3 rounded-xl font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors border border-red-100 dark:border-red-900/50 mb-6">
-                {t('Reset All Data')}
-              </button>
-
-              <button onClick={handleSave} className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg flex items-center justify-center gap-2 hover:bg-blue-700 shadow-md shadow-blue-500/25 transition-all active:scale-[0.98]">
-                <Save size={20} /> {t('Save All Changes')}
-              </button>
-            </div>
-
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'advanced' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-
-          {/* LEFT COLUMN */}
-          <div className="flex flex-col gap-8">
-            {/* ── Advanced Health Goals ── */}
-            <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
-                <Target className="text-emerald-500" /> {t('advanced_health_goals')}
-              </h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('target_weight')} ({weightUnit})</label>
-                  <input type="number" name="target_weight" value={profile.target_weight ? (unit === 'imperial' ? (profile.target_weight * 2.20462).toFixed(1) : profile.target_weight) : ''} placeholder={`e.g. ${unit === 'imperial' ? '150' : '65'}`} onChange={(e) => handleChange({ target: { name: 'target_weight', value: unit === 'imperial' && e.target.value ? parseFloat(e.target.value) / 2.20462 : e.target.value } })} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('timeline')}</label>
-                  <input type="text" name="target_weight_timeline" value={profile.target_weight_timeline || ''} placeholder="e.g. In 2 months" onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
-                </div>
               </div>
 
-              <div className="mb-8">
-                <button
-                  onClick={handleAnalyzeGoal}
-                  disabled={isAnalyzingGoal}
-                  className="w-full py-3 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-xl font-bold border border-indigo-100 dark:border-indigo-800/30 flex items-center justify-center gap-2 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isAnalyzingGoal ? <div className="w-5 h-5 rounded-full border-2 border-indigo-600 dark:border-indigo-400 border-t-transparent animate-spin" /> : <Activity size={18} />}
-                  {isAnalyzingGoal ? t('analyzing_goal') : t('generate_ai')}
-                </button>
+              {/* Emergency Contacts */}
+              <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+                  <HeartPulse className="text-red-500" /> {t('Emergency Contacts (ICE)')}
+                </h3>
 
-                {aiSuggestion && aiSuggestion.analysis && (
-                  <div className="mt-4 p-5 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-100 dark:border-indigo-800/30 rounded-xl text-gray-800 dark:text-gray-200 text-sm leading-relaxed shadow-inner">
-                    <div className="flex items-center gap-2 mb-2 text-indigo-600 dark:text-indigo-400 font-bold">
-                      <Activity size={16} /> {t('ai_prediction')}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <input type="text" name="ice1_name" placeholder={t('Name')} value={profile.ice1_name} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
+                  </div>
+                  <div>
+                    <input type="text" name="ice1_rel" placeholder={t('Relationship')} value={profile.ice1_rel} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
+                  </div>
+                </div>
+                <div className="mb-4">
+                  <input type="tel" name="ice1_phone" placeholder={t('Phone Number')} value={profile.ice1_phone} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
+                </div>
+
+                {showSecondaryContact && (
+                  <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-700">
+                    <div className="flex justify-between items-center mb-4">
+                      <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t('Secondary Contact')}</h4>
+                      <button onClick={() => { setShowSecondaryContact(false); setProfile(p => ({ ...p, ice2_name: '', ice2_rel: '', ice2_phone: '' })); }} className="text-red-500 hover:text-red-600 text-sm font-semibold flex items-center gap-1 transition-colors">
+                        <X size={14} /> {t('Remove')}
+                      </button>
                     </div>
-                    {aiSuggestion.analysis}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <input type="text" name="ice2_name" placeholder={t('Name')} value={profile.ice2_name} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
+                      </div>
+                      <div>
+                        <input type="text" name="ice2_rel" placeholder={t('Relationship')} value={profile.ice2_rel} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
+                      </div>
+                    </div>
+                    <div>
+                      <input type="tel" name="ice2_phone" placeholder={t('Phone Number')} value={profile.ice2_phone} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
+                    </div>
                   </div>
+                )}
+
+                {!showSecondaryContact && (
+                  <button onClick={() => setShowSecondaryContact(true)} className="mt-4 w-full py-3 rounded-xl border border-dashed border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 font-semibold flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                    <Plus size={18} /> {t('Add another contact')}
+                  </button>
                 )}
               </div>
 
-              <div className="mb-8 border-t border-gray-100 dark:border-gray-700 pt-8">
-                <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                  <Activity className="text-orange-500" /> {t('activity_goals')}
-                </h4>
-                <div className="space-y-6">
+            </div>
+
+            <div className="flex flex-col gap-8 h-full">
+
+              {/* Medical Profile */}
+              <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+                  <Activity className="text-rose-500" /> {t('Medical Profile')}
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
                   <div>
-                    <label className="flex items-center justify-between text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-                      <span>{t('calorie_limit')} (Diet Intake)</span>
-                      {aiSuggestion && aiSuggestion.suggested_calories && (
-                        <span className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 px-2 py-0.5 rounded text-[10px]">
-                          {t('ai_suggestion')}: {aiSuggestion.suggested_calories} kcal
-                        </span>
-                      )}
-                    </label>
-                    <input type="number" name="calorie_goal" value={profile.calorie_goal || ''} placeholder="e.g. 2000" onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">{t('leave_blank_ai')}</p>
+                    <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('weight')} ({weightUnit})</label>
+                    <input type="number" name="weight" value={profile.weight ? (unit === 'imperial' ? (profile.weight * 2.20462).toFixed(1) : profile.weight) : ''} onChange={(e) => handleChange({ target: { name: 'weight', value: unit === 'imperial' && e.target.value ? parseFloat(e.target.value) / 2.20462 : e.target.value } })} className="w-full px-3 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
                   </div>
                   <div>
-                    <label className="flex items-center justify-between text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-                      <span>{t('step_goal')}</span>
-                      {aiSuggestion && aiSuggestion.suggested_steps && (
-                        <span className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 px-2 py-0.5 rounded text-[10px]">
-                          {t('ai_suggestion')}: {aiSuggestion.suggested_steps} steps
-                        </span>
-                      )}
-                    </label>
-                    <input type="number" name="step_goal" value={profile.step_goal || ''} placeholder="10000" onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
+                    <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('height')} ({unit === 'imperial' ? 'inches' : 'cm'})</label>
+                    <input type="number" name="height" value={profile.height ? (unit === 'imperial' ? (profile.height / 2.54).toFixed(1) : profile.height) : ''} onChange={(e) => handleChange({ target: { name: 'height', value: unit === 'imperial' && e.target.value ? parseFloat(e.target.value) * 2.54 : e.target.value } })} className="w-full px-3 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
                   </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('Blood Type')}</label>
+                    <CustomSelect
+                      name="blood_type"
+                      value={profile.blood_type || ''}
+                      onChange={handleChange}
+                      options={['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(b => ({ value: b, label: b }))}
+                      className="!bg-gray-50 dark:!bg-gray-900 border border-gray-200 dark:border-gray-700 !font-normal !py-3 !shadow-none !text-gray-900 dark:!text-white !text-base"
+                    />
+                  </div>
+                </div>
+                <div className="mb-5">
+                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('Allergies (comma separated)')}</label>
+                  <input type="text" name="allergies" value={profile.allergies} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('Medical Conditions')}</label>
+                  <input type="text" name="conditions" value={profile.conditions} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
                 </div>
               </div>
 
-              <button onClick={handleSave} className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg flex items-center justify-center gap-2 hover:bg-blue-700 shadow-md shadow-blue-500/25 transition-all active:scale-[0.98] mt-6">
-                <Save size={20} /> {t('save_goals')}
-              </button>
-            </div>
-          </div>
-
-          {/* RIGHT COLUMN */}
-          <div className="flex flex-col gap-8">
-            {/* ── Measurement Units ── */}
-            <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
-                <Ruler className="text-purple-500" /> {t('measurement_units')}
-              </h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">{t('measurement_units_desc')}</p>
-
-              <div className="space-y-5">
-                {/* Weight Toggle */}
-                <div>
-                  <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">{t('weight_unit')}</p>
-                  <div className="inline-flex rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    {[{ val: 'metric', label: 'KG (Metric)' }, { val: 'imperial', label: 'LBS (Imperial)' }].map(({ val, label }) => (
-                      <button
-                        key={val}
-                        onClick={() => handleUnitChange(val)}
-                        className={`px-5 py-2.5 text-sm font-bold transition-all ${unit === val
-                          ? 'bg-purple-600 text-white shadow-inner'
-                          : 'bg-transparent text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                          }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Height Toggle */}
-                <div>
-                  <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">{t('height_unit')}</p>
-                  <div className="inline-flex rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    {[{ val: 'metric', label: 'CM (Metric)' }, { val: 'imperial', label: 'Feet/Inches (Imperial)' }].map(({ val, label }) => (
-                      <button
-                        key={val}
-                        onClick={() => handleUnitChange(val)}
-                        className={`px-5 py-2.5 text-sm font-bold transition-all ${unit === val
-                          ? 'bg-purple-600 text-white shadow-inner'
-                          : 'bg-transparent text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                          }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Live Preview */}
-                <div className="mt-2 p-4 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-700">
-                  <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('preview')}</p>
-                  <div className="flex gap-6 text-sm">
-                    <span className="text-gray-700 dark:text-gray-300">
-                      ⚖️ {t('weight')}: <strong>{displayWeight(profile.weight).value} {displayWeight(profile.weight).label}</strong>
-                    </span>
-                    <span className="text-gray-700 dark:text-gray-300">
-                      📏 {t('height')}: <strong>{displayHeight(profile.height).value} {displayHeight(profile.height).label}</strong>
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* ── App Language ── */}
-            <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
-                <Globe className="text-blue-500" /> {t('app_language')}
-              </h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">{t('app_language_desc')}</p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {[
-                  { code: 'en', flag: 'EN', name: 'English', native: 'English' },
-                  { code: 'hi', flag: 'HI', name: 'Hindi', native: 'हिन्दी' },
-                  { code: 'gu', flag: 'GU', name: 'Gujarati', native: 'ગુજરાતી' },
-                ].map(({ code, flag, name, native }) => (
-                  <button
-                    key={code}
-                    onClick={() => handleLangChange(code)}
-                    className={`flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all font-semibold text-sm ${lang === code
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 shadow-sm'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700 text-gray-700 dark:text-gray-300'
-                      }`}
-                  >
-                    <span className="text-xl font-black tracking-wider">{flag}</span>
-                    <span>{name}</span>
-                    <span className={`text-xs font-normal ${lang === code ? 'text-blue-500 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}`}>{native}</span>
-                    {lang === code && <span className="w-2 h-2 rounded-full bg-blue-500 mt-0.5" />}
+              {/* Data Management & Save */}
+              <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+                  <FileText className="text-indigo-500" /> {t('Data Management')}
+                </h3>
+                <div className="flex flex-col sm:flex-row gap-4 mb-4">
+                  <button onClick={handleExportPDF} className="flex-1 flex items-center justify-center gap-2 py-3 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white rounded-xl font-semibold hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors border border-gray-200 dark:border-gray-600">
+                    <Download size={18} /> {t('Export PDF')}
                   </button>
-                ))}
+                  <button onClick={handleExportExcel} className="flex-1 flex items-center justify-center gap-2 py-3 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white rounded-xl font-semibold hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors border border-gray-200 dark:border-gray-600">
+                    <Download size={18} /> {t('Export Excel')}
+                  </button>
+                </div>
+                <button onClick={handleResetData} className="w-full py-3 rounded-xl font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors border border-red-100 dark:border-red-900/50 mb-6">
+                  {t('Reset All Data')}
+                </button>
+
+                <button onClick={handleSave} className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg flex items-center justify-center gap-2 hover:bg-blue-700 shadow-md shadow-blue-500/25 transition-all active:scale-[0.98]">
+                  <Save size={20} /> {t('Save All Changes')}
+                </button>
+              </div>
+
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'advanced' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+            {/* LEFT COLUMN */}
+            <div className="flex flex-col gap-8">
+              {/* ── Advanced Health Goals ── */}
+              <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+                  <Target className="text-emerald-500" /> {t('advanced_health_goals')}
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('target_weight')} ({weightUnit})</label>
+                    <input type="number" name="target_weight" value={profile.target_weight ? (unit === 'imperial' ? (profile.target_weight * 2.20462).toFixed(1) : profile.target_weight) : ''} placeholder={`e.g. ${unit === 'imperial' ? '150' : '65'}`} onChange={(e) => handleChange({ target: { name: 'target_weight', value: unit === 'imperial' && e.target.value ? parseFloat(e.target.value) / 2.20462 : e.target.value } })} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('timeline')}</label>
+                    <input type="text" name="target_weight_timeline" value={profile.target_weight_timeline || ''} placeholder="e.g. In 2 months" onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
+                  </div>
+                </div>
+
+                <div className="mb-8">
+                  <button
+                    onClick={handleAnalyzeGoal}
+                    disabled={isAnalyzingGoal}
+                    className="w-full py-3 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-xl font-bold border border-indigo-100 dark:border-indigo-800/30 flex items-center justify-center gap-2 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isAnalyzingGoal ? <div className="w-5 h-5 rounded-full border-2 border-indigo-600 dark:border-indigo-400 border-t-transparent animate-spin" /> : <Activity size={18} />}
+                    {isAnalyzingGoal ? t('analyzing_goal') : t('generate_ai')}
+                  </button>
+
+                  {aiSuggestion && aiSuggestion.analysis && (
+                    <div className="mt-4 p-5 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-100 dark:border-indigo-800/30 rounded-xl text-gray-800 dark:text-gray-200 text-sm leading-relaxed shadow-inner">
+                      <div className="flex items-center gap-2 mb-2 text-indigo-600 dark:text-indigo-400 font-bold">
+                        <Activity size={16} /> {t('ai_prediction')}
+                      </div>
+                      {aiSuggestion.analysis}
+                    </div>
+                  )}
+                </div>
+
+                <div className="mb-8 border-t border-gray-100 dark:border-gray-700 pt-8">
+                  <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <Activity className="text-orange-500" /> {t('activity_goals')}
+                  </h4>
+                  <div className="space-y-6">
+                    <div>
+                      <label className="flex items-center justify-between text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                        <span>{t('calorie_limit')} (Diet Intake)</span>
+                        {aiSuggestion && aiSuggestion.suggested_calories && (
+                          <span className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 px-2 py-0.5 rounded text-[10px]">
+                            {t('ai_suggestion')}: {aiSuggestion.suggested_calories} kcal
+                          </span>
+                        )}
+                      </label>
+                      <input type="number" name="calorie_goal" value={profile.calorie_goal || ''} placeholder="e.g. 2000" onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">{t('leave_blank_ai')}</p>
+                    </div>
+                    <div>
+                      <label className="flex items-center justify-between text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                        <span>{t('step_goal')}</span>
+                        {aiSuggestion && aiSuggestion.suggested_steps && (
+                          <span className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 px-2 py-0.5 rounded text-[10px]">
+                            {t('ai_suggestion')}: {aiSuggestion.suggested_steps} steps
+                          </span>
+                        )}
+                      </label>
+                      <input type="number" name="step_goal" value={profile.step_goal || ''} placeholder="10000" onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" />
+                    </div>
+                  </div>
+                </div>
+
+                <button onClick={handleSave} className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg flex items-center justify-center gap-2 hover:bg-blue-700 shadow-md shadow-blue-500/25 transition-all active:scale-[0.98] mt-6">
+                  <Save size={20} /> {t('save_goals')}
+                </button>
               </div>
             </div>
 
-          </div>
+            {/* RIGHT COLUMN */}
+            <div className="flex flex-col gap-8">
+              {/* ── Measurement Units ── */}
+              <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
+                  <Ruler className="text-purple-500" /> {t('measurement_units')}
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">{t('measurement_units_desc')}</p>
 
-        </div>
-      )}
+                <div className="space-y-5">
+                  {/* Weight Toggle */}
+                  <div>
+                    <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">{t('weight_unit')}</p>
+                    <div className="inline-flex rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                      {[{ val: 'metric', label: 'KG (Metric)' }, { val: 'imperial', label: 'LBS (Imperial)' }].map(({ val, label }) => (
+                        <button
+                          key={val}
+                          onClick={() => handleUnitChange(val)}
+                          className={`px-5 py-2.5 text-sm font-bold transition-all ${unit === val
+                            ? 'bg-purple-600 text-white shadow-inner'
+                            : 'bg-transparent text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                            }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-      {activeTab === 'notifications' && (
-        <div className="flex flex-col gap-8">
-          <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
-              <Bell className="text-amber-500" /> {t('Notification Preferences')}
-            </h3>
+                  {/* Height Toggle */}
+                  <div>
+                    <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">{t('height_unit')}</p>
+                    <div className="inline-flex rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                      {[{ val: 'metric', label: 'CM (Metric)' }, { val: 'imperial', label: 'Feet/Inches (Imperial)' }].map(({ val, label }) => (
+                        <button
+                          key={val}
+                          onClick={() => handleUnitChange(val)}
+                          className={`px-5 py-2.5 text-sm font-bold transition-all ${unit === val
+                            ? 'bg-purple-600 text-white shadow-inner'
+                            : 'bg-transparent text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                            }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-8">
-              {t('Customize how LifeOS alerts you for different events. SMS and Email alerts will be sent to your registered contact details.')}
-            </p>
+                  {/* Live Preview */}
+                  <div className="mt-2 p-4 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-700">
+                    <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('preview')}</p>
+                    <div className="flex gap-6 text-sm">
+                      <span className="text-gray-700 dark:text-gray-300">
+                        ⚖️ {t('weight')}: <strong>{displayWeight(profile.weight).value} {displayWeight(profile.weight).label}</strong>
+                      </span>
+                      <span className="text-gray-700 dark:text-gray-300">
+                        📏 {t('height')}: <strong>{displayHeight(profile.height).value} {displayHeight(profile.height).label}</strong>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-            {/* ── Push Notifications Registration ── */}
-            <div className="mb-8 p-6 bg-red-50 dark:bg-red-900/10 rounded-2xl border border-red-100 dark:border-red-900/30">
-              <h4 className="font-bold text-red-700 dark:text-red-400 mb-2 flex items-center gap-2">
-                <Bell size={18} /> {t('Web Push Notifications')}
-              </h4>
-              <p className="text-sm text-red-600/80 dark:text-red-400/80 mb-4">
-                {t('Receive medication and appointment alerts directly on your device, even when the app is closed.')}
-              </p>
-              
-              <div className="flex flex-col gap-3 sm:flex-row">
-                {profile.push_device_token ? (
-                  <>
+              {/* ── App Language ── */}
+              <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
+                  <Globe className="text-blue-500" /> {t('app_language')}
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">{t('app_language_desc')}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {[
+                    { code: 'en', flag: 'EN', name: 'English', native: 'English' },
+                    { code: 'hi', flag: 'HI', name: 'Hindi', native: 'हिन्दी' },
+                    { code: 'gu', flag: 'GU', name: 'Gujarati', native: 'ગુજરાતી' },
+                  ].map(({ code, flag, name, native }) => (
                     <button
-                      onClick={async () => {
-                        if(confirm(t('Are you sure you want to disable push notifications?'))) {
-                           try {
-                             await API.put('/users/me/device-token', { token: '' });
-                             setProfile(p => ({ ...p, push_device_token: null }));
-                             toast.success(t('Successfully unsubscribed from notifications.'));
-                           } catch (e) {
-                             toast.error(t('Failed to unsubscribe'));
-                           }
-                        }
-                      }}
-                      className="flex-1 py-3 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-red-600 rounded-xl font-bold border border-red-200 dark:border-red-800 transition-colors shadow-sm"
+                      key={code}
+                      onClick={() => handleLangChange(code)}
+                      className={`flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all font-semibold text-sm ${lang === code
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 shadow-sm'
+                        : 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700 text-gray-700 dark:text-gray-300'
+                        }`}
                     >
-                      {t('Unsubscribe from Push')}
+                      <span className="text-xl font-black tracking-wider">{flag}</span>
+                      <span>{name}</span>
+                      <span className={`text-xs font-normal ${lang === code ? 'text-blue-500 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}`}>{native}</span>
+                      {lang === code && <span className="w-2 h-2 rounded-full bg-blue-500 mt-0.5" />}
                     </button>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+        )}
+
+        {activeTab === 'notifications' && (
+          <div className="flex flex-col gap-8">
+            <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+                <Bell className="text-amber-500" /> {t('Notification Preferences')}
+              </h3>
+
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-8">
+                {t('Customize how LifeOS alerts you for different events. SMS and Email alerts will be sent to your registered contact details.')}
+              </p>
+
+              {/* ── Push Notifications Registration ── */}
+              <div className="mb-8 p-6 bg-red-50 dark:bg-red-900/10 rounded-2xl border border-red-100 dark:border-red-900/30">
+                <h4 className="font-bold text-red-700 dark:text-red-400 mb-2 flex items-center gap-2">
+                  <Bell size={18} /> {t('Web Push Notifications')}
+                </h4>
+                <p className="text-sm text-red-600/80 dark:text-red-400/80 mb-4">
+                  {t('Receive medication and appointment alerts directly on your device, even when the app is closed.')}
+                </p>
+
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  {profile.push_device_token ? (
+                    <>
+                      <button
+                        onClick={async () => {
+                          if (confirm(t('Are you sure you want to disable push notifications?'))) {
+                            try {
+                              await API.put('/users/me/device-token', { token: '' });
+                              setProfile(p => ({ ...p, push_device_token: null }));
+                              toast.success(t('Successfully unsubscribed from notifications.'));
+                            } catch (e) {
+                              toast.error(t('Failed to unsubscribe'));
+                            }
+                          }
+                        }}
+                        className="flex-1 py-3 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-red-600 rounded-xl font-bold border border-red-200 dark:border-red-800 transition-colors shadow-sm"
+                      >
+                        {t('Unsubscribe from Push')}
+                      </button>
+                      <button
+                        onClick={async () => {
+                          try {
+                            await API.post('/users/me/test-push');
+                            toast.success(t('Test notification sent! It should appear momentarily.'));
+                          } catch (e) {
+                            toast.error(e?.message || t('Failed to send test push'));
+                          }
+                        }}
+                        className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-colors shadow-sm active:scale-[0.98]"
+                      >
+                        {t('Send Test Notification')}
+                      </button>
+                    </>
+                  ) : (
                     <button
                       onClick={async () => {
                         try {
-                           await API.post('/users/me/test-push');
-                           toast.success(t('Test notification sent! It should appear momentarily.'));
+                          const OneSignal = window.OneSignal || window.OneSignalDeferred || [];
+
+                          if (OneSignal.Slidedown) {
+                            await OneSignal.Slidedown.promptPush();
+                          } else if (OneSignal.push) {
+                            OneSignal.push(function () {
+                              OneSignal.Slidedown.promptPush();
+                            });
+                          } else {
+                            toast.error("OneSignal is not ready yet. Please refresh and try again.");
+                            return;
+                          }
+
+                          setTimeout(async () => {
+                            const playerId = OneSignal.User ? OneSignal.User.PushSubscription.id : null;
+                            if (playerId) {
+                              try {
+                                await API.put('/users/me/device-token', { token: playerId });
+                                setProfile(p => ({ ...p, push_device_token: playerId }));
+                                toast.success(t('Push notifications enabled successfully!'));
+                              } catch (apiErr) {
+                                toast.error(apiErr?.response?.data?.detail || t('Failed to save token to server'));
+                              }
+                            } else {
+                              if (OneSignal.User && OneSignal.User.PushSubscription.optedIn === false) {
+                                toast.error(t('Notifications are blocked in your browser settings. Please unblock them via the site settings icon in the URL bar.'));
+                              } else {
+                                toast.error(t('Could not retrieve device token from OneSignal. Ensure notifications are allowed.'));
+                              }
+                            }
+                          }, 3000);
+
                         } catch (e) {
-                           toast.error(e?.message || t('Failed to send test push'));
+                          toast.error(e.message || t('Failed to enable push notifications'));
                         }
                       }}
-                      className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-colors shadow-sm active:scale-[0.98]"
+                      className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-colors shadow-sm active:scale-[0.98]"
                     >
-                      {t('Send Test Notification')}
+                      {t('Subscribe to Push Notifications')}
                     </button>
-                  </>
-                ) : (
-                  <button
-                    onClick={async () => {
-                      try {
-                        const OneSignal = window.OneSignal || window.OneSignalDeferred || [];
-                        
-                        if (OneSignal.Slidedown) {
-                          await OneSignal.Slidedown.promptPush();
-                        } else if (OneSignal.push) {
-                          OneSignal.push(function() {
-                            OneSignal.Slidedown.promptPush();
-                          });
-                        } else {
-                           toast.error("OneSignal is not ready yet. Please refresh and try again.");
-                           return;
-                        }
-                        
-                        setTimeout(async () => {
-                          const playerId = OneSignal.User ? OneSignal.User.PushSubscription.id : null;
-                          if (playerId) {
-                            try {
-                              await API.put('/users/me/device-token', { token: playerId });
-                              setProfile(p => ({ ...p, push_device_token: playerId }));
-                              toast.success(t('Push notifications enabled successfully!'));
-                            } catch (apiErr) {
-                              toast.error(apiErr?.response?.data?.detail || t('Failed to save token to server'));
-                            }
-                          } else {
-                            if (OneSignal.User && OneSignal.User.PushSubscription.optedIn === false) {
-                               toast.error(t('Notifications are blocked in your browser settings. Please unblock them via the site settings icon in the URL bar.'));
-                            } else {
-                               toast.error(t('Could not retrieve device token from OneSignal. Ensure notifications are allowed.'));
-                            }
-                          }
-                        }, 3000);
-                        
-                      } catch (e) {
-                        toast.error(e.message || t('Failed to enable push notifications'));
-                      }
-                    }}
-                    className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-colors shadow-sm active:scale-[0.98]"
-                  >
-                    {t('Subscribe to Push Notifications')}
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-8">
-              {/* Jarvis AI Assistant */}
-              <div className="border-b border-gray-100 dark:border-gray-700/50 pb-6">
-                <h4 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">🤖 {t('Jarvis AI Assistant')}</h4>
-                <div className="flex flex-col gap-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('Enable Jarvis Voice Assistant')}</span>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" className="sr-only peer" checked={profile.notification_preferences?.jarvis_enabled ?? false} onChange={(e) => {
-                        const newPrefs = {
-                          ...profile.notification_preferences,
-                          jarvis_enabled: e.target.checked
-                        };
-                        setProfile(p => ({ ...p, notification_preferences: newPrefs }));
-                        API.put('/users/profile', { notification_preferences: newPrefs }).catch(() => toast.error('Failed to save preference'));
-                        window.dispatchEvent(new CustomEvent('profile-updated', { detail: { notification_preferences: newPrefs } }));
-                      }} />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                    </label>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('Enable Swipe Navigation')}</span>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">{t('Swipe left/right to change tabs')}</span>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" className="sr-only peer" checked={localStorage.getItem('jarvisSwipeEnabled') !== 'false'} onChange={(e) => {
-                        localStorage.setItem('jarvisSwipeEnabled', e.target.checked ? 'true' : 'false');
-                        // Force a re-render so the toggle visually updates immediately
-                        setProfile(p => ({ ...p }));
-                      }} />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                    </label>
-                  </div>
+                  )}
                 </div>
               </div>
 
-              {/* Medicine Reminders */}
-              <div className="border-b border-gray-100 dark:border-gray-700/50 pb-6">
-                <h4 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">💊 {t('Medicine Reminders')}</h4>
-                <div className="flex flex-col gap-4">
-                  {['email', 'sms', 'app'].map(type => (
-                    <div key={`med-${type}`} className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">{t(type + ' Notifications')}</span>
+              <div className="space-y-8">
+                {/* Jarvis AI Assistant */}
+                <div className="border-b border-gray-100 dark:border-gray-700/50 pb-6">
+                  <h4 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">🤖 {t('Jarvis AI Assistant')}</h4>
+                  <div className="flex flex-col gap-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('Enable Jarvis Voice Assistant')}</span>
                       <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" className="sr-only peer" checked={profile.notification_preferences?.medicine?.[type] ?? false} onChange={(e) => {
+                        <input type="checkbox" className="sr-only peer" checked={profile.notification_preferences?.jarvis_enabled ?? false} onChange={(e) => {
                           const newPrefs = {
                             ...profile.notification_preferences,
-                            medicine: { ...(profile.notification_preferences?.medicine || {}), [type]: e.target.checked }
+                            jarvis_enabled: e.target.checked
+                          };
+                          setProfile(p => ({ ...p, notification_preferences: newPrefs }));
+                          API.put('/users/profile', { notification_preferences: newPrefs }).catch(() => toast.error('Failed to save preference'));
+                          window.dispatchEvent(new CustomEvent('profile-updated', { detail: { notification_preferences: newPrefs } }));
+                        }} />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                      </label>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('Enable Swipe Navigation')}</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">{t('Swipe left/right to change tabs')}</span>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" className="sr-only peer" checked={localStorage.getItem('jarvisSwipeEnabled') !== 'false'} onChange={(e) => {
+                          localStorage.setItem('jarvisSwipeEnabled', e.target.checked ? 'true' : 'false');
+                          // Force a re-render so the toggle visually updates immediately
+                          setProfile(p => ({ ...p }));
+                        }} />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Medicine Reminders */}
+                <div className="border-b border-gray-100 dark:border-gray-700/50 pb-6">
+                  <h4 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">💊 {t('Medicine Reminders')}</h4>
+                  <div className="flex flex-col gap-4">
+                    {['email', 'sms', 'app'].map(type => (
+                      <div key={`med-${type}`} className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">{t(type + ' Notifications')}</span>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input type="checkbox" className="sr-only peer" checked={profile.notification_preferences?.medicine?.[type] ?? false} onChange={(e) => {
+                            const newPrefs = {
+                              ...profile.notification_preferences,
+                              medicine: { ...(profile.notification_preferences?.medicine || {}), [type]: e.target.checked }
+                            };
+                            setProfile(p => ({ ...p, notification_preferences: newPrefs }));
+                            API.put('/users/profile', { notification_preferences: newPrefs }).catch(() => toast.error('Failed to save preference'));
+                          }} />
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Appointment Alerts */}
+                <div className="border-b border-gray-100 dark:border-gray-700/50 pb-6">
+                  <h4 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">📅 {t('Appointment Alerts')}</h4>
+                  <div className="flex flex-col gap-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('App Notifications')}</span>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" className="sr-only peer" checked={profile.notification_preferences?.appointment?.app ?? false} onChange={(e) => {
+                          const newPrefs = {
+                            ...profile.notification_preferences,
+                            appointment: { ...(profile.notification_preferences?.appointment || {}), app: e.target.checked }
                           };
                           setProfile(p => ({ ...p, notification_preferences: newPrefs }));
                           API.put('/users/profile', { notification_preferences: newPrefs }).catch(() => toast.error('Failed to save preference'));
@@ -1174,49 +1196,27 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
                         <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
                       </label>
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Appointment Alerts */}
-              <div className="border-b border-gray-100 dark:border-gray-700/50 pb-6">
-                <h4 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">📅 {t('Appointment Alerts')}</h4>
-                <div className="flex flex-col gap-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('App Notifications')}</span>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" className="sr-only peer" checked={profile.notification_preferences?.appointment?.app ?? false} onChange={(e) => {
-                        const newPrefs = {
-                          ...profile.notification_preferences,
-                          appointment: { ...(profile.notification_preferences?.appointment || {}), app: e.target.checked }
-                        };
-                        setProfile(p => ({ ...p, notification_preferences: newPrefs }));
-                        API.put('/users/profile', { notification_preferences: newPrefs }).catch(() => toast.error('Failed to save preference'));
-                      }} />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                    </label>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('SMS to Emergency Contact')}</span>
-                      <span className="text-xs text-gray-500">{t('Alerts emergency contact of upcoming appointments')}</span>
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('SMS to Emergency Contact')}</span>
+                        <span className="text-xs text-gray-500">{t('Alerts emergency contact of upcoming appointments')}</span>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" className="sr-only peer" checked={profile.notification_preferences?.appointment?.emergency_sms ?? false} onChange={(e) => {
+                          const newPrefs = {
+                            ...profile.notification_preferences,
+                            appointment: { ...(profile.notification_preferences?.appointment || {}), emergency_sms: e.target.checked }
+                          };
+                          setProfile(p => ({ ...p, notification_preferences: newPrefs }));
+                          API.put('/users/profile', { notification_preferences: newPrefs }).catch(() => toast.error('Failed to save preference'));
+                        }} />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                      </label>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" className="sr-only peer" checked={profile.notification_preferences?.appointment?.emergency_sms ?? false} onChange={(e) => {
-                        const newPrefs = {
-                          ...profile.notification_preferences,
-                          appointment: { ...(profile.notification_preferences?.appointment || {}), emergency_sms: e.target.checked }
-                        };
-                        setProfile(p => ({ ...p, notification_preferences: newPrefs }));
-                        API.put('/users/profile', { notification_preferences: newPrefs }).catch(() => toast.error('Failed to save preference'));
-                      }} />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                    </label>
                   </div>
                 </div>
-              </div>
 
-              {/* Inactivity/Fitness Alerts */}
+                {/* Inactivity/Fitness Alerts
               <div className="pb-2">
                 <h4 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">🏃 {t('Inactivity & Fitness Alerts')}</h4>
                 <div className="flex flex-col gap-4">
@@ -1237,159 +1237,159 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
                     </div>
                   ))}
                 </div>
-              </div>
+              </div> */}
 
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {activeTab === 'security' && (
-        <div className="flex flex-col gap-8">
-          <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
-              <ShieldAlert className="text-emerald-500" /> {t('Security Settings')}
-            </h3>
+        {activeTab === 'security' && (
+          <div className="flex flex-col gap-8">
+            <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 dark:border-gray-700">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+                <ShieldAlert className="text-emerald-500" /> {t('Security Settings')}
+              </h3>
 
-            {/* Biometric Login Row */}
-            <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-2">{t('Biometric Login')}</h2>
-            <p className="text-slate-500 dark:text-slate-400 mb-6">
-              {t('Use your device\'s built-in biometric sensor (fingerprint or face) to log in securely.')}
-            </p>
+              {/* Biometric Login Row */}
+              <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-2">{t('Biometric Login')}</h2>
+              <p className="text-slate-500 dark:text-slate-400 mb-6">
+                {t('Use your device\'s built-in biometric sensor (fingerprint or face) to log in securely.')}
+              </p>
 
-            <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-6 border border-slate-200 dark:border-slate-700 flex flex-col md:flex-row items-center justify-between">
-              <div className="flex items-center gap-4 mb-4 md:mb-0">
-                <div className={`p-4 rounded-full ${faceLoginEnabled ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400' : 'bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>
-                  <ScanFace className="w-8 h-8" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-slate-800 dark:text-white">
-                    {t('Biometric Login is')} {faceLoginEnabled ? <span className="text-emerald-600 dark:text-emerald-400">{t('Enabled')}</span> : <span className="text-slate-500">{t('Disabled')}</span>}
-                  </h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">
-                    {faceLoginEnabled ? t('You can use your device biometrics to sign in.') : t('Enable to sign in without a password.')}
-                  </p>
-                </div>
-              </div>
-              <div>
-                {faceLoginEnabled ? (
-                  <button
-                    onClick={handleDisableFaceLogin}
-                    className="px-4 py-2 border border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-500/10 font-medium transition-colors"
-                  >
-                    {t('Disable')}
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleOpenFaceSetup}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-                  >
-                    {t('Setup Biometric Login')}
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* 2FA Row */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 py-5 border-b border-gray-100 dark:border-gray-700/50">
-              <div className="flex items-center gap-4">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${twoFactorEnabled ? 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400' : 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'}`}>
-                  <Shield size={24} />
-                </div>
-                <div>
-                  <div className="font-bold text-gray-900 dark:text-white">{t('Two-Factor Authentication')}</div>
-                  <div className={`text-sm ${twoFactorEnabled ? 'text-green-600 dark:text-green-400 font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
-                    {twoFactorEnabled ? t('✅ Enabled — Authenticator App') : t('Additional security layer · Not configured')}
+              <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-6 border border-slate-200 dark:border-slate-700 flex flex-col md:flex-row items-center justify-between">
+                <div className="flex items-center gap-4 mb-4 md:mb-0">
+                  <div className={`p-4 rounded-full ${faceLoginEnabled ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400' : 'bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>
+                    <ScanFace className="w-8 h-8" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-800 dark:text-white">
+                      {t('Biometric Login is')} {faceLoginEnabled ? <span className="text-emerald-600 dark:text-emerald-400">{t('Enabled')}</span> : <span className="text-slate-500">{t('Disabled')}</span>}
+                    </h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      {faceLoginEnabled ? t('You can use your device biometrics to sign in.') : t('Enable to sign in without a password.')}
+                    </p>
                   </div>
                 </div>
-              </div>
-              {twoFactorEnabled ? (
-                <button onClick={async () => {
-                  if (confirm(t('Are you sure you want to disable 2FA?'))) {
-                    try {
-                      await API.post('/auth/2fa/disable');
-                      setTwoFactorEnabled(false);
-                      toast.success(t('2FA Disabled.'));
-                    } catch (e) { toast.error(t('Failed to disable 2FA')); }
-                  }
-                }} className="px-4 py-2 rounded-xl text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 transition-colors">{t('Disable')}</button>
-              ) : (
-                <button onClick={async () => {
-                  try {
-                    const res = await API.get('/auth/2fa/setup');
-                    setTwoFactorSecret(res.data.secret);
-                    setTwoFactorUri(res.data.uri);
-                    setTwoFactorSetupOpen(true);
-                  } catch (e) { toast.error(t('Failed to setup 2FA')); }
-                }} className="px-5 py-2 rounded-xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-colors">{t('Setup')}</button>
-              )}
-            </div>
-
-            {/* Login Alerts Row */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 py-5 border-b border-gray-100 dark:border-gray-700/50">
-              <div className="flex items-center gap-4">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${loginAlertsEnabled ? 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'}`}>
-                  <Bell size={24} />
-                </div>
                 <div>
-                  <div className="font-bold text-gray-900 dark:text-white">{t('Login Email Alerts')}</div>
-                  <div className={`text-sm ${loginAlertsEnabled ? 'text-green-600 dark:text-green-400 font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
-                    {loginAlertsEnabled ? t('✅ Enabled — Receiving alerts for new logins') : t('Alerts are paused')}
-                  </div>
-                </div>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" className="sr-only peer" checked={loginAlertsEnabled} onChange={async () => {
-                  try {
-                    const res = await API.put('/users/security/alerts-toggle');
-                    setLoginAlertsEnabled(res.data.login_alerts_enabled);
-                  } catch (e) { toast.error('Failed'); }
-                }} />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-              </label>
-            </div>
-
-            {/* Login History */}
-            <div className="py-5">
-              <h4 className="font-bold text-gray-900 dark:text-white mb-4">{t('Recent Logins')}</h4>
-              {loginHistory.length === 0 ? (
-                <p className="text-sm text-gray-500 dark:text-gray-400">{t('No recent logins found.')}</p>
-              ) : (
-                <div className="flex flex-col gap-3">
-                  {loginHistory.slice(0, 2).map(h => (
-                    <div key={h.id} className="flex justify-between items-center bg-gray-50 dark:bg-gray-900/50 p-4 rounded-2xl border border-gray-100 dark:border-gray-700/50">
-                      <div className="flex flex-col">
-                        <span className="text-sm font-bold text-gray-900 dark:text-white">{h.ip_address}</span>
-                        <span className="text-xs text-gray-500 dark:text-gray-400 max-w-[200px] truncate" title={h.user_agent}>{h.user_agent}</span>
-                      </div>
-                      <span className="text-xs font-medium text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 px-3 py-1.5 rounded-lg border border-gray-100 dark:border-gray-700">{new Date(h.created_at).toLocaleString()}</span>
-                    </div>
-                  ))}
-                  {loginHistory.length > 2 && (
-                    <button onClick={() => setShowAllLoginsModal(true)} className="text-sm font-bold text-blue-600 hover:text-blue-700 mt-2 self-start transition-colors">
-                      {t('Show more login history...')}
+                  {faceLoginEnabled ? (
+                    <button
+                      onClick={handleDisableFaceLogin}
+                      className="px-4 py-2 border border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-500/10 font-medium transition-colors"
+                    >
+                      {t('Disable')}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleOpenFaceSetup}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                    >
+                      {t('Setup Biometric Login')}
                     </button>
                   )}
                 </div>
-              )}
-            </div>
-
-            {/* Blockchain */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 py-5 opacity-60">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-amber-50 text-amber-500 dark:bg-amber-900/20 dark:text-amber-400">
-                  <Share2 size={24} />
-                </div>
-                <div>
-                  <div className="font-bold text-gray-900 dark:text-white">{t('Blockchain Sync')}</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">{t('Tamper-proof medical records')}</div>
-                </div>
               </div>
-              <span className="px-3 py-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-xs font-bold rounded-lg uppercase tracking-wider">{t('Coming Soon')}</span>
+
+              {/* 2FA Row */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 py-5 border-b border-gray-100 dark:border-gray-700/50">
+                <div className="flex items-center gap-4">
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${twoFactorEnabled ? 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400' : 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'}`}>
+                    <Shield size={24} />
+                  </div>
+                  <div>
+                    <div className="font-bold text-gray-900 dark:text-white">{t('Two-Factor Authentication')}</div>
+                    <div className={`text-sm ${twoFactorEnabled ? 'text-green-600 dark:text-green-400 font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
+                      {twoFactorEnabled ? t('✅ Enabled — Authenticator App') : t('Additional security layer · Not configured')}
+                    </div>
+                  </div>
+                </div>
+                {twoFactorEnabled ? (
+                  <button onClick={async () => {
+                    if (confirm(t('Are you sure you want to disable 2FA?'))) {
+                      try {
+                        await API.post('/auth/2fa/disable');
+                        setTwoFactorEnabled(false);
+                        toast.success(t('2FA Disabled.'));
+                      } catch (e) { toast.error(t('Failed to disable 2FA')); }
+                    }
+                  }} className="px-4 py-2 rounded-xl text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 transition-colors">{t('Disable')}</button>
+                ) : (
+                  <button onClick={async () => {
+                    try {
+                      const res = await API.get('/auth/2fa/setup');
+                      setTwoFactorSecret(res.data.secret);
+                      setTwoFactorUri(res.data.uri);
+                      setTwoFactorSetupOpen(true);
+                    } catch (e) { toast.error(t('Failed to setup 2FA')); }
+                  }} className="px-5 py-2 rounded-xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-colors">{t('Setup')}</button>
+                )}
+              </div>
+
+              {/* Login Alerts Row */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 py-5 border-b border-gray-100 dark:border-gray-700/50">
+                <div className="flex items-center gap-4">
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${loginAlertsEnabled ? 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'}`}>
+                    <Bell size={24} />
+                  </div>
+                  <div>
+                    <div className="font-bold text-gray-900 dark:text-white">{t('Login Email Alerts')}</div>
+                    <div className={`text-sm ${loginAlertsEnabled ? 'text-green-600 dark:text-green-400 font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
+                      {loginAlertsEnabled ? t('✅ Enabled — Receiving alerts for new logins') : t('Alerts are paused')}
+                    </div>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" className="sr-only peer" checked={loginAlertsEnabled} onChange={async () => {
+                    try {
+                      const res = await API.put('/users/security/alerts-toggle');
+                      setLoginAlertsEnabled(res.data.login_alerts_enabled);
+                    } catch (e) { toast.error('Failed'); }
+                  }} />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
+
+              {/* Login History */}
+              <div className="py-5">
+                <h4 className="font-bold text-gray-900 dark:text-white mb-4">{t('Recent Logins')}</h4>
+                {loginHistory.length === 0 ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{t('No recent logins found.')}</p>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    {loginHistory.slice(0, 2).map(h => (
+                      <div key={h.id} className="flex justify-between items-center bg-gray-50 dark:bg-gray-900/50 p-4 rounded-2xl border border-gray-100 dark:border-gray-700/50">
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold text-gray-900 dark:text-white">{h.ip_address}</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400 max-w-[200px] truncate" title={h.user_agent}>{h.user_agent}</span>
+                        </div>
+                        <span className="text-xs font-medium text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 px-3 py-1.5 rounded-lg border border-gray-100 dark:border-gray-700">{new Date(h.created_at).toLocaleString()}</span>
+                      </div>
+                    ))}
+                    {loginHistory.length > 2 && (
+                      <button onClick={() => setShowAllLoginsModal(true)} className="text-sm font-bold text-blue-600 hover:text-blue-700 mt-2 self-start transition-colors">
+                        {t('Show more login history...')}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Blockchain */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 py-5 opacity-60">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-amber-50 text-amber-500 dark:bg-amber-900/20 dark:text-amber-400">
+                    <Share2 size={24} />
+                  </div>
+                  <div>
+                    <div className="font-bold text-gray-900 dark:text-white">{t('Blockchain Sync')}</div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">{t('Tamper-proof medical records')}</div>
+                  </div>
+                </div>
+                <span className="px-3 py-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-xs font-bold rounded-lg uppercase tracking-wider">{t('Coming Soon')}</span>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
       </SwipeTabContainer>
 
       {/* Login History Modal Overlay */}
@@ -1461,7 +1461,7 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
         <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={(e) => { if (e.target === e.currentTarget) handleCloseFaceSetup(); }}>
           <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 md:p-8 w-full max-w-lg shadow-2xl flex flex-col items-center animate-in zoom-in-95 duration-200 relative overflow-hidden">
             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">📷 {t('Face Setup')}</h3>
-            
+
             <div className="relative w-full aspect-video bg-black rounded-2xl overflow-hidden mb-6 flex items-center justify-center border-4 border-gray-100 dark:border-gray-700">
               {faceCaptureStatus === 'loading' && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
@@ -1480,7 +1480,7 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
                 {faceCaptureStatus === 'scanning' ? t('Capture Face') : t('Please Wait...')}
               </button>
             )}
-            
+
             <button onClick={handleCloseFaceSetup} className="mt-4 text-sm font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors">
               {t('Cancel')}
             </button>
