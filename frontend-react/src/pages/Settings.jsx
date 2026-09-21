@@ -867,10 +867,12 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
                   <button
                     onClick={handleAnalyzeGoal}
                     disabled={isAnalyzingGoal}
-                    className="w-full py-3 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-xl font-bold border border-indigo-100 dark:border-indigo-800/30 flex items-center justify-center gap-2 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full py-3 px-4 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-xl font-bold border border-indigo-100 dark:border-indigo-800/30 flex items-center justify-center gap-2.5 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isAnalyzingGoal ? <div className="w-5 h-5 rounded-full border-2 border-indigo-600 dark:border-indigo-400 border-t-transparent animate-spin" /> : <Activity size={18} />}
-                    {isAnalyzingGoal ? t('analyzing_goal') : t('generate_ai')}
+                    <div className="flex items-center justify-center shrink-0">
+                      {isAnalyzingGoal ? <div className="w-5 h-5 rounded-full border-2 border-indigo-600 dark:border-indigo-400 border-t-transparent animate-spin" /> : <Activity size={18} />}
+                    </div>
+                    <span className="text-center leading-snug">{isAnalyzingGoal ? t('analyzing_goal') : t('generate_ai')}</span>
                   </button>
 
                   {aiSuggestion && aiSuggestion.analysis && (

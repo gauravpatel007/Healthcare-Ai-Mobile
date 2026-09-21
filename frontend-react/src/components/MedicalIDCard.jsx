@@ -28,7 +28,7 @@ const MedicalIDCard = () => {
   const { profile, contacts } = data;
 
   return (
-    <div className="min-h-[100dvh] bg-transparent p-4 sm:p-8 font-sans">
+    <div className="min-h-[100dvh] bg-transparent p-4 pt-[max(env(safe-area-inset-top,44px),44px)] sm:p-8 font-sans">
       {/* Changed max-w-2xl to max-w-4xl to stretch the card wider */}
       <div className="max-w-4xl mx-auto w-full">
 
