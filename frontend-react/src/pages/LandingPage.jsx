@@ -124,7 +124,7 @@ const LandingPage = () => {
     <div className={isDark ? 'dark' : ''} style={{ colorScheme: landingTheme }} data-theme={landingTheme}>
       <div id="landing-scroll-container" className={`absolute inset-0 w-full h-full overflow-y-auto overflow-x-hidden m-0 p-0 selection:bg-blue-200 selection:text-blue-900 font-['Inter'] transition-colors duration-300 ${isDark ? 'bg-slate-950' : 'bg-slate-50'} [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]`}>
         {/* ========== TOP NAV BAR ========== */}
-        <header className={`fixed top-[max(env(safe-area-inset-top),12px)] md:top-4 left-2 right-2 md:left-6 md:right-6 max-w-[1440px] mx-auto z-50 backdrop-blur-md rounded-[20px] transition-colors duration-300 shadow-sm border ${isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white/80 border-slate-200'}`}>
+        <header className={`fixed top-[max(env(safe-area-inset-top,40px),40px)] md:top-4 left-2 right-2 md:left-6 md:right-6 max-w-[1440px] mx-auto z-50 backdrop-blur-md rounded-[20px] transition-colors duration-300 shadow-sm border ${isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white/80 border-slate-200'}`}>
           <nav className="flex justify-between items-center px-4 py-3 md:px-8 md:py-4">
             <div className="flex flex-1 items-center gap-3 cursor-pointer" onClick={() => window.scrollTo(0, 0)}>
               <div className="w-9 h-9 rounded-[10px] bg-[#0ea5e9] flex items-center justify-center text-white shadow-sm">

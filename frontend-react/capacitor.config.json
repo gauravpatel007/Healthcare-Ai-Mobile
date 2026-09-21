@@ -5,10 +5,5 @@
   "server": {
     "cleartext": true,
     "androidScheme": "http"
-  },
-  "plugins": {
-    "StatusBar": {
-      "overlaysWebView": false
-    }
   }
 }
