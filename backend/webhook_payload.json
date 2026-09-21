@@ -1,0 +1,1 @@
+{"url": "https://slackness-wilt-staple.ngrok-free.dev/api/v1/emergency/telegram/webhook", "secret_token": "G9k-D_L2r_H6vM_wFm2V9eA7wXbTqK_yWb5aQ0m1A7M", "allowed_updates": ["message"], "max_connections": 1}

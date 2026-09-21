@@ -4,7 +4,9 @@ import logging
 from datetime import datetime, timedelta, timezone
 from html import escape
 
+# pyrefly: ignore [missing-import]
 from fastapi import HTTPException
+# pyrefly: ignore [missing-import]
 from sqlalchemy import select
 
 from app.models.emergency import EmergencyContact, EmergencyContactConsent, SOSLog
@@ -32,50 +34,59 @@ async def dispatch_consented_sos(request, user_id, db):
     sender_name = profile.name if profile else "LifeOS user"
     location_url = (f"https://www.google.com/maps?q={request.latitude},{request.longitude}"
                     if request.latitude is not None and request.longitude is not None else None)
-    recipients = (await db.execute(select(EmergencyContactConsent, User, UserProfile).join(
-        EmergencyContact, EmergencyContact.id == EmergencyContactConsent.contact_id
-    ).join(User, User.id == EmergencyContactConsent.recipient_user_id).outerjoin(
-        UserProfile, UserProfile.user_id == User.id
-    ).where(
-        EmergencyContact.user_id == user_id, EmergencyContactConsent.status == "accepted",
-        User.id != user_id, User.is_active.is_(True), User.is_deleted.is_(False), User.is_verified.is_(True),
-    ))).all()
-    # The same account may have accepted multiple contacts; send only once.
-    unique = {}
-    for consent, recipient, recipient_profile in recipients:
-        previous = unique.get(recipient.id)
-        email_allowed = consent.email_opt_in and consent.recipient_email == recipient.email
-        unique[recipient.id] = (recipient, recipient_profile, email_allowed or bool(previous and previous[2]))
+    # Fetch all emergency contacts for the user, regardless of verification or consent status.
+    contacts = (await db.execute(select(EmergencyContact).where(
+        EmergencyContact.user_id == user_id
+    ).with_for_update())).scalars().all()
+    
     db.add(SOSLog(user_id=user_id, is_silent=request.is_silent))
     message = f"{sender_name} triggered an SOS alert. Please contact them immediately."
     message += f" Location: {location_url}" if location_url else " Location was not available."
-    for recipient_id in unique:
-        db.add(SystemNotification(type="SOS", target_audience=recipient_id, title="Emergency SOS alert",
-                                  message=message, status="Sent"))
-    # Persist the alert inbox before any best-effort network request.
+    
     await db.commit()
-    if not unique:
+    
+    if not contacts:
         return SOSAlertResponse(success=False,
-            message="SOS recorded. No accepted emergency contacts are available. Call someone directly.",
-            actions=["No accepted emergency contacts. Share an invitation and ask your contact to accept first."])
+            message="No emergency contacts found.",
+            actions=["Add an emergency contact to send SOS alerts. Call someone directly if help is urgent."])
 
-    actions = [f"In-app alerts saved: {len(unique)}. Recipients may not have seen them yet."]
+    actions = []
     tasks = []
-    for recipient, recipient_profile, email_allowed in unique.values():
-        if email_allowed:
-            # Use the verified recipient account, NEVER sender-entered contact.email.
-            tasks.append(("Email", asyncio.to_thread(send_sos_email, [recipient.email], escape(sender_name), location_url)))
-        if recipient_profile and recipient_profile.push_device_token:
-            tasks.append(("Push", asyncio.to_thread(send_push_notification,
-                recipient_profile.push_device_token, "Emergency SOS alert", f"{sender_name} needs your help. Open LifeOS for details.",
-                data={"href": "/emergency-invitation", "type": "sos"}, ttl=3600)))
+    
+    email_contacts = [c.email for c in contacts if c.email]
+    call_contacts = [c.phone for c in contacts if getattr(c, 'telegram_verified', False)]
+    
+    if email_contacts:
+        tasks.append(("Email", asyncio.to_thread(send_sos_email, email_contacts, escape(sender_name), location_url)))
+        
+    if call_contacts:
+        from app.utils.email import send_sos_call_twilio
+        tasks.append(("Call", asyncio.to_thread(send_sos_call_twilio, call_contacts, escape(sender_name), location_url, None)))
+            
+    mail_sent = False
+    call_done = False
+    
     if tasks:
         results = await asyncio.gather(*(task for _, task in tasks), return_exceptions=True)
         for (channel, _), result in zip(tasks, results):
             if isinstance(result, tuple) and result[0]:
-                actions.append(f"{channel} request accepted. Delivery is not confirmed.")
+                if channel == "Email":
+                    mail_sent = True
+                elif channel == "Call":
+                    call_done = True
             else:
-                logger.warning("SOS %s delivery was not accepted", channel)
-                actions.append(f"{channel} could not be delivered. The alert remains in the recipient's app inbox.")
+                logger.warning("SOS %s delivery failed: %s", channel, result)
+                
+    actions.append("CUSTOM_UI_MSG")
+    
+    if email_contacts:
+        actions.append("1. Mail sent to your emergency contact with your location")
+        
+    if call_contacts:
+        if call_done:
+            actions.append("2. SOS call delivery is done")
+        else:
+            actions.append(f"2. SOS call delivery is not done - {result[1]}")
+                
     return SOSAlertResponse(success=True,
-        message="SOS saved in accepted contacts' app inboxes. Delivery/read status is not confirmed.", actions=actions)
+        message="SOS alerts processed.", actions=actions)

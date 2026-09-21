@@ -16,7 +16,7 @@ import {
 import OrganDonorModal from '../components/OrganDonorModal';
 import OrganNetworkModal from '../components/OrganNetworkModal';
 import HealthIDCard from '../components/HealthIDCard';
-import EmergencyContactInvite from '../components/EmergencyContactInvite';
+import EmergencyTelegramVerification from '../components/EmergencyTelegramVerification';
 
 const PREDEFINED_FIRST_AID = {
   'Burns': "1. Cool the burn under cold running water for at least 10 minutes.\n2. Remove clothing or jewelry near the burned area unless it's stuck to the skin.\n3. Cover the burn loosely with a clean, non-stick dressing or plastic wrap.\n4. Do not apply ice, butter, or ointments to a severe burn.\n5. Seek medical attention for large, deep, or facial burns.\n\n**DISCLAIMER:** This is a quick reference guide. It does not replace professional medical advice. Always call emergency services immediately in a critical situation.",
@@ -81,14 +81,14 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
   // Listen for voice actions (handled after triggerSOS is defined)
   const voiceActionHandled = React.useRef(false);
 
-  const fetchData = async () => {
+  const fetchData = async (savedContact = null) => {
     try {
       setLoading(true);
       const [fetchedContacts, qrData] = await Promise.all([
         API.get('/emergency/contacts'),
         API.get('/emergency/qr-data')
       ]);
-      setContacts(fetchedContacts || []);
+      setContacts((fetchedContacts || []).map(contact => contact.id === savedContact?.id ? savedContact : contact));
       setProfile(qrData || {});
 
       // ARCHIVED: Audio Clip Fetch
@@ -112,11 +112,13 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
   useEffect(() => {
     const refreshConsent = () => {
       if (document.visibilityState === 'hidden') return;
-      API.get('/emergency/contacts').then(setContacts).catch(() => {});
+      API.get('/emergency/contacts').then(setContacts).catch(() => { });
     };
     window.addEventListener('focus', refreshConsent);
     document.addEventListener('visibilitychange', refreshConsent);
+    const statusRefresh = window.setInterval(refreshConsent, 15000);
     return () => {
+      window.clearInterval(statusRefresh);
       window.removeEventListener('focus', refreshConsent);
       document.removeEventListener('visibilitychange', refreshConsent);
     };
@@ -176,7 +178,7 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
       toast.success(t('SOS disabled in Demo Mode.'));
       return;
     }
-    
+
     const shouldSkipConfirm = skipConfirm === true || isSilent === true;
     if (sosLoading) return;
     if (shouldSkipConfirm || confirm(t('Send an SOS app/email alert to contacts who accepted your invitation? Automated calls/SMS are disabled. This does not contact local authorities.'))) {
@@ -193,8 +195,15 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
         if (!isSilent) {
           const status = sosResult(res, { locationAvailable: Boolean(locationData) });
           setSosStatus(status);
-          if (status.ok) toast.success(t(status.message), { duration: 8000 });
-          else toast.error(t(status.message), { duration: 10000 });
+          if (status.messages) {
+            status.messages.forEach(msg => {
+              if (status.ok) toast.success(t(msg), { duration: 8000 });
+              else toast.error(t(msg), { duration: 10000 });
+            });
+          } else {
+            if (status.ok) toast.success(t(status.message), { duration: 8000 });
+            else toast.error(t(status.message), { duration: 10000 });
+          }
         } else {
           console.log(res.success ? "Silent SOS executed successfully." : "Silent SOS failed.");
         }
@@ -331,16 +340,17 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
     }
 
     try {
+      let savedContact;
       if (modalMode === 'add') {
-        await API.post('/emergency/contacts', { name: modalData.name, phone: modalData.phone, relation: modalData.relation, email: modalData.email || null, carrier: modalData.carrier || null });
+        savedContact = await API.post('/emergency/contacts', { name: modalData.name, phone: modalData.phone, relation: modalData.relation, email: modalData.email || null, carrier: modalData.carrier || null });
       } else {
-        await API.put(`/emergency/contacts/${modalData.id}`, { name: modalData.name, phone: modalData.phone, relation: modalData.relation, email: modalData.email || null, carrier: modalData.carrier || null });
+        savedContact = await API.put(`/emergency/contacts/${modalData.id}`, { name: modalData.name, phone: modalData.phone, relation: modalData.relation, email: modalData.email || null, carrier: modalData.carrier || null });
       }
       setModalOpen(false);
-      fetchData();
+      fetchData(savedContact);
       toast.success(modalMode === 'add' ? t('Contact added successfully') : t('Contact updated successfully'));
     } catch (e) {
-      toast.error(t('Failed to save contact'));
+      toast.error(e.message || t('Failed to save contact'));
     }
   };
 
@@ -502,10 +512,13 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
           <div className="mt-8 text-center relative z-10">
             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{t('Emergency Assistance')}</h3>
             <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto text-sm leading-relaxed mb-4">
-              {t('SOS sends app/email alerts only to accepted contacts. Location requires permission. If help is urgent, call directly.')}
+              {t('SOS sends app/email alerts to contacts who verified their phone and accepted your invitation. If help is urgent, call directly.')}
             </p>
             {/* [ARCHIVED] Selected voice message display */}
-            {sosStatus && <p role="status" className="my-3 whitespace-pre-line text-sm font-semibold">{t(sosStatus.message)}</p>}
+            {sosStatus && <div role="status" className={`mx-auto my-4 max-w-lg rounded-xl border p-4 text-left ${sosStatus.ok ? 'border-green-200 bg-green-50 text-green-800 dark:bg-green-950/30 dark:text-green-300' : 'border-amber-200 bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200'}`}>
+              <p className="mb-1 text-sm font-semibold">{t(sosStatus.ok ? 'SOS update' : 'SOS needs attention')}</p>
+              <p className="whitespace-pre-line text-sm leading-relaxed">{t(sosStatus.message)}</p>
+            </div>}
             <a href="tel:108" className="inline-flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-full text-xs font-bold uppercase tracking-wider">
               <Phone size={14} /> {t('Call 108')}
             </a>
@@ -568,12 +581,11 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
               </button>
             </div>
 
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">{t('Share an invitation in WhatsApp. Only accepted contacts receive SOS app/email alerts. Automated calls/SMS are disabled.')}</p>
-            <button onClick={() => navigate('/emergency-invitation')} className="text-sm text-blue-600 dark:text-blue-400 mb-4">{t('My received SOS alerts & consent')}</button>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">{t('Verify their phone in Telegram. Note: even if not verified via Telegram, an emergency email with location will still be sent to them if you provided their email. Automated calls/SMS remain disabled.')}</p>
 
             <div className="space-y-4">
               {contacts.map(c => (
-                <div key={c.id} className="p-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:shadow-md hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-all group">
+                <div key={c.id} className="p-4 sm:p-5 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-4">
                   <div className="flex items-start gap-4 min-w-0 w-full sm:flex-1">
                     <div className="w-12 h-12 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
                       <span className="font-bold text-lg">{c.name.charAt(0).toUpperCase()}</span>
@@ -584,20 +596,20 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
                         <span className="px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 whitespace-nowrap">{c.relation}</span>
                         <span className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">{c.phone}</span>
                       </div>
-                      <EmergencyContactInvite key={`${c.id}:${c.phone}:${c.email}:${c.consent_status}`} contact={c} />
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 self-end sm:self-auto opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                    <button onClick={() => openEditModal(c)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button aria-label={`Edit ${c.name}`} title="Edit contact" onClick={() => openEditModal(c)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
                       <Edit2 size={18} />
                     </button>
-                    <button onClick={() => deleteContact(c.id)} className="p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 transition-colors">
+                    <button aria-label={`Remove ${c.name}`} title="Remove contact" onClick={() => deleteContact(c.id)} className="p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-500 hover:text-red-500 transition-colors">
                       <Trash2 size={18} />
                     </button>
                     <a href={`tel:${c.phone}`} className="ml-2 flex items-center gap-2 px-4 py-2 rounded-full bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 font-bold hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors">
                       <Phone size={16} /> {t('Call')}
                     </a>
                   </div>
+                  <EmergencyTelegramVerification contact={c} />
                 </div>
               ))}
               {contacts.length === 0 && (

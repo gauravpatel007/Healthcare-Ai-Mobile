@@ -38,6 +38,11 @@ class EmergencyContactResponse(BaseModel):
     consent_status: str = "pending"
     consent_accepted_at: datetime | None = None
     accepted_by: str | None = None
+    verification_status: str = "pending"
+    telegram_verified: bool = False
+    verified_at: datetime | None = None
+    verification_url: str | None = None
+    verification_expires_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { invitationLink, whatsappInvitation, invitationReturnPath, sosLocationLink } from '../src/utils/emergencyInvitations.js';
+import { invitationLink, whatsappInvitation, invitationReturnPath, sosLocationLink, telegramWhatsappInvitation, emergencyInvitationOrigin } from '../src/utils/emergencyInvitations.js';
 import { sosResult } from '../src/utils/sosResult.js';
 
 test('WhatsApp draft targets the explicit number and carries a private fragment invitation', () => {
@@ -37,6 +37,23 @@ test('received alert maps links accept only valid fixed-host coordinate URLs', (
   assert.equal(sosLocationLink('Location: https://www.google.com/maps?q=0.0,-72.3'), 'https://www.google.com/maps?q=0.0,-72.3');
   assert.equal(sosLocationLink('https://evil.example/maps?q=0,0'), null);
   assert.equal(sosLocationLink('https://www.google.com/maps?q=91,0'), null);
+});
+
+test('WhatsApp phone verification goes to the entered contact and preserves the Telegram token', () => {
+  const link = `https://t.me/LifeOSTestBot?start=${'a'.repeat(43)}`;
+  const url = new URL(telegramWhatsappInvitation('+91 98765 43210', link));
+  assert.equal(url.pathname, '/919876543210');
+  assert.ok(url.searchParams.get('text').includes(link));
+  assert.match(url.searchParams.get('text'), /tap Confirm, then Share My Phone Number/);
+  assert.throws(() => telegramWhatsappInvitation('+919876543210', 'https://evil.example/?start=x'));
+});
+
+test('app invitations preserve configured public ports and never invent a fallback website', () => {
+  assert.equal(emergencyInvitationOrigin('https://lifeos.example:8443', 'http://localhost:5173'), 'https://lifeos.example:8443');
+  assert.equal(emergencyInvitationOrigin('', 'https://lifeos.example'), 'https://lifeos.example');
+  for (const origin of ['http://localhost:5173', 'http://127.0.0.1:5173', 'capacitor://localhost']) {
+    assert.throws(() => emergencyInvitationOrigin('', origin), /published LifeOS website/);
+  }
 });
 
 test('SOS feedback distinguishes an inbox save from email or push delivery', () => {

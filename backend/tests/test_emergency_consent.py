@@ -56,6 +56,11 @@ class ConsentTests(unittest.IsolatedAsyncioTestCase):
     async def accept(self, email=True):
         token = await self.invite()
         await accept_invitation(AcceptInvitation(token=token, consent=True, email_opt_in=email), "recipient", self.db)
+        # These tests isolate account consent/delivery after phone proof.
+        contact = await self.db.get(EmergencyContact, self.contact.id)
+        contact.verification_status = "verified"
+        contact.telegram_verified = True
+        contact.verified_at = datetime.now(timezone.utc)
         await self.db.commit()
 
     async def test_new_and_legacy_contacts_pending_send_nothing(self):

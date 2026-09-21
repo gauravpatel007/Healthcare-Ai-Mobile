@@ -25,10 +25,13 @@ from app.schemas.emergency import (
 )
 from app.routers.emergency_consent import router as consent_router, contact_response, reset_consent
 from app.services.emergency_alerts import dispatch_consented_sos
+from app.routers.emergency_telegram import router as telegram_router
+from app.services.telegram_verification import issue_token, normalize_phone, verification_url
 import asyncio
 
 router = APIRouter(prefix="/emergency", tags=["Emergency"])
 router.include_router(consent_router)
+router.include_router(telegram_router)
 
 
 async def audio_clip_response(clip):
@@ -56,10 +59,14 @@ async def list_contacts(user_id: CurrentUserId, db: AsyncSession = Depends(get_d
 @router.post("/contacts", response_model=EmergencyContactResponse, status_code=201)
 async def create_contact(data: EmergencyContactCreate, user_id: CurrentUserId, db: AsyncSession = Depends(get_db)):
     contact = EmergencyContact(user_id=user_id, **data.model_dump())
+    contact.phone = normalize_phone(contact.phone)
+    token = issue_token(contact)
     db.add(contact)
     await db.flush()
     await db.refresh(contact)
-    return await contact_response(contact, db)
+    response = await contact_response(contact, db)
+    response.verification_url = verification_url(token)
+    return response
 
 
 @router.put("/contacts/{contact_id}", response_model=EmergencyContactResponse)
@@ -67,19 +74,31 @@ async def update_contact(
     contact_id: str, data: EmergencyContactUpdate, user_id: CurrentUserId, db: AsyncSession = Depends(get_db)
 ):
     result = await db.execute(
-        select(EmergencyContact).where(EmergencyContact.id == contact_id, EmergencyContact.user_id == user_id)
+        select(EmergencyContact).where(EmergencyContact.id == contact_id, EmergencyContact.user_id == user_id).with_for_update()
     )
     contact = result.scalar_one_or_none()
     if not contact:
         raise NotFoundException("Emergency contact", contact_id)
     changes = data.model_dump(exclude_unset=True)
+    token = None
+    if "phone" in changes:
+        changes["phone"] = normalize_phone(changes["phone"])
+        try:
+            old_phone = normalize_phone(contact.phone)
+        except HTTPException:
+            old_phone = contact.phone
+        if changes["phone"] != old_phone:
+            token = issue_token(contact)
     if any(key in changes and changes[key] != getattr(contact, key) for key in ("name", "phone", "email")):
         await reset_consent(contact.id, db)
     for key, value in changes.items():
         setattr(contact, key, value)
     await db.flush()
     await db.refresh(contact)
-    return await contact_response(contact, db)
+    response = await contact_response(contact, db)
+    if token:
+        response.verification_url = verification_url(token)
+    return response
 
 
 @router.delete("/contacts/{contact_id}")

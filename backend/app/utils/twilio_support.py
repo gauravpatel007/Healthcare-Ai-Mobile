@@ -25,17 +25,13 @@ def create_client(settings):
 
 
 def voice_instructions(settings, twiml):
-    # Twilio trial accounts do not support the 'twiml' parameter.
-    # To bypass needing a working ngrok tunnel (PUBLIC_API_URL), 
-    # we use Twilio's official Twimlets service to echo the TwiML.
     from urllib.parse import urlencode
-    return {'url': 'http://twimlets.com/echo?' + urlencode({'Twiml': twiml})}
+    return {'url': 'https://twimlets.com/echo?' + urlencode({'Twiml': twiml})}
 
 
 def twiml_url(base_url, twiml):
-    # Re-route to twimlets to avoid ngrok dependency completely
     from urllib.parse import urlencode
-    return 'http://twimlets.com/echo?' + urlencode({'Twiml': twiml})
+    return 'https://twimlets.com/echo?' + urlencode({'Twiml': twiml})
 
 
 VOICE_TWIML_PATH = '/api/v1/emergency/echo-twiml'

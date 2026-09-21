@@ -3,7 +3,7 @@ LifeOS Backend — Emergency Contact Model
 """
 
 from datetime import datetime
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, JSON, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, JSON, Text, Integer, BigInteger
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base, TimestampMixin, generate_uuid
@@ -25,6 +25,26 @@ class EmergencyContact(Base, TimestampMixin):
     carrier: Mapped[str | None] = mapped_column(String(50), nullable=True)
     relation: Mapped[str] = mapped_column(String(100), nullable=False, default="")
     is_primary: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    verification_status: Mapped[str] = mapped_column(String(20), default="pending", server_default="pending", nullable=False)
+    telegram_verified: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    verification_token_hash: Mapped[str | None] = mapped_column(String(64), unique=True, index=True, nullable=True)
+    verification_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    verification_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    verification_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+
+
+class TelegramVerificationSession(Base):
+    """Private-chat binding and persistent rate limit, shared across workers."""
+
+    __tablename__ = "telegram_verification_sessions"
+
+    telegram_user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    token_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_message_id: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    window_started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
 
 class EmergencyContactConsent(Base, TimestampMixin):

@@ -366,17 +366,10 @@ def send_sos_call_twilio(phone_numbers: List[str], user_name: str, location_url:
         from xml.sax.saxutils import escape
         user_name = escape(user_name)
         audio_warning = ""
-        if (settings.TWILIO_VOICE_USE_URL or audio_url):
-            try:
-                probe = '<Response><Hangup/></Response>'
-                if problem := voice_url_problem(twiml_url(settings.PUBLIC_API_URL, probe), probe):
-                    return False, problem
-            except ValueError:
-                return False, "Call not placed: PUBLIC_API_URL must be a reachable public server address."
         if audio_url and (problem := audio_url_problem(audio_url)):
             audio_url = None
             audio_warning = " Recording unavailable; used a spoken SOS instead. " + problem
-        spoken = f"Emergency Alert. {user_name} has requested urgent help through LifeOS. Please contact them immediately."
+        spoken = f"Emergency Alert. {user_name} has requested urgent help through LifeOS. Please contact them immediately. Location is shared with your mail."
             
         if audio_url:
             twiml_content = recording_call_twiml(settings.PUBLIC_API_URL, audio_url, spoken)

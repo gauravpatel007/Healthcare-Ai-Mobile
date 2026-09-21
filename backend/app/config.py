@@ -69,6 +69,11 @@ class Settings(BaseSettings):
     TWILIO_SMS_TEMPLATE_ONLY: bool = False
     TWILIO_WHATSAPP_NUMBER: str = ""
 
+    # --- Telegram emergency-contact verification ---
+    TELEGRAM_BOT_TOKEN: str = ""
+    TELEGRAM_BOT_USERNAME: str = ""
+    TELEGRAM_WEBHOOK_SECRET: str = ""
+
     @field_validator("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM_NUMBER", "TWILIO_WHATSAPP_NUMBER")
     @classmethod
     def strip_twilio_settings(cls, value: str) -> str:

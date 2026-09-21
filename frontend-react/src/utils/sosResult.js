@@ -3,6 +3,14 @@ export function sosResult(response, { locationAvailable } = {}) {
   const locationWarning = locationAvailable === false
     ? ' Location unavailable; no Maps link was included. Allow location access to share it.' : '';
   const actions = Array.isArray(data.actions) ? data.actions.filter(action => typeof action === 'string') : [];
+  if (actions.length > 0 && actions[0] === 'CUSTOM_UI_MSG') {
+    actions.shift();
+    if (locationWarning) {
+      actions[actions.length - 1] += locationWarning;
+    }
+    return { ok: !locationWarning, messages: actions, message: actions.join('\n') };
+  }
+  
   if (actions.some(action => action.startsWith('In-app alerts saved:'))) {
     return { ok: Boolean(data.success) && !locationWarning && !actions.some(action => /could not be delivered/i.test(action)),
       message: actions.join('\n') + '\nCall directly if help is urgent.' + locationWarning };
