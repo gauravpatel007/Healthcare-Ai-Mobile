@@ -390,7 +390,7 @@ const AppDashboard = () => {
   return (
     <div className={userTheme === 'dark' ? 'dark' : ''} style={{ colorScheme: userTheme }} data-theme={userTheme}>
       {isDemoMode && (
-        <div className="fixed top-[max(env(safe-area-inset-top,44px),44px)] md:top-3 left-3 right-3 md:left-1/2 md:right-auto md:-translate-x-1/2 md:w-[600px] bg-gradient-to-r from-[#2F80ED] to-[#56CCF2] text-white text-xs md:text-sm font-medium py-2 pl-4 pr-2.5 rounded-2xl flex justify-between items-center z-[100] shadow-lg shadow-blue-500/25 border border-white/20">
+        <div className="fixed top-[max(env(safe-area-inset-top),12px)] md:top-3 left-3 right-3 md:left-1/2 md:right-auto md:-translate-x-1/2 md:w-[600px] bg-gradient-to-r from-[#2F80ED] to-[#56CCF2] text-white text-xs md:text-sm font-medium py-2 pl-4 pr-2.5 rounded-2xl flex justify-between items-center z-[100] shadow-lg shadow-blue-500/25 border border-white/20">
           <div className="flex items-center gap-2.5">
             <span className="text-lg">✨</span>
             <span className="truncate tracking-wide font-semibold">Guest Demo Mode (24h Session)</span>
@@ -400,7 +400,7 @@ const AppDashboard = () => {
           </button>
         </div>
       )}
-      <div className={`fixed inset-0 z-50 flex bg-gray-50 dark:bg-black text-gray-900 dark:text-gray-100 font-sans overflow-hidden ${isDemoMode ? 'pt-[86px] md:pt-[72px]' : 'pt-0'}`}>
+      <div className={`fixed inset-0 z-50 flex bg-gray-50 dark:bg-black text-gray-900 dark:text-gray-100 font-sans overflow-hidden ${isDemoMode ? 'pt-[56px] md:pt-[72px]' : 'pt-0'}`}>
 
         {/* Sidebar */}
         <aside
