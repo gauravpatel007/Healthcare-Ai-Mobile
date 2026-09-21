@@ -13,6 +13,8 @@ import { useUnit } from '../contexts/UnitContext';
 import CustomSelect from '../components/ui/CustomSelect';
 import { useReminders, recordDose, refreshReminders } from '../utils/reminders';
 import { MedicineDoseCard, MedicineActionDialog } from '../components/MedicineShared';
+import { getWebAppOrigin } from '../utils/url';
+import { copyToClipboard } from '../utils/clipboard';
 
 /* ─── Reusable Card (Matches AdminUI) ──────────── */
 const StatCard = ({ title, value, subtitle, icon: Icon, colorClass, onClick }) => (
@@ -174,11 +176,11 @@ const DashboardOverview = ({ currentUser, voiceAction, onVoiceActionConsumed }) 
     setIsSharing(true);
     try {
       const res = await API.post('/share/generate');
-      const link = `${window.location.origin}/shared/${res.token}`;
+      const link = `${getWebAppOrigin()}/shared/${res.token}`;
       setSharedLink(link);
 
       try {
-        await navigator.clipboard.writeText(link);
+        await copyToClipboard(link);
         setIsCopied(true);
         setTimeout(() => setIsCopied(false), 5000);
         toast.success('Sharing link generated and copied to clipboard!');
@@ -612,14 +614,18 @@ const DashboardOverview = ({ currentUser, voiceAction, onVoiceActionConsumed }) 
                     <p className="text-sm text-pink-900 dark:text-pink-100 font-bold mb-1.5 truncate">Summary Link Ready!</p>
                     <div className="flex items-center gap-2 w-full bg-white dark:bg-gray-900 p-1 rounded-lg border border-pink-200 dark:border-pink-700 focus-within:border-pink-400 transition-colors shadow-inner">
                       <input type="text" readOnly value={sharedLink} className="flex-1 bg-transparent text-gray-700 dark:text-gray-300 px-2 py-0.5 text-xs font-medium outline-none truncate min-w-0" onClick={e => e.target.select()} />
-                      <button onClick={(e) => {
+                      <button onClick={async (e) => {
                         e.stopPropagation();
-                        navigator.clipboard.writeText(sharedLink);
-                        setIsCopied(true);
-                        setTimeout(() => {
-                          setIsCopied(false);
-                          setSharedLink('');
-                        }, 5000);
+                        try {
+                          await copyToClipboard(sharedLink);
+                          setIsCopied(true);
+                          setTimeout(() => {
+                            setIsCopied(false);
+                            setSharedLink('');
+                          }, 5000);
+                        } catch (err) {
+                          toast.error('Failed to copy link');
+                        }
                       }}
                         className={`${isCopied ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-pink-500 hover:bg-pink-600'} text-white px-3 py-1 rounded font-bold text-xs transition-colors shadow-md shrink-0`}
                       >

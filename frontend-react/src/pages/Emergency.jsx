@@ -6,6 +6,8 @@ import API from '../utils/api';
 import { sosResult } from '../utils/sosResult';
 import { getSosLocation } from '../utils/sosLocation';
 import { watchNearbyHospitals, hospitalDirections, hospitalHoursToday, hospitalPhones } from '../utils/nearbyHospitals';
+import { getWebAppOrigin } from '../utils/url';
+import { copyToClipboard } from '../utils/clipboard';
 import toast from 'react-hot-toast';
 import {
   AlertTriangle, Phone, Activity, HeartPulse, Plus, X, Edit2, Trash2,
@@ -390,8 +392,8 @@ const Emergency = ({ voiceAction, onVoiceActionConsumed }) => {
     try {
       setSharingLoading(true);
       const res = await API.post('/share/generate');
-      const url = `${window.location.origin}/shared/${res.token}`;
-      await navigator.clipboard.writeText(url);
+      const url = `${getWebAppOrigin()}/shared/${res.token}`;
+      await copyToClipboard(url);
       toast.success(t("Secure Digital ID link copied!"));
     } catch (e) {
       toast.error(t("Failed to generate secure Digital ID link."));

@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 import CustomSelect from '../components/ui/CustomSelect';
 import SwipeTabContainer from '../components/SwipeTabContainer';
+import { getWebAppOrigin } from '../utils/url';
+import { copyToClipboard } from '../utils/clipboard';
 
 const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
   const { unit, setUnit, displayWeight, displayHeight, weightUnit } = useUnit();
@@ -146,9 +148,9 @@ const Settings = ({ voiceAction, onVoiceActionConsumed }) => {
     try {
       setSharingLoading(true);
       const res = await API.post('/share/generate');
-      const url = `${window.location.origin}/shared/${res.token}`;
+      const url = `${getWebAppOrigin()}/shared/${res.token}`;
       setSharingLink(url);
-      navigator.clipboard.writeText(url);
+      await copyToClipboard(url);
       toast.success(t('Secure link generated and copied to clipboard! It will expire in 24 hours.'));
     } catch (e) {
       toast.error(t('Failed to generate secure link.'));

@@ -152,21 +152,6 @@ async def seed():
         ]
         db.add_all(family)
 
-        # ─── Vaccinations ────────────────────────────────────────────
-        vaccinations = [
-            Vaccination(
-                user_id=user.id, name="COVID-19 Booster",
-                date=date.today() - timedelta(days=180),
-                status="completed", person="Self",
-            ),
-            Vaccination(
-                user_id=user.id, name="Influenza",
-                date=date.today() - timedelta(days=300),
-                next_due=date.today() + timedelta(days=65),
-                status="completed", person="Self",
-            ),
-        ]
-        db.add_all(vaccinations)
 
         # ─── Health Data (6 months) ──────────────────────────────────
         months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]

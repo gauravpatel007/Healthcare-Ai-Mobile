@@ -458,16 +458,14 @@ const LandingPage = () => {
               <div className="text-center max-w-2xl mx-auto mb-8 md:mb-16 reveal-on-scroll opacity-0 translate-y-6 md:translate-y-12 transition-all duration-[800ms] ease-[cubic-bezier(0.16,1,0.3,1)]">
                 <div className="text-blue-600 dark:text-blue-400 font-bold tracking-widest text-xs md:text-sm mb-3 md:mb-4 uppercase">Features</div>
                 <h2 className="text-2xl md:text-4xl font-extrabold text-slate-900 dark:text-white mb-3 md:mb-4">Everything your health needs, in one place</h2>
-                <p className="text-sm md:text-lg text-slate-500 dark:text-slate-400">Six intelligent modules working together to keep you healthier, every single day.</p>
+                <p className="text-sm md:text-lg text-slate-500 dark:text-slate-400">Intelligent modules working together to keep you healthier, every single day.</p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
                 {[
                   { icon: 'smart_toy', color: 'blue', colorHex: 'blue-600', bgHex: 'blue-100', title: 'AI Health Assistant', desc: 'Smart medical guidance with conversational AI chat for personalized recommendations tuned to your body.' },
-                  { icon: 'monitor_heart', color: 'red', colorHex: 'red-500', bgHex: 'red-100', title: 'Health Monitoring', desc: 'Track heart rate, blood pressure, sleep, oxygen levels, and daily wellness in real time.' },
-                  { icon: 'fitness_center', color: 'green', colorHex: 'green-500', bgHex: 'green-100', title: 'AI Fitness Coach', desc: 'Personalized workout plans, step tracking, calorie insights, and goal monitoring that adapts to you.' },
+                  { icon: 'monitor_heart', color: 'red', colorHex: 'red-500', bgHex: 'red-100', title: 'Health Monitoring', desc: 'Track heart rate, blood pressure and daily wellness in real time.' },
                   { icon: 'coronavirus', color: 'purple', colorHex: 'purple-600', bgHex: 'purple-100', title: 'Symptom Checker', desc: 'Instantly check your symptoms with our AI triage system to know when you should see a doctor.' },
-                  { icon: 'restaurant', color: 'cyan', colorHex: 'cyan-600', bgHex: 'cyan-100', title: 'Nutrition Planner', desc: 'Log meals and get AI-generated nutrition plans designed to help you hit your optimal macros.' },
                   { icon: 'folder_managed', color: 'orange', colorHex: 'orange-500', bgHex: 'orange-100', title: 'Medical Records', desc: 'Securely store, organize and analyze all your blood tests, MRI scans, and doctors notes.' }
                 ].map((f, i) => (
                   <div key={i} className={`bg-slate-50 dark:bg-slate-800 rounded-[20px] md:rounded-[24px] p-5 md:p-8 hover:shadow-lg dark:hover:shadow-slate-900/50 transition-shadow reveal-on-scroll opacity-0 translate-y-6 md:translate-y-12 transition-all duration-[800ms] ease-[cubic-bezier(0.16,1,0.3,1)]`}>
@@ -510,38 +508,36 @@ const LandingPage = () => {
                 <h2 className="text-2xl md:text-4xl font-extrabold text-slate-900 dark:text-white mb-8 md:mb-16">Healthier in four simple steps</h2>
               </div>
 
-              {/* Mobile: vertical steps */}
-              <div className="flex flex-col gap-6 md:hidden">
-                {[
-                  { step: 1, color: 'blue-600', shadow: 'blue-500/30', title: 'Connect your health data', desc: 'Sync wearables, apps, and records in minutes.' },
-                  { step: 2, color: 'blue-500', shadow: 'blue-500/30', title: 'AI analyzes your wellness', desc: 'Patterns and risks surface automatically.' },
-                  { step: 3, color: 'cyan-500', shadow: 'cyan-500/30', title: 'Receive recommendations', desc: 'Clear, actionable guidance daily.' },
-                  { step: 4, color: 'teal-500', shadow: 'teal-500/30', title: 'Improve every day', desc: 'Watch your health score climb over time.' }
-                ].map((s, i) => (
-                  <div key={i} className="flex items-start gap-4 text-left reveal-on-scroll opacity-0 translate-y-6 transition-all duration-[800ms] ease-[cubic-bezier(0.16,1,0.3,1)]">
-                    <div className={`w-12 h-12 rounded-full bg-${s.color} text-white flex items-center justify-center text-lg font-bold shrink-0 shadow-lg shadow-${s.shadow}`}>{s.step}</div>
-                    <div>
-                      <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1">{s.title}</h3>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">{s.desc}</p>
+              {/* Responsive steps: Vertical on mobile, Horizontal on laptop/desktop */}
+              <div className="relative">
+                {/* Horizontal connector line on desktop */}
+                <div className="hidden md:block absolute top-8 left-12 right-12 h-0.5 bg-slate-100 dark:bg-slate-800 z-0"></div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 md:gap-8 relative z-10">
+                  {[
+                    { step: 1, color: 'blue-600', shadow: 'blue-500/30', title: 'Connect your health data', desc: 'Sync wearables, apps, and records in minutes.' },
+                    { step: 2, color: 'blue-500', shadow: 'blue-500/30', title: 'AI analyzes your wellness', desc: 'Patterns and risks surface automatically.' },
+                    { step: 3, color: 'cyan-500', shadow: 'cyan-500/30', title: 'Receive recommendations', desc: 'Clear, actionable guidance daily.' },
+                    { step: 4, color: 'teal-500', shadow: 'teal-500/30', title: 'Improve every day', desc: 'Watch your health score climb over time.' }
+                  ].map((s, i) => (
+                    <div
+                      key={i}
+                      className="flex items-start md:items-center md:flex-col gap-4 md:gap-0 text-left md:text-center reveal-on-scroll opacity-0 translate-y-6 md:translate-y-12 transition-all duration-[800ms] ease-[cubic-bezier(0.16,1,0.3,1)]"
+                    >
+                      <div className={`w-12 h-12 md:w-16 md:h-16 rounded-full bg-${s.color} text-white flex items-center justify-center text-lg md:text-2xl font-bold shrink-0 md:mb-6 shadow-lg shadow-${s.shadow}`}>
+                        {s.step}
+                      </div>
+                      <div>
+                        <h3 className="text-base md:text-xl font-bold text-slate-900 dark:text-white mb-1 md:mb-3">
+                          {s.title}
+                        </h3>
+                        <p className="text-sm md:text-base text-slate-500 dark:text-slate-400">
+                          {s.desc}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-              {/* Desktop: horizontal steps */}
-              <div className="hidden md:grid grid-cols-4 gap-8 relative">
-                <div className="absolute top-8 left-12 right-12 h-0.5 bg-slate-100 dark:bg-slate-800 z-0"></div>
-                {[
-                  { step: 1, color: 'blue-600', shadow: 'blue-500/30', title: 'Connect your health data', desc: 'Sync wearables, apps, and records in minutes.' },
-                  { step: 2, color: 'blue-500', shadow: 'blue-500/30', title: 'AI analyzes your wellness', desc: 'Patterns and risks surface automatically.' },
-                  { step: 3, color: 'cyan-500', shadow: 'cyan-500/30', title: 'Receive recommendations', desc: 'Clear, actionable guidance daily.' },
-                  { step: 4, color: 'teal-500', shadow: 'teal-500/30', title: 'Improve every day', desc: 'Watch your health score climb over time.' }
-                ].map((s, i) => (
-                  <div key={i} className="relative z-10 flex flex-col items-center reveal-on-scroll opacity-0 translate-y-12 transition-all duration-[800ms] ease-[cubic-bezier(0.16,1,0.3,1)]">
-                    <div className={`w-16 h-16 rounded-full bg-${s.color} text-white flex items-center justify-center text-2xl font-bold mb-6 shadow-lg shadow-${s.shadow}`}>{s.step}</div>
-                    <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">{s.title}</h3>
-                    <p className="text-slate-500 dark:text-slate-400">{s.desc}</p>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
           </section>

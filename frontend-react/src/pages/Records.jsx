@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import CustomSelect from '../components/ui/CustomSelect';
 import { useLang } from '../contexts/LangContext';
+import { copyToClipboard } from '../utils/clipboard';
 
 const Records = ({ voiceAction, onVoiceActionConsumed }) => {
   const { lang, t } = useLang();
@@ -946,9 +947,13 @@ const Records = ({ voiceAction, onVoiceActionConsumed }) => {
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <button 
-                  onClick={() => {
-                    navigator.clipboard.writeText(viewFindingsModal.findings);
-                    toast.success(t("Extracted text copied to clipboard!"));
+                  onClick={async () => {
+                    try {
+                      await copyToClipboard(viewFindingsModal.findings);
+                      toast.success(t("Extracted text copied to clipboard!"));
+                    } catch (err) {
+                      toast.error("Failed to copy text");
+                    }
                   }}
                   className="p-2 text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors flex items-center gap-1.5 text-xs font-bold"
                   title="Copy text"

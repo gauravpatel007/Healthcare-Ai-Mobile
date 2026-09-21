@@ -594,7 +594,7 @@ const LoginModal = ({ show, onClose, returnTo }) => {
             <div style={{ marginBottom: '20px' }}>
               <label htmlFor="login-email" style={labelStyle}>Email Address</label>
               <input
-                id="login-email" name="email" type="email" inputMode="email" autoComplete="username" required value={email}
+                id="login-email" name="email" type="email" inputMode="email" autoComplete="email" required value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
                 style={inputStyle}
@@ -668,7 +668,7 @@ const LoginModal = ({ show, onClose, returnTo }) => {
             <div style={{ marginBottom: '20px' }}>
               <label htmlFor="signup-email" style={labelStyle}>Email Address</label>
               <input
-                id="signup-email" name="email" type="email" inputMode="email" autoComplete="username" required value={email}
+                id="signup-email" name="email" type="email" inputMode="email" autoComplete="email" required value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
                 style={inputStyle}

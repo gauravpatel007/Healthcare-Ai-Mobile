@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import API from '../utils/api';
 import { invitationLink, whatsappInvitation } from '../utils/emergencyInvitations';
+import { getWebAppOrigin } from '../utils/url';
 
 export default function EmergencyContactInvite({ contact }) {
   const [busy, setBusy] = useState(false);
@@ -14,10 +15,7 @@ export default function EmergencyContactInvite({ contact }) {
     const tab = window.open('about:blank', '_blank');
     if (tab) tab.opener = null;
     try {
-      const origin = import.meta.env.VITE_PUBLIC_WEB_URL || window.location.origin;
-      if (Capacitor.isNativePlatform() && !import.meta.env.VITE_PUBLIC_WEB_URL) {
-        throw new Error('Set VITE_PUBLIC_WEB_URL to your live website URL when building the mobile app.');
-      }
+      const origin = getWebAppOrigin();
       // Validate the website URL before creating/rotating the invitation.
       invitationLink('a'.repeat(43), origin);
       const result = await API.post(`/emergency/contacts/${contact.id}/invitation`, {});

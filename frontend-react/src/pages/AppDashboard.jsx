@@ -270,12 +270,12 @@ const AppDashboard = () => {
   };
 
   const topNavItemsArray = [...overviewItems, ...aiCareItems];
-  
+
   const handleAppSwipeLeft = () => {
     if (showFeedbackModal) return;
     const isTopGroup = topNavItemsArray.some(i => checkIsActive(i.path));
     const isBottomGroup = careItems.some(i => checkIsActive(i.path));
-    
+
     if (isTopGroup) {
       const currentIndex = topNavItemsArray.findIndex(i => checkIsActive(i.path));
       if (currentIndex !== -1 && currentIndex < topNavItemsArray.length - 1) navigate(topNavItemsArray[currentIndex + 1].path);
@@ -289,7 +289,7 @@ const AppDashboard = () => {
     if (showFeedbackModal) return;
     const isTopGroup = topNavItemsArray.some(i => checkIsActive(i.path));
     const isBottomGroup = careItems.some(i => checkIsActive(i.path));
-    
+
     if (isTopGroup) {
       const currentIndex = topNavItemsArray.findIndex(i => checkIsActive(i.path));
       if (currentIndex > 0) navigate(topNavItemsArray[currentIndex - 1].path);
@@ -390,17 +390,17 @@ const AppDashboard = () => {
   return (
     <div className={userTheme === 'dark' ? 'dark' : ''} style={{ colorScheme: userTheme }} data-theme={userTheme}>
       {isDemoMode && (
-        <div className="w-full bg-blue-600 text-white text-xs md:text-sm font-semibold py-1.5 px-4 flex justify-between items-center z-[100] relative shadow-md">
-          <div className="flex items-center gap-2">
-            <span>👁</span>
-            <span>Demo Mode — Exploring as gaurav@lifeos.com</span>
+        <div className="fixed top-3 left-3 right-3 md:left-1/2 md:right-auto md:-translate-x-1/2 md:w-[600px] bg-gradient-to-r from-[#2F80ED] to-[#56CCF2] text-white text-xs md:text-sm font-medium py-2 pl-4 pr-2.5 rounded-2xl flex justify-between items-center z-[100] shadow-lg shadow-blue-500/25 border border-white/20">
+          <div className="flex items-center gap-2.5">
+            <span className="text-lg">✨</span>
+            <span className="truncate tracking-wide font-semibold">Demo Mode —  gaurav@lifeos.com  </span>
           </div>
-          <button onClick={handleLogout} className="bg-white/20 hover:bg-white/30 text-white px-3 py-1 rounded text-xs transition-colors">
+          <button onClick={handleLogout} className="bg-black/15 hover:bg-black/25 backdrop-blur-md text-white px-4 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0">
             Exit Demo
           </button>
         </div>
       )}
-      <div className="fixed inset-0 z-50 flex bg-gray-50 dark:bg-black text-gray-900 dark:text-gray-100 font-sans overflow-hidden" style={{ top: isDemoMode ? '32px' : '0' }}>
+      <div className="fixed inset-0 z-50 flex bg-gray-50 dark:bg-black text-gray-900 dark:text-gray-100 font-sans overflow-hidden" style={{ paddingTop: isDemoMode ? '72px' : '0' }}>
 
         {/* Sidebar */}
         <aside

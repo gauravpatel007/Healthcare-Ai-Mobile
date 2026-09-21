@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { User, Printer, Heart, FileText, Syringe, Phone, Shield, Activity, Lock } from 'lucide-react';
+import { User, Printer, Heart, FileText, Phone, Shield, Activity, Lock } from 'lucide-react';
 import API from '../utils/api';
 import { useUnit } from '../contexts/UnitContext';
 import '../index.css';
@@ -115,7 +115,7 @@ const SharedProfile = () => {
     );
   }
 
-  const { profile, contacts, records = [], vaccinations = [] } = data;
+  const { profile, contacts, records = [] } = data;
 
   return (
     <div className="w-full max-w-4xl mx-auto my-10 px-4 sm:px-6 print:m-0 print:p-0 print:max-w-none text-slate-900 dark:text-slate-100">
@@ -215,28 +215,6 @@ const SharedProfile = () => {
             </div>
           ) : (
             <p className="text-slate-500 dark:text-slate-400 font-medium italic bg-slate-50 dark:bg-gray-800/50 p-6 rounded-3xl">No recent medical records available.</p>
-          )}
-        </div>
-
-        {/* Vaccinations */}
-        <div className="mb-8">
-          <h3 className="text-xl font-extrabold text-slate-900 dark:text-white mb-6 flex items-center gap-3">
-            <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 rounded-2xl flex items-center justify-center">
-              <Syringe className="w-5 h-5" />
-            </div>
-            Vaccination History
-          </h3>
-          {vaccinations.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              {vaccinations.map((v) => (
-                <div key={v.id} className="p-5 rounded-3xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-900/30">
-                  <h4 className="font-bold text-emerald-800 dark:text-emerald-300 mb-1">{v.name}</h4>
-                  <p className="text-emerald-600 dark:text-emerald-500 font-semibold text-sm">{v.date}</p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-slate-500 dark:text-slate-400 font-medium italic bg-slate-50 dark:bg-gray-800/50 p-6 rounded-3xl">No vaccinations on record.</p>
           )}
         </div>
 

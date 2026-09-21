@@ -4,6 +4,7 @@ import API from '../utils/api';
 import { startSpeechRecognition } from '../utils/voice';
 import MedicalDisclaimer from '../components/MedicalDisclaimer';
 import { useLang } from '../contexts/LangContext';
+import { copyToClipboard as copyToClipboardUtil } from '../utils/clipboard';
 import {
   Bot,
   MessageSquare,
@@ -258,7 +259,7 @@ const AIChat = ({ voiceAction, onVoiceActionConsumed }) => {
   };
 
   const copyToClipboard = (text, id) => {
-    navigator.clipboard.writeText(text).then(() => {
+    copyToClipboardUtil(text).then(() => {
       setCopiedMessageId(id);
       setTimeout(() => setCopiedMessageId(null), 2000);
     }).catch(err => {
