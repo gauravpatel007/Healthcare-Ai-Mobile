@@ -16,6 +16,7 @@ def migrate(connection):
     additions = {
         "verification_status": "VARCHAR(20) NOT NULL DEFAULT 'pending'",
         "telegram_verified": "BOOLEAN NOT NULL DEFAULT FALSE",
+        "telegram_chat_id": "BIGINT",
         "verified_at": timestamp,
         "verification_token_hash": "VARCHAR(64)",
         "verification_expires_at": timestamp,

@@ -331,8 +331,8 @@ class MigrationTests(unittest.IsolatedAsyncioTestCase):
                 await connection.execute(text("INSERT INTO emergency_contacts VALUES ('legacy', 'Mom', '+919876543210')"))
                 await connection.run_sync(migrate)
                 await connection.run_sync(migrate)
-                row = (await connection.execute(text("SELECT name, phone, verification_status, telegram_verified FROM emergency_contacts"))).one()
-                self.assertEqual(tuple(row), ("Mom", "+919876543210", "pending", 0))
+                row = (await connection.execute(text("SELECT name, phone, verification_status, telegram_verified, telegram_chat_id FROM emergency_contacts"))).one()
+                self.assertEqual(tuple(row), ("Mom", "+919876543210", "pending", 0, None))
         finally:
             await engine.dispose()
 

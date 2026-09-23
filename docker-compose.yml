@@ -53,6 +53,9 @@ services:
       ONESIGNAL_REST_API_KEY: ${ONESIGNAL_REST_API_KEY:-}
       FITBIT_CLIENT_ID: ${FITBIT_CLIENT_ID:-}
       FITBIT_CLIENT_SECRET: ${FITBIT_CLIENT_SECRET:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
       UPLOAD_DIR: /app/uploads
       MAX_FILE_SIZE_MB: 10
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost,https://localhost,capacitor://localhost,http://localhost:5173,http://localhost:3000}
@@ -64,6 +67,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
+      interval: 10s
+      timeout: 6s
+      retries: 12
+      start_period: 30s
     command: >
       sh -c "
         alembic -c /app/alembic.ini upgrade head &&
@@ -82,10 +91,11 @@ services:
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in the deployment .env file}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
     volumes:
       - ./backend:/app/backend
     depends_on:
-      db:
+      app:
         condition: service_healthy
     command: >
       sh -c "cd backend && python run_telegram_bot.py"
