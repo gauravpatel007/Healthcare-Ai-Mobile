@@ -56,16 +56,17 @@ export default function EmergencyTelegramVerification({ contact, onUpdated }) {
 
   const prepare = async (destination = null) => {
     setBusy(true); setError(''); setNotice('');
-    const tab = destination ? window.open('about:blank', '_blank') : null;
-    if (tab) tab.opener = null;
     try {
       const result = await API.post(`/emergency/contacts/${contact.id}/telegram-verification`, {});
       setLink(result.verification_url);
-      if (tab) tab.location.href = destination === 'whatsapp'
-        ? telegramWhatsappInvitation(contact.phone, result.verification_url) : result.verification_url;
+      
+      if (destination) {
+        const finalUrl = destination === 'whatsapp'
+          ? telegramWhatsappInvitation(contact.phone, result.verification_url) : result.verification_url;
+        window.open(finalUrl, '_blank');
+      }
       setNotice(destination ? 'Link ready. If no app opened, use the buttons below.' : 'New link ready. Share it with your contact; the previous link no longer works.');
     } catch (err) {
-      tab?.close();
       setError(err.message || 'Could not prepare Telegram verification.');
     } finally { setBusy(false); }
   };

@@ -13,8 +13,8 @@ export default function EmergencyContactInvite({ contact }) {
   const accepted = status === 'accepted';
   const prepare = async () => {
     setBusy(true); setError(''); setNotice('');
-    const tab = window.open('about:blank', '_blank');
-    if (tab) tab.opener = null;
+    // Removed tab
+    // Removed opener
     try {
       const origin = emergencyInvitationOrigin(import.meta.env.VITE_PUBLIC_WEB_URL, window.location.origin);
       invitationLink('a'.repeat(43), origin);
@@ -22,10 +22,10 @@ export default function EmergencyContactInvite({ contact }) {
       const link = invitationLink(result.token, origin);
       const whatsapp = whatsappInvitation(result.whatsapp_number, link);
       setInvite({ link, whatsapp });
-      if (tab) tab.location.href = whatsapp;
-      else setNotice('Invitation ready. Tap Open WhatsApp below, then Send.');
+      window.open(whatsapp, '_blank');
+      setNotice('Invitation ready. If no app opened, tap Open WhatsApp below.');
     } catch (err) {
-      tab?.close();
+      // removed tab.close
       setError(err.message || 'Could not create invitation.');
     } finally { setBusy(false); }
   };
