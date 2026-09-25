@@ -208,7 +208,7 @@ async def seed():
     print("✅ Database seeded successfully!")
     print("\n📧 Login credentials:")
     print("   Email:    gaurav@lifeos.com")
-    print("   Password: password123")
+    print("   Password: 1234")
 
 
 if __name__ == "__main__":
