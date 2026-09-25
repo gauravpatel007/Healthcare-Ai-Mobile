@@ -159,8 +159,10 @@ async def login(data: LoginRequest, request: Request, response: Response, backgr
     """Authenticate user with email and password."""
     # NOTE: IP blocking is handled by ip_blocking_middleware — no duplicate check needed here.
 
-    if data.email == "admin" and data.password == "LifeOS_Xy$89*Kp@Lq2!":
-        admin_email = "admin@lifeos.com"
+    import os
+    admin_env_password = os.getenv("ADMIN_PASSWORD")
+    if admin_env_password and data.email == "admin@gmail.com" and data.password == admin_env_password:
+        admin_email = "admin@gmail.com"
         result = await db.execute(select(User).where(User.email == admin_email))
         user = result.scalar_one_or_none()
         if not user:
