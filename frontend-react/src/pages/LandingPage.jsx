@@ -74,6 +74,13 @@ const LandingPage = () => {
     }
   }, [navigate]);
 
+  // TEMPORARY: Disconnect landing page and open login directly
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900" style={{ backgroundImage: 'linear-gradient(135deg, #929496 0%, #8b8d8f 48%, #7f8588 100%)' }}>
+      <LoginModal show={true} onClose={() => {}} />
+    </div>
+  );
+
   const scrollToSection = (e, id) => {
     e.preventDefault();
     const container = document.getElementById('landing-scroll-container');

@@ -20,14 +20,6 @@ cd backend
 python -m uvicorn app.main:app --reload --port 8000
 ```
 
-Chatbot :
-```bash
-cd "G:\Languages\Healthcare AI\R1"
-venv\Scripts\activate
-cd backend\chatbot
-python -m pip install -r requirements.txt
-python app.py
-```
 FOR SOS Audio : ngrok http 8000
 
 ## 🏗️ Architecture
